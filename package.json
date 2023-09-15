@@ -1,0 +1,23 @@
+{
+  "name": "mpmify",
+  "version": "1.0.0",
+  "description": "",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "npx tsc",
+    "test": "npx vitest"
+  },
+  "author": "Niels Pfeffer",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/uuid": "^9.0.4",
+    "typescript": "^5.2.2",
+    "vitest": "^0.34.4"
+  },
+  "dependencies": {
+    "js2xmlparser": "^5.0.0",
+    "jsdom": "^22.1.0",
+    "uuid": "^9.0.1"
+  }
+}

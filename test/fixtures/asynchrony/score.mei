@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/4.0.0/mei-all.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/4.0.0/mei-all.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0.0">
+    <meiHead>
+        <fileDesc>
+            <titleStmt>
+                <title>Asynchrony Test</title>
+            </titleStmt>
+            <pubStmt>
+                <respStmt>
+                    <persName role="encoder">Niels Pfeffer</persName>
+                </respStmt>
+                <date isodate="2022">2022</date>
+            </pubStmt>
+            <seriesStmt>
+                <title>Measuring Early Records</title>
+            </seriesStmt>
+            <notesStmt>
+                <annot>
+                    Sauer plays this with excerpt with every melody note clearly delayed.
+                </annot>
+            </notesStmt>
+            <sourceDesc>
+                <source>
+                    <bibl>
+                        Excerpt from Chopin's Nocturne op. 27 no. 2,
+                        played by Emil von Sauer, WM 879.
+                    </bibl>
+                </source>
+            </sourceDesc>
+        </fileDesc>
+        <encodingDesc>
+            <appInfo />
+        </encodingDesc>
+    </meiHead>
+    <music>
+        <body>
+            <mdiv>
+                <score>
+                    <scoreDef>
+                        <staffGrp>
+                            <staffGrp>
+                                <staffDef xml:id="s3vxtt1" n="1" lines="5" ppq="40">
+                                    <clef xml:id="c2a7zv3" shape="G" line="2" />
+                                    <keySig xml:id="kzcf90t" sig="5f" />
+                                    <meterSig xml:id="m6rg4ou" count="6" unit="8" />
+                                </staffDef>
+                                <staffDef xml:id="s2zq1bj" n="2" lines="5" ppq="40">
+                                    <clef xml:id="cq7vhw0" shape="F" line="4" />
+                                    <keySig xml:id="kwhs8ek" sig="5f" />
+                                    <meterSig xml:id="m9r0hl2" count="6" unit="8" />
+                                </staffDef>
+                            </staffGrp>
+                        </staffGrp>
+                    </scoreDef>
+                    <section xml:id="st0e4jd">
+                        <measure xml:id="mjtx521" n="1">
+                            <staff xml:id="s9mc3nx" n="1">
+                                <layer xml:id="lq8k1kd" n="1">
+                                    <note xml:id="nn9qxtc" dots="1" dur.ppq="60" dur="4" oct="5" pname="f" stem.dir="down" />
+                                    <beam xml:id="bs411jh">
+                                        <note xml:id="nev7aqc" dur.ppq="20" dur="8" oct="5" pname="e" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="nawc24w" dots="1" dur.ppq="30" dur="8" oct="5" pname="d" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="nwgempb" dur.ppq="10" dur="16" oct="4" pname="f" stem.dir="down" />
+                                    </beam>
+                                </layer>
+                            </staff>
+                            <staff xml:id="shop0fm" n="2">
+                                <layer xml:id="lyj46v0" n="5">
+                                    <beam xml:id="bpc16ch">
+                                        <note xml:id="ntp3vmw" dur.ppq="10" dur="16" oct="3" pname="d" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="ndyscu5" dur.ppq="10" dur="16" oct="4" pname="f" stem.dir="down" />
+                                        <note xml:id="n336heq" dur.ppq="10" dur="16" oct="3" pname="a" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="n7ca211" dur.ppq="10" dur="16" oct="4" pname="f" stem.dir="down" />
+                                        <note xml:id="n6akcib" dur.ppq="10" dur="16" oct="4" pname="d" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="n6c337b" dur.ppq="10" dur="16" oct="3" pname="f" stem.dir="down" />
+                                    </beam>
+                                    <beam xml:id="bqaifcr">
+                                        <note xml:id="ngwmg3q" dur.ppq="10" dur="16" oct="3" pname="d" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="nc3i6bo" dur.ppq="10" dur="16" oct="4" pname="f" stem.dir="down" />
+                                        <note xml:id="n4evdui" dur.ppq="10" dur="16" oct="3" pname="a" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="npfj46" dur.ppq="10" dur="16" oct="4" pname="f" stem.dir="down" />
+                                        <note xml:id="nd5ld20" dur.ppq="10" dur="16" oct="4" pname="d" stem.dir="down" accid.ges="f" />
+                                        <note xml:id="nm2da0y" dur.ppq="10" dur="16" oct="3" pname="f" stem.dir="down" />
+                                    </beam>
+                                </layer>
+                            </staff>
+                        </measure>
+                        <measure xml:id="m385ef6" n="2" metcon="false">
+                            <staff xml:id="sxe61wj" n="1">
+                                <layer xml:id="lvi53mw" n="1">
+                                    <note xml:id="nd6y1xh" dots="1" dur.ppq="60" dur="4" oct="4" pname="a" stem.dir="up" accid.ges="f" />
+                                </layer>
+                            </staff>
+                            <staff xml:id="sjha5w" n="2">
+                                <layer xml:id="l3yp18d" n="5">
+                                    <note xml:id="n4dgeig" dur.ppq="10" dur="16" oct="3" pname="d" stem.dir="down" accid.ges="f" />
+                                </layer>
+                            </staff>
+                        </measure>
+                    </section>
+                </score>
+            </mdiv>
+        </body>
+    </music>
+</mei>
