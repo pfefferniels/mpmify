@@ -1,4 +1,4 @@
-import { Articulation, MPM, Part } from "../mpm/index"
+import { Articulation, MPM, Part } from "mpm-ts"
 import { MSM } from "../msm"
 import { AbstractTransformer, TransformationOptions } from "./Transformer"
 import { v4 } from "uuid"

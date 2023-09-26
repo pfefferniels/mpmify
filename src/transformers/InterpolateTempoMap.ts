@@ -1,6 +1,6 @@
 import { v4 } from "uuid";
-import { MPM, Tempo } from "../mpm";
-import { MSM } from "../msm";
+import { MPM, Tempo } from "mpm-ts";
+import { MSM, MsmNote } from "../msm";
 import { BeatLengthBasis, calculateBeatLength } from "./BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "./Transformer";
 import { calculateSymbolicNoteDuration } from "./basicCalculations";

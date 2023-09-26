@@ -1,5 +1,5 @@
+import { MPM } from "mpm-ts";
 import { MSM } from "../msm";
-import { MPM } from "../mpm";
 
 /**
  * 

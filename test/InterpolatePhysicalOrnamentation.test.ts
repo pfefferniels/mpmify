@@ -3,7 +3,7 @@
 import { expect, test } from 'vitest'
 import { readFileSync } from "fs"
 import { parseMSM } from '../src/msm'
-import { MPM, Ornament } from '../src/mpm'
+import { MPM, Ornament } from 'mpm-ts'
 import { InterpolatePhysicalOrnamentation } from '../src/transformers/InterpolatePhysicalOrnamentation'
 
 test('does not interpolate anything when no arpeggiation is given', () => {

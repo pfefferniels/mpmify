@@ -1,4 +1,4 @@
-import { MPM, Ornament, Part } from "../mpm"
+import { MPM, Ornament, Part } from "mpm-ts"
 import { MSM } from "../msm"
 import { AbstractTransformer, TransformationOptions } from "./Transformer"
 

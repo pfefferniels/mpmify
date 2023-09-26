@@ -1,4 +1,4 @@
-import { Part } from "../mpm";
+import { Part } from "mpm-ts";
 import { parse } from "js2xmlparser";
 
 /**

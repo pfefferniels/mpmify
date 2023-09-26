@@ -1,4 +1,4 @@
-import { Tempo } from "../mpm";
+import { Tempo } from "mpm-ts";
 import { MsmNote } from "../msm";
 
 export const physicalToSymbolic = (physicalDate: number, bpm: number, beatLength: number) => {

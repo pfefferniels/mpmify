@@ -1,5 +1,5 @@
 import { BeatLengthBasis } from "./BeatLengthBasis"
-import { Dynamics, MPM, Part } from "../mpm"
+import { Dynamics, MPM, Part } from "mpm-ts"
 import { MSM } from "../msm"
 import { AbstractTransformer, TransformationOptions } from "./Transformer"
 import { v4 } from "uuid"

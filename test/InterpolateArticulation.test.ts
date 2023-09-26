@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { parseMSM } from "../src/msm"
 import { readFileSync } from "fs"
-import { Articulation, MPM } from "../src/mpm"
+import { Articulation, MPM } from "mpm-ts"
 import { InterpolateTempoMap } from "../src/transformers/InterpolateTempoMap"
 import { InterpolateRubato } from "../src/transformers/InterpolateRubato"
 import { InterpolateArticulation } from "../src/transformers/InterpolateArticulation"

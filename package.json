@@ -18,6 +18,7 @@
   "dependencies": {
     "js2xmlparser": "^5.0.0",
     "jsdom": "^22.1.0",
+    "mpm-ts": "file:../mpm-ts",
     "uuid": "^9.0.1"
   }
 }

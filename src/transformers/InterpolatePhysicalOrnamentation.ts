@@ -1,4 +1,4 @@
-import { DynamicsGradient, MPM, Ornament, Part } from "../mpm"
+import { DynamicsGradient, MPM, Ornament, Part } from "mpm-ts"
 import { MSM } from "../msm"
 import { isDefined } from "./InterpolateTempoMap"
 import { AbstractTransformer, TransformationOptions } from "./Transformer"
