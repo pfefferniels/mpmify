@@ -3,7 +3,7 @@ import { MPM, Tempo } from "mpm-ts";
 import { MSM, MsmNote } from "../msm";
 import { BeatLengthBasis, calculateBeatLength } from "./BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "./Transformer";
-import { calculateSymbolicNoteDuration } from "./basicCalculations";
+import { physicalToSymbolic, symbolicToPhysical } from "./basicCalculations";
 
 export const isDefined = (onset?: number) => {
     return !!onset && !isNaN(onset)
@@ -15,28 +15,49 @@ type InterpolationPoint = {
     beatLength: number
 }
 
-const generatePowFunction = (start: InterpolationPoint, end: InterpolationPoint, meanTempoAt: number, maxIterations = 1000, tolerance = 0.01): ((x: number) => number) => {
-    let iteration = 0;
+const generatePowFunction = (start: InterpolationPoint, end: InterpolationPoint, maxIterations = 3000, tolerance = 0.01) => {
     let updatedBPM = start.bpm;
+    let updatedMeanTempoAt = 0.5
 
-    const computePowFunction = (bpm: number) => (x: number) => Math.pow((x - start.tstamp) / (end.tstamp - start.tstamp), Math.log(0.5) / Math.log(meanTempoAt)) * (end.bpm - bpm) + bpm;
-
-    while (iteration < maxIterations) {
-        let powFunction = computePowFunction(updatedBPM);
-        let target = start.tstamp + start.beatLength;
-        let diff = powFunction(target) - start.bpm;
-
-        if (Math.abs(diff) < tolerance) {
-            return powFunction;
-        }
-
-        // Update updatedBPM and recompute powFunction
-        updatedBPM -= diff;
-        iteration++;
+    const computePowFunction = (startBPM: number, meanTempoAt: number) => {
+        return (x: number) => Math.pow((x - start.tstamp) / (end.tstamp - start.tstamp), Math.log(0.5) / Math.log(meanTempoAt)) * (end.bpm - startBPM) + startBPM;
     }
 
+    const computeStartBPMError = () => {
+        let powFunction = computePowFunction(updatedBPM, updatedMeanTempoAt);
+        let target = start.tstamp + (start.beatLength * updatedMeanTempoAt);
+        return powFunction(target) - start.bpm;
+    }
+
+    const computeMeanTempoAtError = () => {
+        let powFunction = computePowFunction(updatedBPM, updatedMeanTempoAt);
+        const fullRange = end.bpm - updatedBPM
+        const meanTempo = fullRange / 2
+        const diff = powFunction(updatedMeanTempoAt * (end.tstamp - start.tstamp)) - meanTempo
+        return diff / meanTempo
+    }
+
+    for (let i = 0; i < 1000; i++) {
+        const error = computeStartBPMError()
+        if (error < 0.1) break;
+        updatedBPM -= error * 0.2
+    }
+
+    for (let i = 0; i < 100; i++) {
+        const error = computeMeanTempoAtError()
+        if (isNaN(error) || error < 0.2 || error > 0.8) break;
+        // console.log('mean tempo error=', error)
+        updatedMeanTempoAt -= error * 0.001
+    }
+
+    //console.log('done. best start bpm=', updatedBPM, 'best mean tempo at=', updatedMeanTempoAt)
+
     // Return the best approximation of powFunction after maxIterations
-    return computePowFunction(updatedBPM);
+    return {
+        startBPM: updatedBPM,
+        meanTempoAt: updatedMeanTempoAt,
+        powFunction: computePowFunction(updatedBPM, updatedMeanTempoAt)
+    }
 };
 
 
@@ -116,7 +137,7 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
         // make sure to delete the arbitrary silence before the first note onset
         this.shiftToFirstOnset(msm)
 
-        let tempos: Tempo[] = []
+        const tempos: Tempo[] = []
 
         function douglasPeucker(points: InterpolationPoint[], epsilon: number) {
             if (!points.length) {
@@ -127,34 +148,21 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
             const start = points[0]
             const end = points[points.length - 1]
 
-            const meanTempo = (start.bpm + end.bpm) / 2
+            console.log('douglas peucker from', start, 'to', end)
 
-
-            // search for BPM value closest to meanTempo
-            let optimal = Number.MAX_SAFE_INTEGER
-            let meanTempoAtQstamp = 0;
-            for (let i = 1; i < points.length - 1; i++) {
-                const distance = Math.abs(points[i].bpm - meanTempo)
-                if (distance < optimal) {
-                    optimal = distance
-                    meanTempoAtQstamp = points[i].tstamp
-                }
-            }
             const fullDistance = end.tstamp - start.tstamp
 
             // In case of constant tempo no tempo curve needs to be 
             // interpolated.
             if (start.bpm !== end.bpm && fullDistance > start.beatLength) {
-                const meanTempoAt = (meanTempoAtQstamp - start.tstamp) / fullDistance
-
-                // create a new tempo curve
-                const powFunction = generatePowFunction(start, end, meanTempoAt)
+                // approximate a new tempo curve
+                const { powFunction, meanTempoAt } = generatePowFunction(start, end)
 
                 // find point of maximum distance from this curve
                 let dmax = 0
                 let index = 0
                 for (let i = 1; i < points.length - 1; i++) {
-                    const d = Math.abs(points[i].bpm - powFunction(points[i].tstamp))
+                    const d = Math.abs(points[i].bpm - powFunction(points[i].tstamp + (points[i].beatLength * meanTempoAt)))
                     if (d > dmax) {
                         index = i
                         dmax = d
@@ -163,7 +171,7 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
 
                 if (dmax > epsilon) {
                     douglasPeucker(points.slice(0, index + 1), epsilon)
-                    douglasPeucker(points.slice(index), epsilon)
+                    douglasPeucker(points.slice(index + 1), epsilon)
                 }
                 else {
                     // Is there a <tempo> instruction already at the same date?
@@ -186,15 +194,6 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
                         })
                     }
 
-                    // update the MSM bpm values accordingly
-                    msm.allNotes.forEach(n => {
-                        if (n.date >= start.tstamp) {
-                            n['bpm'] = Math.abs(+powFunction(n.date))
-                            n['bpm.beatLength'] = start.beatLength / 720 / 4
-
-                        }
-                    })
-
                     // add <tempo> at the target date of the transition
                     tempos.push({
                         'type': 'tempo',
@@ -202,14 +201,6 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
                         'date': end.tstamp,
                         'bpm': Math.abs(+powFunction(end.tstamp).toFixed(precision)),
                         'beatLength': end.beatLength / 720 / 4
-                    })
-
-                    // update the MSM bpm values accordingly
-                    msm.allNotes.forEach(n => {
-                        if (n.date >= end.tstamp) {
-                            n['bpm'] = Math.abs(+powFunction(end.tstamp))
-                            n['bpm.beatLength'] = end.beatLength
-                        }
                     })
                 }
             }
@@ -226,12 +217,6 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
                         'beatLength': start.beatLength / 720 / 4
                     })
                 }
-                msm.allNotes.forEach(n => {
-                    if (n.date >= start.tstamp) {
-                        n['bpm'] = Math.abs(+start.bpm)
-                        n['bpm.beatLength'] = start.beatLength / 720 / 4
-                    }
-                })
             }
         }
 
@@ -270,26 +255,14 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
         }
         else {
             const beatLength = calculateBeatLength(this.options?.beatLength || 'bar', msm.timeSignature);
-            console.log('beatLength=', beatLength)
 
             for (let date = 0; date <= msm.lastDate(); date += beatLength) {
                 const performedNotes = msm.notesAtDate(date, 'global')
-                console.log('performed notes=', performedNotes)
 
-                if (performedNotes[0] && performedNotes[0]['midi.onset']) {
+                if (performedNotes[0] && performedNotes[0]['midi.onset'] !== undefined) {
                     onsets.push(performedNotes[0]["midi.onset"])
-                    console.log('onsets=', onsets)
                     tstamps.push(date)
                     beatLengths.push(beatLength)
-
-                    // put a virtual onset at the offset of the last note, 
-                    // so that the tempo of the final note will be calculated
-                    // on the basis of its length.
-                    if (date === msm.lastDate()) {
-                        onsets.push(performedNotes[0]['midi.onset'] + performedNotes[0]['midi.duration'])
-                        tstamps.push(date + performedNotes[0].duration)
-                        beatLengths.push(performedNotes[0].duration)
-                    }
                 }
                 else {
                     // We singularly prolong the beat length until
@@ -297,6 +270,14 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
                     beatLengths[beatLengths.length - 1] += beatLength
                 }
             }
+
+            // put a virtual onset at the offset of the last note, 
+            // so that the tempo of the final note will be calculated
+            // on the basis of its length.
+            const performedNotes = msm.notesAtDate(msm.lastDate(), 'global')
+            onsets.push(performedNotes[0]['midi.onset'] + performedNotes[0]['midi.duration'])
+            tstamps.push(msm.lastDate() + performedNotes[0].duration)
+            beatLengths.push(performedNotes[0].duration)
         }
         const bpms = asBPM(onsets)
 
@@ -309,37 +290,47 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
         douglasPeucker(points, this.options?.epsilon || 4)
 
         mpm.insertInstructions(tempos, 'global')
-        this.reduceMidiOnset(msm)
-        this.calculateTickDurations(msm, mpm)
+        this.addTickDurations(msm, mpm)
+        this.addTickOnsets(msm, mpm)
+
         return super.transform(msm, mpm)
     }
 
     /**
-     * Substracts the calculated onsets from the original onsets, 
-     * so that only the difference remains for further transformations.
-     * 
-     * @param msm MSM to perform the onset reduction on
+     * Translates MIDI onset times into tempo-dependent
+     * ticks using the newly interpolated tempo curves.
+     * Adds the variable `tickDate` on every MSM note 
+     * and removes the variable `midi.onset`. 
+     * @param msm The MSM to modify.
+     * @param mpm The MPM to take the tempo instructions from. 
+     *            It must contain a `tempoMap`.
      */
-    reduceMidiOnset(msm: MSM) {
-        const chords = Object.entries(msm.asChords('global'))
-        let perfDate = 0
-        chords.forEach(([date, chord], i) => {
-            if (i === 0) return
+    addTickOnsets(msm: MSM, mpm: MPM) {
+        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
 
-            const dateDiff = +date - (+chords[i - 1][0])
-            const bpm = chords[i - 1][1][0].bpm
-            const bpmBeatLength = chords[i - 1][1][0]["bpm.beatLength"]
-            if (!bpm) {
-                console.log('No BPM found.')
-                return
-            }
+        let previousStartDate = 0
+        for (let i = 0; i < tempos.length; i++) {
+            const previousTempo = tempos[i - 1]
+            const tempo = tempos[i]
+            const nextTempo = tempos[i + 1]
 
-            perfDate += ((60 / ((bpmBeatLength || 0.25) * 4)) / bpm) * (dateDiff / 720)
+            const startDate =
+                previousStartDate +
+                computeMilliseconds(tempo.date, previousTempo || tempo, tempos[i]?.date)
+            previousStartDate = startDate
 
-            chord.forEach(note => {
-                note['midi.onset'] -= perfDate
+            msm.allNotes.forEach(n => {
+                // are out of the scope of the current tempo instruction? 
+                if (nextTempo && n.date >= nextTempo.date) return
+                if (n.date < tempo.date) return
+
+                const onsetMilliseconds = n["midi.onset"] * 1000
+
+                // replace MIDI time with tick time.
+                n.tickDate = tempo.date + approximateDate(onsetMilliseconds - startDate, tempo, nextTempo?.date)
+                delete n["midi.onset"]
             })
-        })
+        }
     }
 
     /**
@@ -350,11 +341,95 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
      * @param msm 
      * @param mpm 
      */
-    calculateTickDurations(msm: MSM, mpm: MPM) {
+    addTickDurations(msm: MSM, mpm: MPM) {
         for (const note of msm.allNotes) {
             const tempos = mpm.instructionEffectiveInRange<Tempo>(note.date, note.date + note.duration, 'tempo', 'global')
-            note.tickDuration = calculateSymbolicNoteDuration(note, tempos)
+            note.tickDuration = calculateTickDuration(note, tempos)
         }
     }
 }
 
+const isTransition = (tempo: Tempo) => {
+    return tempo["transition.to"] && tempo.meanTempoAt
+}
+
+const computeMilliseconds = (date: number, tempo: Tempo, endDate?: number) => {
+    if (isTransition(tempo)) {
+        return computeMillisecondsForTransition(date, tempo, endDate || -1)
+    }
+    else {
+        return computeMillisecondsForConstantTempo(date, tempo)
+    }
+}
+
+const computeMillisecondsForConstantTempo = (date: number, tempo: Tempo) => {
+    return ((15000.0 * (date - tempo.date)) / (tempo.bpm * tempo.beatLength * 720))
+}
+
+const computeMillisecondsForTransition = (date: number, tempo: Tempo, endDate: number): number => {
+    const N = 2 * Math.floor((date - tempo.date) / (720 / 4));
+    const adjustedN = (N === 0) ? 2 : N;
+
+    const n = adjustedN / 2;
+    const x = (date - tempo.date) / adjustedN;
+
+    const resultConst = (date - tempo.date) * 5000 / (adjustedN * tempo.beatLength * 720);
+    let resultSum = 1 / tempo.bpm + 1 / getTempoAt(date, tempo, endDate);
+
+    for (let k = 1; k < n; k++) {
+        resultSum += 2 / getTempoAt(tempo.date + 2 * k * x, tempo, endDate);
+    }
+
+    for (let k = 1; k <= n; k++) {
+        resultSum += 4 / getTempoAt(tempo.date + (2 * k - 1) * x, tempo, endDate);
+    }
+
+    return resultConst * resultSum;
+}
+
+const getTempoAt = (date: number, tempo: Tempo, endDate): number => {
+    // no tempo
+    if (!tempo.bpm) return 100.0;
+
+    // constant tempo
+    if (!tempo["transition.to"]) return tempo.bpm
+
+    if (date === endDate) return tempo["transition.to"]
+
+    const result = (date - tempo.date) / (endDate - tempo.date);
+    const exponent = Math.log(0.5) / Math.log(tempo.meanTempoAt);
+    return Math.pow(result, exponent) * (tempo["transition.to"] - tempo.bpm) + tempo.bpm;
+}
+
+const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: Tempo, endDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
+    if (!isTransition(effectiveTempoInstruction)) {
+        return physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
+    }
+
+    let guess = initialGuess;
+    let guessedMilliseconds = computeMillisecondsForTransition(guess, effectiveTempoInstruction, endDate);
+    for (let i=0; i<1000 && Math.abs(guessedMilliseconds - targetMilliseconds) > tolerance; i++) {
+        guess += 0.09 * (targetMilliseconds - guessedMilliseconds) 
+        guessedMilliseconds = computeMillisecondsForTransition(guess, effectiveTempoInstruction, endDate);
+    }
+
+    return guess;
+}
+
+export function calculateTickDuration(note: MsmNote, tempos: Tempo[]) {
+    tempos.sort((a, b) => a.date - b.date)
+    let fullDuration = 0
+    let remaining = note['midi.duration'] * 1000
+    for (let i = 0; i < tempos.length; i++) {
+        const startDate = Math.max(note.date, tempos[i].date)
+        let localDuration = remaining
+        if (i < tempos.length - 1) {
+            localDuration = Math.min(symbolicToPhysical(tempos[i + 1].date - startDate, tempos[i].bpm, tempos[i].beatLength),
+                localDuration)
+        }
+
+        fullDuration += approximateDate(localDuration, tempos[i], tempos[i + 1]?.date || -1)
+        remaining -= localDuration
+    }
+    return fullDuration
+}

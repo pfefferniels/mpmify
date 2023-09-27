@@ -44,7 +44,7 @@ const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
 
 export interface InterpolateRubatoOptions extends TransformationOptions {
     /**
-     * Tolerance in milliseconds to deviate from 0. Default value is 20.
+     * Tolerance in ticks to deviate from score onset time. Default value is 5.
      */
     tolerance: number
 
@@ -70,7 +70,7 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
         // set the default options
         this.setOptions(options || {
-            tolerance: 20,
+            tolerance: 5,
             part: 'global',
             beatLength: 'everything'
         })
@@ -80,6 +80,14 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
     public transform(msm: MSM, mpm: MPM): string {
         const tolerance = this.options?.tolerance || 20
+
+        // The rubato transformation can only be placed
+        // after a tempo interpolation. Make sure that 
+        // all notes have a tick date and a tick duration.
+        if (msm.allNotes.some(note => !note.tickDate || !note.tickDuration)) {
+            console.log('Some note of the provided MSM does not have a tick date or a tick duration')
+            return super.transform(msm, mpm)
+        }
 
         const chords = Object.entries(msm.asChords(this.options?.part))
 
@@ -99,13 +107,15 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
             // of the previous tempo interpolation with rubato elements.
             let currentPos = 0
             while (currentPos < chords.length - 1) {
+                // from the current position onwards, find the next chord where
+                // the difference between score onset and performed onset is 
+                // in an acceptable range.
                 const nextNull = chords.slice(currentPos + 1).find(([_, chord]) => {
-                    return (
-                        isDefined(chord[0]['midi.onset']) &&
-                        isDefined(chord[0].bpm) &&
-                        isDefined(chord[0]["bpm.beatLength"]) &&
-                        chord[0]['midi.onset'] <= tolerance / 1000
-                    )
+                    // at this point, all notes inside a chord should be aligned
+                    // to the same onset, so we simply take the first note of the
+                    // chord.
+                    const note = chord[0]
+                    return (note.tickDate - note.date) < tolerance
                 })
 
                 if (nextNull) {
@@ -119,11 +129,9 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
                     chunks.push({
                         events: chords.slice(currentPos, nextPos).map(([date, chord]) => {
-                            // console.log('shift for @', date, '=', chord[0]["midi.onset"] * (chord[0]?.bpm || 60) * ((chord[0]?.["bpm.beatLength"] || 0.25) * 4 * 720) / 60,
-                            // 'midi.duration=', chord[0]["midi.duration"])
                             return {
                                 date: +date,
-                                shift: chord[0]["midi.onset"] * (chord[0]?.bpm || 60) * ((chord[0]?.["bpm.beatLength"] || 0.25) * 4 * 720) / 60
+                                shift: chord[0].tickDate - chord[0].date
                             }
                         }),
                         frameLength: +chords[nextPos][0] - +chords[currentPos][0]
@@ -135,7 +143,7 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
                     chunks.push({
                         events: chords.slice(currentPos).map(([date, chord]) => ({
                             date: +date,
-                            shift: chord[0]["midi.onset"]
+                            shift: chord[0].tickDate - chord[0].date
                         })),
                         frameLength: +chords[currentPos][0] + chords[currentPos][1][0].duration
                     })
@@ -154,16 +162,11 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
             console.log('beat length=', beatLength)
 
             for (let date = 0; date <= msm.lastDate(); date += beatLength) {
+                // filter those chords which are inside the current frame
                 const internalChords = chords
                     .filter(([chordDate, _]) => {
                         return (+chordDate) >= date && (+chordDate) < (date + beatLength)
                     })
-                    .filter(([_, notes]) => {
-                        return isDefined(notes[0]['midi.onset']) &&
-                            isDefined(notes[0].bpm) &&
-                            isDefined(notes[0]["bpm.beatLength"])
-                    })
-
 
                 // for a successfull rubato interpolation, at least two 
                 // chords are required.
@@ -174,13 +177,15 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
                         .map(([date, chord]) => {
                             return {
                                 date: +date,
-                                shift: chord[0]["midi.onset"] * (chord[0]?.bpm || 60) * ((chord[0]?.["bpm.beatLength"] || 0.25) * 4 * 720) / 60
+                                shift: chord[0].tickDate - chord[0].date
                             }
                         }),
                     frameLength: beatLength
                 })
             }
         }
+
+        console.log(JSON.stringify(chunks, null, 4));
 
         const instructions: Rubato[] = chunks
             .map(chunk => {
