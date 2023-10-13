@@ -223,37 +223,41 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
             })
         }
 
-        const points: InterpolationPoint[] = []
         const chords = Object.entries(msm.asChords())
-        chords
+        const points = chords
             .filter(filterByBeatLength(this.options.beatLength, msm.timeSignature))
-            .forEach(([date, chord], i) => {
+            .filter(([_, chord]) => {
                 if (chord.length === 0) {
                     console.warn('Empty chord found. This is not supposed to happen.')
-                    return
                 }
 
-                const firstOnset = chord[0]['midi.onset']
-                if (chord.some(note => note["midi.onset"] !== firstOnset)) {
-                    console.log(`Not all notes in the chord at ${chord[0].date}
+                return chord.length !== 0
+            })
+            .map(([date, chord]) => {
+                const firstNote = chord[0]
+                if (chord.some(note => note["midi.onset"] !== firstNote["midi.onset"])) {
+                    console.log(`Not all notes in the chord at ${date}
                     occur at the same physical time. Make sure that a global physical
                     ornamentation map and/or asynchrony map are calculated before
                     applying this transformer.`)
                 }
-
+                return firstNote
+            })
+            .map((currentNote, i, selectedNotes) => {
+                const currentOnset = currentNote["midi.onset"]
                 // TODO consider beatLength in case of beat length basis = 'everything'
                 // and deal with left-out beats.
-                const [_, nextChord] = chords[i + 1] || [undefined, undefined]
-                const nextOnset = nextChord?.at(0)['midi.onset'] || firstOnset + chord[0]['midi.duration']
+                const nextNote = selectedNotes[i + 1]
+                const nextOnset = nextNote ? nextNote['midi.onset'] : currentOnset + currentNote['midi.duration']
 
-                points.push({
-                    tstamp: +date,
+                return {
+                    tstamp: currentNote.date,
                     beatLength: this.options.beatLength === 'everything'
-                        ? chord[0].duration
+                        ? currentNote.duration
                         : calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4,
-                    milliseconds: firstOnset * 1000,
-                    measuredBpm: nextOnset !== undefined ? 60 / (nextOnset - firstOnset) : 60
-                })
+                    milliseconds: currentOnset * 1000,
+                    measuredBpm: nextOnset !== undefined ? 60 / (nextOnset - currentOnset) : 60
+                } as InterpolationPoint
             })
 
         linearDouglasPeucker(points, this.options?.epsilon || 0.1)
