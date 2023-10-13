@@ -277,24 +277,17 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
     addTickOnsets(msm: MSM, mpm: MPM) {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
 
-        let previousStartDate = 0
+        let currentMilliseconds = 0
         for (let i = 0; i < tempos.length; i++) {
-            const previousTempo = tempos[i - 1]
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
 
-            const startDate =
-                previousStartDate +
-                computeMillisecondsForTransition(tempo.date, {
-                    ...previousTempo,
-                    endDate: tempos[i]?.date
-                } || {
-                    ...tempo,
-                    endDate: tempos[i]?.date
-                },)
-            previousStartDate = startDate
+            console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
 
-            console.log('start date of tempo instruction @', tempo.date, '=', startDate)
+            const tempoWithEndDate: TempoWithEndDate = {
+                ...tempo,
+                endDate: nextTempo?.date || tempo.date + tempo.beatLength * 4 * 720
+            }
 
             msm.allNotes.forEach(n => {
                 // are out of the scope of the current tempo instruction? 
@@ -304,12 +297,11 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
                 const onsetMilliseconds = n["midi.onset"] * 1000
 
                 // replace MIDI time with tick time.
-                n.tickDate = tempo.date + approximateDate(onsetMilliseconds - startDate, {
-                    ...tempo,
-                    endDate: nextTempo?.date
-                })
+                n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
                 delete n["midi.onset"]
             })
+
+            currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
         }
     }
 
@@ -370,8 +362,7 @@ const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
 
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
     if (!isTransition(effectiveTempoInstruction)) {
-        console.log(targetMilliseconds, 'is not inside a tempo transition')
-        return physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
+        return effectiveTempoInstruction.date  + physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
     }
 
     let guess = initialGuess;
