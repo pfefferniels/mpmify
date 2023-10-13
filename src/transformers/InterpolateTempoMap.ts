@@ -1,6 +1,6 @@
 import { v4 } from "uuid";
 import { MPM, Tempo } from "mpm-ts";
-import { MSM, MsmNote } from "../msm";
+import { MSM } from "../msm";
 import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "./BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "./Transformer";
 import { physicalToSymbolic } from "./basicCalculations";
@@ -259,8 +259,8 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
         linearDouglasPeucker(points, this.options?.epsilon || 0.1)
 
         mpm.insertInstructions(tempos, 'global')
-        this.addTickDurations(msm, mpm)
         this.addTickOnsets(msm, mpm)
+        this.addTickDurations(msm, mpm)
 
         return super.transform(msm, mpm)
     }
@@ -298,7 +298,6 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
 
                 // replace MIDI time with tick time.
                 n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
-                delete n["midi.onset"]
             })
 
             currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
@@ -314,9 +313,31 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
      * @param mpm 
      */
     addTickDurations(msm: MSM, mpm: MPM) {
-        for (const note of msm.allNotes) {
-            const tempos = mpm.instructionEffectiveInRange<Tempo>(note.date, note.date + note.duration, 'tempo', 'global')
-            note.tickDuration = calculateTickDuration(note, tempos)
+        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+
+        let currentFrameBeginMilliseconds = 0
+        for (let i = 0; i < tempos.length; i++) {
+            const tempo = tempos[i]
+            const nextTempo = tempos[i + 1]
+
+            const tempoWithEndDate: TempoWithEndDate = {
+                ...tempo,
+                endDate: nextTempo?.date || tempo.date + tempo.beatLength * 100 * 720
+            }
+
+            const endMilliseconds = computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
+
+            msm.allNotes
+                .filter(n => n["midi.duration"])
+                .forEach(n => {
+                    const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000 - currentFrameBeginMilliseconds
+                    if (offsetMs > endMilliseconds) return
+                    n.tickDuration = approximateDate(offsetMs, tempoWithEndDate) - n.tickDate
+                    delete n["midi.duration"]
+                    delete n["midi.onset"]
+                })
+
+            currentFrameBeginMilliseconds += endMilliseconds
         }
     }
 }
@@ -362,7 +383,7 @@ const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
 
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
     if (!isTransition(effectiveTempoInstruction)) {
-        return effectiveTempoInstruction.date  + physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
+        return effectiveTempoInstruction.date + physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
     }
 
     let guess = initialGuess;
@@ -375,22 +396,3 @@ const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: 
     return Math.round(guess);
 }
 
-export function calculateTickDuration(note: MsmNote, tempos: Tempo[]) {
-    /*tempos.sort((a, b) => a.date - b.date)
-    let fullDuration = 0
-    let remaining = note['midi.duration'] * 1000
-    for (let i = 0; i < tempos.length; i++) {
-        const startDate = Math.max(note.date, tempos[i].date)
-        let localDuration = remaining
-        if (i < tempos.length - 1) {
-            localDuration = Math.min(
-                symbolicToPhysical(tempos[i + 1].date - startDate, tempos[i].bpm, tempos[i].beatLength) * 1000,
-                localDuration)
-        }
-
-        fullDuration += approximateDate(localDuration, tempos[i], tempos[i + 1]?.date || -1)
-        remaining -= localDuration
-    }
-    return fullDuration*/
-    return 10
-}
