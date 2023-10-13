@@ -84,8 +84,8 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
         // The rubato transformation can only be placed
         // after a tempo interpolation. Make sure that 
         // all notes have a tick date and a tick duration.
-        if (msm.allNotes.some(note => !note.tickDate || !note.tickDuration)) {
-            console.log('Some note of the provided MSM does not have a tick date or a tick duration')
+        if (msm.allNotes.some(note => note.tickDate === undefined || note.tickDuration === undefined)) {
+            console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
             return super.transform(msm, mpm)
         }
 
