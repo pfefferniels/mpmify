@@ -66,7 +66,7 @@ test('it correctly interpolates a linear tempo transition', () => {
     expect.soft(+tempos[0].meanTempoAt!.toFixed(1)).toEqual(0.5)
     expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(60)
     expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(120)
-    // expect(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
+    expect(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
 })
 
 test('it correctly interpolates a non linear accelerando', () => {
@@ -121,7 +121,7 @@ test('it correctly interpolates a non linear accelerando', () => {
     expect.soft(+tempos[0].meanTempoAt!.toFixed(1)).toEqual(0.3)
     expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(60)
     expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(120)
-    // expect.soft(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
+    expect.soft(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
 })
 
 test('it correctly interpolates a non linear ritardando', () => {
@@ -186,49 +186,49 @@ test('it splits a simple tempo bow into two segments (accelerando and ritardando
             {
                 ...generateQuarterNote(1, 0),
                 'midi.onset': 1,
-                'midi.duration': 0.5,
+                'midi.duration': 0.785,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 1),
                 'midi.onset': 1.785011338,
-                'midi.duration': 0.5,
+                'midi.duration': 0.64,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 2),
                 'midi.onset': 2.425011338,
-                'midi.duration': 0.5,
+                'midi.duration': 0.568,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 3),
                 'midi.onset': 2.992993197,
-                'midi.duration': 0.5,
+                'midi.duration': 0.52,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 4),
                 'midi.onset': 3.512993197,
-                'midi.duration': 0.5,
+                'midi.duration': 0.517,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 5),
                 'midi.onset': 4.030,
-                'midi.duration': 0.5,
+                'midi.duration': 0.577,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 6),
                 'midi.onset': 4.607,
-                'midi.duration': 0.5,
+                'midi.duration': 0.682,
                 'midi.velocity': 100
             },
             {
                 ...generateQuarterNote(1, 7),
                 'midi.onset': 5.290,
-                'midi.duration': 0.5,
+                'midi.duration': 0.863,
                 'midi.velocity': 100
             },
             {
@@ -257,5 +257,6 @@ test('it splits a simple tempo bow into two segments (accelerando and ritardando
     expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(60)
     expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(120)
     expect.soft(+tempos[2].bpm.toFixed(0)).toEqual(60)
-    // expect.soft(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
+    expect.soft(msm.allNotes.map(n => n.tickDate?.toFixed(0))).toEqual([0, 720, 1440, 2160, 2880, 3600, 4320, 5040, 5760])
+    expect.soft(msm.allNotes.map(n => n.tickDuration?.toFixed(0))).toEqual([720, 720, 720, 720, 720, 720, 720, 720, 720])
 })
