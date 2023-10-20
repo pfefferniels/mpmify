@@ -8,14 +8,13 @@ import { InterpolateTempoMap } from "../src/transformers/InterpolateTempoMap"
 import { InterpolateRubato } from "../src/transformers/InterpolateRubato"
 import { InterpolateArticulation } from "../src/transformers/InterpolateArticulation"
 
-/*
 test('correctly interpolates articulation with a rubato map present', () => {
     // Arrange
     const msm = parseMSM(readFileSync('test/fixtures/articulation/with-rubato.msm', 'utf-8'))
     const mpm = new MPM()
 
-    const tempo = new InterpolateTempoMap({ beatLength: 'halfbar', epsilon: 0, precision: 2 })
-    const rubato = new InterpolateRubato({ part: 0, tolerance: 0 })
+    const tempo = new InterpolateTempoMap({ beatLength: 'halfbar', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
+    const rubato = new InterpolateRubato({ beatLength: 'halfbar', part: 0, tolerance: 0 })
     const articulation = new InterpolateArticulation({ part: 0, relativeDurationPrecision: 2, relativeDurationTolerance: 0 })
     tempo.setNext(rubato)
     rubato.setNext(articulation)
@@ -28,7 +27,6 @@ test('correctly interpolates articulation with a rubato map present', () => {
 
     expect(articulations.map(articulation => articulation.relativeDuration)).toEqual([1.5, 0.5, 1.5])
 })
-*/
 
 test('correctly interpolates articulation after a complex-world rubato', () => {
     // Arrange

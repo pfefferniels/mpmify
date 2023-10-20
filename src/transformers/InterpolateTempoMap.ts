@@ -1,5 +1,5 @@
 import { v4 } from "uuid";
-import { MPM, Tempo } from "mpm-ts";
+import { MPM, Ornament, Tempo } from "mpm-ts";
 import { MSM } from "../msm";
 import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "./BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "./Transformer";
@@ -20,7 +20,7 @@ type InterpolationPoint = {
     measuredBpm: number // tempo to the next interpolation point
 }
 
-const simulatedAnnealing = (points: InterpolationPoint[], initialTempo: TempoWithEndDate, initialTemperature: number = 120, coolingRate: number = 0.995, maxIterations: number = 10000): TempoWithEndDate => {
+const simulatedAnnealing = (points: InterpolationPoint[], initialTempo: TempoWithEndDate, initialTemperature: number = 150, coolingRate: number = 0.995, maxIterations: number = 10000): TempoWithEndDate => {
     let currentTempo = { ...initialTempo };
     let bestTempo = { ...initialTempo };
     let bestError = computeTotalError(points, currentTempo);
@@ -89,6 +89,13 @@ export interface InterpolateTempoMapOptions extends TransformationOptions {
      * The number of digits to appear after the decimal point of a BPM value
      */
     precision: number
+
+    /**
+     * Defines whether physical modifiers which are already present in the MPM
+     * (e.g. because of a previous <ornamentation> or <asynchrony> interpolation)
+     * should be translated into symbolic ones.
+     */
+    translatePhysicalModifiers: boolean
 }
 
 /**
@@ -102,7 +109,8 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
         this.setOptions(options || {
             beatLength: 'denominator',
             epsilon: 4,
-            precision: 0
+            precision: 0,
+            translatePhysicalModifiers: true
         })
     }
 
@@ -263,10 +271,60 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
         linearDouglasPeucker(points, this.options?.epsilon || 0.1)
 
         mpm.insertInstructions(tempos, 'global')
+
         this.addTickOnsets(msm, mpm)
+        if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm)
+
         this.addTickDurations(msm, mpm)
 
         return super.transform(msm, mpm)
+    }
+
+    /**
+     * 
+     */
+    translatePhysicalMPMModifiers(mpm: MPM) {
+        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+
+        let currentMilliseconds = 0
+        for (let i = 0; i < tempos.length; i++) {
+            const tempo = tempos[i]
+            const nextTempo = tempos[i + 1]
+
+            console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
+
+            const tempoWithEndDate: TempoWithEndDate = {
+                ...tempo,
+                endDate: nextTempo?.date || tempo.date + tempo.beatLength * 4 * 720
+            }
+
+            // find all ornaments that fit into the tempo frame
+            const ornaments = mpm.instructionEffectiveInRange<Ornament>(tempo.date, tempoWithEndDate.endDate + 1, 'ornament')
+            for (const ornament of ornaments) {
+                if (ornament["time.unit"] === 'ticks') {
+                    // the job is done already
+                    continue
+                }
+
+                const ornamentMs = computeMillisecondsForTransition(ornament.date, tempoWithEndDate)
+                const frameStart = ornamentMs + ornament["frame.start"]
+                console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
+                if (frameStart < 0) {
+                    // use previous tempo frame
+                    continue
+                }
+                const tickFrameStart = approximateDate(frameStart, tempoWithEndDate)
+
+                const frameEnd = frameStart + ornament.frameLength
+                const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
+
+                ornament["frame.start"] = tickFrameStart - ornament.date
+                ornament['frameLength'] = tickFrameEnd - tickFrameStart
+                ornament['time.unit'] = 'ticks'
+            }
+
+            currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
+        }
     }
 
     /**
@@ -303,6 +361,25 @@ export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMap
                 // replace MIDI time with tick time.
                 n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
             })
+
+            // find all ornaments that fit into the tempo frame
+            const ornaments = mpm.instructionEffectiveInRange<Ornament>(tempo.date, tempoWithEndDate.endDate, 'ornament')
+            for (const ornament of ornaments) {
+                const ornamentMs = computeMillisecondsForTransition(ornament.date, tempoWithEndDate)
+                const frameStart = ornamentMs + ornament["frame.start"]
+                if (frameStart < 0) {
+                    // use previous tempo frame
+                    continue
+                }
+                const tickFrameStart = approximateDate(frameStart, tempoWithEndDate)
+
+                const frameEnd = frameStart + ornament.frameLength
+                const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
+
+                ornament["frame.start"] = tickFrameStart - ornament.date
+                ornament['frameLength'] = tickFrameEnd - tickFrameStart
+                ornament['time.unit'] = 'ticks'
+            }
 
             currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
         }
