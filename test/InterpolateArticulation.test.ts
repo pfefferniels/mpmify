@@ -4,7 +4,7 @@ import { expect, test } from "vitest"
 import { parseMSM } from "../src/msm"
 import { readFileSync } from "fs"
 import { Articulation, MPM } from "mpm-ts"
-import { InterpolateTempoMap } from "../src/transformers/InterpolateTempoMap"
+import { CurvedTempoTransformer } from "../src/transformers/CurvedTempoTransformer"
 import { InterpolateRubato } from "../src/transformers/InterpolateRubato"
 import { InterpolateArticulation } from "../src/transformers/InterpolateArticulation"
 
@@ -13,7 +13,7 @@ test('correctly interpolates articulation with a rubato map present', () => {
     const msm = parseMSM(readFileSync('test/fixtures/articulation/with-rubato.msm', 'utf-8'))
     const mpm = new MPM()
 
-    const tempo = new InterpolateTempoMap({ beatLength: 'halfbar', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
+    const tempo = new CurvedTempoTransformer({ beatLength: 'halfbar', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
     const rubato = new InterpolateRubato({ beatLength: 'halfbar', part: 0, tolerance: 0 })
     const articulation = new InterpolateArticulation({ part: 0, relativeDurationPrecision: 2, relativeDurationTolerance: 0 })
     tempo.setNext(rubato)
@@ -33,7 +33,7 @@ test('correctly interpolates articulation after a complex-world rubato', () => {
     const msm = parseMSM(readFileSync('test/fixtures/articulation/with-complex-rubato.msm', 'utf-8'))
     const mpm = new MPM()
 
-    const tempo = new InterpolateTempoMap({ beatLength: 'denominator', epsilon: 0, precision: 2 })
+    const tempo = new CurvedTempoTransformer({ beatLength: 'denominator', epsilon: 0, precision: 2, translatePhysicalModifiers: false })
     const rubato = new InterpolateRubato({ part: 'global', beatLength: 'everything', tolerance: 0 })
     const articulationRight = new InterpolateArticulation({ part: 0, relativeDurationPrecision: 2, relativeDurationTolerance: 0 })
     const articulationLeft = new InterpolateArticulation({ part: 1, relativeDurationPrecision: 2, relativeDurationTolerance: 0 })

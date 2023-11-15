@@ -72,7 +72,7 @@ const computeTotalError = (points: InterpolationPoint[], tempo: TempoWithEndDate
     return totalError;
 }
 
-export interface InterpolateTempoMapOptions extends TransformationOptions {
+export interface CurvedTempoTransformerOptions extends TransformationOptions {
     /**
      * The basis on which to calculate the beat lengths on. 
      * @todo It should be possible to define ranges in a piece
@@ -101,8 +101,8 @@ export interface InterpolateTempoMapOptions extends TransformationOptions {
 /**
  * Interpolates the global tempo and inserts it into the MPM
  */
-export class CurvedTempoTransformer extends AbstractTransformer<InterpolateTempoMapOptions> {
-    constructor(options?: InterpolateTempoMapOptions) {
+export class CurvedTempoTransformer extends AbstractTransformer<CurvedTempoTransformerOptions> {
+    constructor(options?: CurvedTempoTransformerOptions) {
         super()
 
         // set the default options
@@ -114,7 +114,7 @@ export class CurvedTempoTransformer extends AbstractTransformer<InterpolateTempo
         })
     }
 
-    public name() { return 'InterpolateTempoMap' }
+    public name() { return 'CurvedTempoTransformer' }
 
     /**
      * Deletes the silence before the first note is being played 
