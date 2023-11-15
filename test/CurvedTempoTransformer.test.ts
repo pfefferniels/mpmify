@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { MSM } from "../src/msm"
 import { MPM, Ornament, Tempo } from 'mpm-ts'
-import { InterpolateTempoMap } from "../src/transformers/InterpolateTempoMap"
+import { CurvedTempoTransformer } from "../src/transformers/CurvedTempoTransformer"
 
 const generateQuarterNote = (part: number, n: number) => ({
     'xml:id': `n_${part}_${n}`,
@@ -56,7 +56,7 @@ test('it correctly interpolates a linear tempo transition', () => {
     const mpm = new MPM()
 
     // Act
-    const tempo = new InterpolateTempoMap({ beatLength: 'denominator', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
+    const tempo = new CurvedTempoTransformer({ beatLength: 'denominator', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
     tempo.transform(msm, mpm)
 
     // Assert
@@ -109,7 +109,7 @@ test('it correctly interpolates a non linear accelerando', () => {
     const mpm = new MPM()
 
     // Act
-    const tempo = new InterpolateTempoMap({ beatLength: 'denominator', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
+    const tempo = new CurvedTempoTransformer({ beatLength: 'denominator', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
     tempo.transform(msm, mpm)
 
     // Assert
@@ -164,7 +164,7 @@ test('it correctly interpolates a non linear ritardando', () => {
     const mpm = new MPM()
 
     // Act
-    const tempo = new InterpolateTempoMap({ beatLength: 'denominator', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
+    const tempo = new CurvedTempoTransformer({ beatLength: 'denominator', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
     tempo.transform(msm, mpm)
 
     // Assert
@@ -243,7 +243,7 @@ test('it splits a simple tempo bow into two segments (accelerando and ritardando
     const mpm = new MPM()
 
     // Act
-    const tempo = new InterpolateTempoMap({ beatLength: 'denominator', epsilon: 10, precision: 2, translatePhysicalModifiers: false })
+    const tempo = new CurvedTempoTransformer({ beatLength: 'denominator', epsilon: 10, precision: 2, translatePhysicalModifiers: false })
     tempo.transform(msm, mpm)
 
     // Assert
@@ -333,7 +333,7 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     mpm.insertInstructions(physicalArpeggios, 'global')
 
     // Act
-    const tempoTransformer = new InterpolateTempoMap({ beatLength: 'denominator', epsilon: 10, precision: 2, translatePhysicalModifiers: true })
+    const tempoTransformer = new CurvedTempoTransformer({ beatLength: 'denominator', epsilon: 10, precision: 2, translatePhysicalModifiers: true })
     tempoTransformer.translatePhysicalMPMModifiers(mpm)
 
     // Assert

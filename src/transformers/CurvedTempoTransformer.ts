@@ -101,7 +101,7 @@ export interface InterpolateTempoMapOptions extends TransformationOptions {
 /**
  * Interpolates the global tempo and inserts it into the MPM
  */
-export class InterpolateTempoMap extends AbstractTransformer<InterpolateTempoMapOptions> {
+export class CurvedTempoTransformer extends AbstractTransformer<InterpolateTempoMapOptions> {
     constructor(options?: InterpolateTempoMapOptions) {
         super()
 
