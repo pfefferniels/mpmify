@@ -5,6 +5,8 @@ import { AbstractTransformer, TransformationOptions } from "./Transformer";
 import { CurvedTempoTransformer } from "./CurvedTempoTransformer";
 import { SimpleTempoTransformer } from "./SimpleTempoTransformer";
 
+export type TempoApproximation = 'constant' | 'linear' | 'curved'
+
 export interface TempoTransformerOptions extends TransformationOptions {
     /**
      * The basis on which to calculate the beat lengths on. 
@@ -30,7 +32,7 @@ export interface TempoTransformerOptions extends TransformationOptions {
      */
     translatePhysicalModifiers: boolean
 
-    mode: 'constant' | 'linear' | 'curved'
+    mode: TempoApproximation
 }
 
 /**

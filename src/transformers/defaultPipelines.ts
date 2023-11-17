@@ -3,7 +3,8 @@ import {
     InterpolateDynamicsMap,
     InterpolatePhysicalOrnamentation,
     TempoTransformer,
-    InterpolateTimingImprecision
+    InterpolateTimingImprecision,
+    TempoApproximation
 } from ".";
 import { ExtractStyleDefinitions } from "./ExtractStyleDefinitions";
 import { InterpolateAsynchrony } from "./InterpolateAsynchrony";
@@ -12,7 +13,7 @@ import { InterpolateRubato } from "./InterpolateRubato";
 import { BeatLengthBasis } from "./BeatLengthBasis";
 
 export interface TransformerSettings {
-    tempoApproximation: 'constant' | 'linear' | 'curved'
+    tempoApproximation: TempoApproximation
     minimumArpeggioSize: number
     beatLength: BeatLengthBasis
     rubatoLength: BeatLengthBasis
