@@ -124,7 +124,7 @@ export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTrans
         if (this.options.linearTransitions) {
             tempos.forEach((tempo, i) => {
                 if (i === tempos.length - 1) return 
-                tempo['transition.to'] = 0.5
+                tempo['meanTempoAt'] = 0.5
             })
         }
 
