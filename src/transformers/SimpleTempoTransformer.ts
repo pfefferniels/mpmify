@@ -113,7 +113,7 @@ export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTrans
                 return {
                     type: 'tempo',
                     date: currentNote.date,
-                    'xml:id': `tempo${v4()}`,
+                    'xml:id': `tempo_${v4()}`,
                     beatLength: this.options.beatLength === 'everything'
                         ? currentNote.duration
                         : calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4,
@@ -124,6 +124,8 @@ export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTrans
         if (this.options.linearTransitions) {
             tempos.forEach((tempo, i) => {
                 if (i === tempos.length - 1) return 
+
+                tempo['transition.to'] = tempos[i+1].bpm
                 tempo['meanTempoAt'] = 0.5
             })
         }
