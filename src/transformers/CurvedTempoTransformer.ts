@@ -245,7 +245,8 @@ export class CurvedTempoTransformer extends AbstractTransformer<CurvedTempoTrans
                 const firstNote = chord[0]
                 if (chord.some(note => note["midi.onset"] !== firstNote["midi.onset"])) {
                     console.log(`Not all notes in the chord at ${date}
-                    occur at the same physical time. Make sure that a global physical
+                    occur at the same physical time (${chord.map(note => note['midi.onset']).join(';')
+                        }). Make sure that a global physical
                     ornamentation map and/or asynchrony map are calculated before
                     applying this transformer.`)
                 }
@@ -254,9 +255,22 @@ export class CurvedTempoTransformer extends AbstractTransformer<CurvedTempoTrans
             .map((currentNote, i, selectedNotes) => {
                 const currentOnset = currentNote["midi.onset"]
                 // TODO consider beatLength in case of beat length basis = 'everything'
-                // and deal with left-out beats.
+
                 const nextNote = selectedNotes[i + 1]
-                const nextOnset = nextNote ? nextNote['midi.onset'] : currentOnset + currentNote['midi.duration']
+                const beatLength = calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4
+                let ioi = 1
+                if (nextNote) {
+                    ioi = nextNote['midi.onset'] - currentOnset
+                }
+                else {
+                    // It frequently happens, that on the next regular beat
+                    // no note occurs: instead, there's a rest or a tied note.
+                    // If that happens, we take the note's length and turn 
+                    // it convert it to our beat length
+                    const realBeatLength = currentNote['duration'] / 720 / 4
+                    const factor = realBeatLength / beatLength
+                    ioi = currentNote['midi.duration'] / factor
+                }
 
                 return {
                     tstamp: currentNote.date,
@@ -264,7 +278,7 @@ export class CurvedTempoTransformer extends AbstractTransformer<CurvedTempoTrans
                         ? currentNote.duration
                         : calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4,
                     milliseconds: currentOnset * 1000,
-                    measuredBpm: nextOnset !== undefined ? 60 / (nextOnset - currentOnset) : 60
+                    measuredBpm: 60 / ioi
                 } as InterpolationPoint
             })
 

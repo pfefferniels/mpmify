@@ -108,24 +108,39 @@ export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTrans
                 // TODO consider beatLength in case of beat length basis = 'everything'
                 // and deal with left-out beats.
                 const nextNote = selectedNotes[i + 1]
-                const nextOnset = nextNote ? nextNote['midi.onset'] : currentOnset + currentNote['midi.duration']
+
+                let nextOnset, beatLength
+                if (nextNote) {
+                    nextOnset = nextNote['midi.onset']
+                    if (this.options.beatLength === 'everything') {
+                        beatLength = currentNote['duration'] / 720 / 4
+                    }
+                    else {
+                        beatLength = calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4
+                    }
+                }
+                else {
+                    nextOnset = currentOnset + currentNote['midi.duration']
+                    beatLength = currentNote['duration'] / 720 / 4
+                }
+
+                const bpm = nextOnset !== undefined ? 60 / (nextOnset - currentOnset) : 60
 
                 return {
                     type: 'tempo',
                     date: currentNote.date,
                     'xml:id': `tempo_${v4()}`,
-                    beatLength: this.options.beatLength === 'everything'
-                        ? currentNote.duration
-                        : calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4,
-                    bpm: nextOnset !== undefined ? 60 / (nextOnset - currentOnset) : 60
+                    beatLength,
+                    bpm
                 } as Tempo
             })
-        
+            .filter(tempo => !isNaN(tempo.bpm))
+
         if (this.options.linearTransitions) {
             tempos.forEach((tempo, i) => {
-                if (i === tempos.length - 1) return 
+                if (i === tempos.length - 1) return
 
-                tempo['transition.to'] = tempos[i+1].bpm
+                tempo['transition.to'] = tempos[i + 1].bpm
                 tempo['meanTempoAt'] = 0.5
             })
         }
