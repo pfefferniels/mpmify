@@ -50,7 +50,7 @@ export const getDefaultPipeline = (mode: 'melodic-texture' | 'chordal-texture', 
     }
     else {
         return new Pipeline(
-            new InterpolatePhysicalOrnamentation().setNext(
+            new InterpolatePhysicalOrnamentation({ part: 'global', minimumArpeggioSize: settings.minimumArpeggioSize, noteOffShiftTolerance: 250, placement: 'before-beat', durationThreshold: 10 }).setNext(
                 new TempoTransformer({ beatLength: settings.beatLength, epsilon: settings.epsilon, precision: 0, translatePhysicalModifiers: true, mode: settings.tempoApproximation }).setNext(
                     new InterpolateRubato().setNext(
                         new InterpolateArticulation().setNext(
