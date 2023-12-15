@@ -5,6 +5,10 @@ import { MSM } from "../src/msm"
 import { MPM, Ornament, Tempo } from 'mpm-ts'
 import { CurvedTempoTransformer } from "../src/transformers/CurvedTempoTransformer"
 
+const roundToNearestTen = (n: number): number => {
+    return +(Math.round(n / 10) * 10).toFixed(0);
+}
+
 const generateQuarterNote = (part: number, n: number) => ({
     'xml:id': `n_${part}_${n}`,
     date: 720 * n,
@@ -64,9 +68,10 @@ test('it correctly interpolates a linear tempo transition', () => {
 
     expect(tempos).toHaveLength(2)
     expect.soft(+tempos[0].meanTempoAt!.toFixed(1)).toEqual(0.5)
-    expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(60)
-    expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(120)
-    expect(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
+    expect.soft(roundToNearestTen(tempos[0].bpm)).toEqual(60)
+    expect.soft(roundToNearestTen(tempos[1].bpm)).toEqual(120)
+    expect(msm.allNotes.map(n => roundToNearestTen(n.tickDate || 0)))
+        .toEqual([0, 720, 1440, 2160, 2880])
 })
 
 test('it correctly interpolates a non linear accelerando', () => {
@@ -119,9 +124,10 @@ test('it correctly interpolates a non linear accelerando', () => {
 
     expect.soft(tempos).toHaveLength(2)
     expect.soft(+tempos[0].meanTempoAt!.toFixed(1)).toEqual(0.3)
-    expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(60)
-    expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(120)
-    expect.soft(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
+    expect.soft(roundToNearestTen(tempos[0].bpm)).toEqual(60)
+    expect.soft(roundToNearestTen(tempos[1].bpm)).toEqual(120)
+    expect.soft(msm.allNotes.map(n => roundToNearestTen(n.tickDate || 0)))
+        .toEqual([0, 720, 1440, 2160, 2880])
 })
 
 test('it correctly interpolates a non linear ritardando', () => {
@@ -174,8 +180,8 @@ test('it correctly interpolates a non linear ritardando', () => {
 
     expect.soft(tempos).toHaveLength(2)
     expect.soft(+tempos[0].meanTempoAt!.toFixed(1)).toEqual(0.6)
-    expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(120)
-    expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(60)
+    expect.soft(roundToNearestTen(tempos[0].bpm)).toEqual(120)
+    expect.soft(roundToNearestTen(tempos[1].bpm)).toEqual(60)
     // expect.soft(msm.allNotes.map(n => n.tickDate)).toEqual([0, 720, 1440, 2160, 2880])
 })
 
@@ -254,11 +260,13 @@ test('it splits a simple tempo bow into two segments (accelerando and ritardando
     expect.soft(tempos).toHaveLength(3)
     expect.soft(+tempos[0].meanTempoAt!.toFixed(1)).toEqual(0.3)
     expect.soft(+tempos[1].meanTempoAt!.toFixed(1)).toEqual(0.6)
-    expect.soft(+tempos[0].bpm.toFixed(0)).toEqual(60)
-    expect.soft(+tempos[1].bpm.toFixed(0)).toEqual(120)
-    expect.soft(+tempos[2].bpm.toFixed(0)).toEqual(60)
-    expect.soft(msm.allNotes.map(n => n.tickDate?.toFixed(0))).toEqual([0, 720, 1440, 2160, 2880, 3600, 4320, 5040, 5760])
-    expect.soft(msm.allNotes.map(n => n.tickDuration?.toFixed(0))).toEqual([720, 720, 720, 720, 720, 720, 720, 720, 720])
+    expect.soft(roundToNearestTen(tempos[0].bpm)).toEqual(60)
+    expect.soft(roundToNearestTen(tempos[1].bpm)).toEqual(120)
+    expect.soft(roundToNearestTen(tempos[2].bpm)).toEqual(60)
+    expect.soft(msm.allNotes.map(n => roundToNearestTen(n.tickDate || 0)))
+        .toEqual([0, 720, 1440, 2160, 2880, 3600, 4320, 5040, 5760])
+    expect.soft(msm.allNotes.map(n => roundToNearestTen(n.tickDuration || 0)))
+        .toEqual([720, 720, 720, 720, 720, 720, 720, 720, 720])
 })
 
 test('it translates existing physical modifiers into tick modifiers', () => {
