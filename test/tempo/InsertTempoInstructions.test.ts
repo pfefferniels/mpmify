@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Tempo } from 'mpm-ts'
-import { InsertTempoInstructions } from "../../src/transformers/InsertTempoInstructions"
+import { InsertTempoInstructions } from "../../src/transformers/tempo/InsertTempoInstructions"
 
 /**
  * Quickly generates a simple MSM note
@@ -25,19 +25,25 @@ const msmFixture = new MSM(
         {
             ...generateNote(0, 0.5),    // half note ...
             'midi.onset': 1,            
-            'midi.duration': 2,         // lasting 2 seconds (i.e. 60bpm)
+            'midi.duration': 2,         // lasting 2 seconds
             'midi.velocity': 100
         },
         {
             ...generateNote(0.5, 0.25), // quarter note ...
             'midi.onset': 3,            
-            'midi.duration': 1,         // lasting 1 seconds (i.e. 60bpm too)
+            'midi.duration': 1,         // lasting 1 second
             'midi.velocity': 100
         },
         {
-            ...generateNote(0.75, 0.25),
+            ...generateNote(0.75, 0.125),   // eighth note ...
             'midi.onset': 4,
-            'midi.duration': 1,
+            'midi.duration': 0.5,           // lasting half a second 
+            'midi.velocity': 100
+        },
+        {
+            ...generateNote(0.875, 0.125),  // eighth note ...
+            'midi.onset': 4,
+            'midi.duration': 0.5,           // lasting half a second 
             'midi.velocity': 100
         }
     ],

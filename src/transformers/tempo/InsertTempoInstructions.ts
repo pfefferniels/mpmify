@@ -1,9 +1,9 @@
 import { v4 } from "uuid";
 import { MPM, Part, Tempo } from "mpm-ts";
-import { MSM } from "../msm";
-import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "./BeatLengthBasis";
-import { AbstractTransformer, TransformationOptions } from "./Transformer";
-import { isDefined } from "../utils/isDefined";
+import { MSM } from "../../msm";
+import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "../BeatLengthBasis";
+import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { isDefined } from "../../utils/isDefined";
 
 export interface InsertTempoInstructionsOptions extends TransformationOptions {
     /**
@@ -36,7 +36,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         })
     }
 
-    public name() { return 'SimpleTempoTransformer' }
+    public name() { return 'InsertTempoInstructions' }
 
     /**
      * Deletes the silence before the first note is being played 

@@ -1,10 +1,8 @@
 import { v4 } from "uuid";
-import { MPM, Ornament, Part, Tempo } from "mpm-ts";
-import { MSM } from "../msm";
-import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "./BeatLengthBasis";
-import { AbstractTransformer, TransformationOptions } from "./Transformer";
-import { physicalToSymbolic } from "./basicCalculations";
-import { isDefined } from "../utils/isDefined";
+import { MPM, Part, Tempo } from "mpm-ts";
+import { MSM } from "../../msm";
+import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { isDefined } from "../../utils/isDefined";
 
 interface TempoWithEndDate extends Tempo {
     endDate: number

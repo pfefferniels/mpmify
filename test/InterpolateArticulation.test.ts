@@ -4,7 +4,7 @@ import { expect, test } from "vitest"
 import { parseMSM } from "../src/msm"
 import { readFileSync } from "fs"
 import { Articulation, MPM } from "mpm-ts"
-import { CurvedTempoTransformer } from "../src/transformers/CurvedTempoTransformer"
+import { SimplifyTempo } from "../src/transformers/tempo/SimplifyTempo"
 import { InterpolateRubato } from "../src/transformers/InterpolateRubato"
 import { InterpolateArticulation } from "../src/transformers/InterpolateArticulation"
 
@@ -13,7 +13,7 @@ test('correctly interpolates articulation with a rubato map present', () => {
     const msm = parseMSM(readFileSync('test/fixtures/articulation/with-rubato.msm', 'utf-8'))
     const mpm = new MPM()
 
-    const tempo = new CurvedTempoTransformer({ beatLength: 'halfbar', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
+    const tempo = new SimplifyTempo({ beatLength: 'halfbar', epsilon: 8, precision: 2, translatePhysicalModifiers: false })
     const rubato = new InterpolateRubato({ beatLength: 'halfbar', part: 0, tolerance: 0 })
     const articulation = new InterpolateArticulation({ part: 0, relativeDurationPrecision: 2, relativeDurationTolerance: 0 })
     tempo.setNext(rubato)

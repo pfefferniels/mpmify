@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Ornament, Tempo } from 'mpm-ts'
-import { TranslatePhyiscalTimeToTicks } from "../../src/transformers/TranslatePhysicalTimeToTicks"
+import { TranslatePhyiscalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
 
 /**
  * Quickly generates a simple MSM note

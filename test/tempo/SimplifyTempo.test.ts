@@ -3,8 +3,8 @@
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Tempo } from 'mpm-ts'
-import { SimplifyTempo } from "../../src/transformers/SimplifyTempo"
-import { InsertTempoInstructions } from "../../src/transformers/InsertTempoInstructions"
+import { SimplifyTempo } from "../../src/transformers/tempo/SimplifyTempo"
+import { InsertTempoInstructions } from "../../src/transformers/tempo/InsertTempoInstructions"
 
 const roundToNearestTen = (n: number): number => {
     return +(Math.round(n / 10) * 10).toFixed(0);

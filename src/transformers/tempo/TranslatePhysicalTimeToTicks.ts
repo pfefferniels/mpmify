@@ -1,7 +1,7 @@
 import { MPM, Ornament, Tempo } from "mpm-ts";
-import { MSM } from "../msm";
-import { AbstractTransformer, TransformationOptions } from "./Transformer";
-import { physicalToSymbolic } from "./basicCalculations";
+import { MSM } from "../../msm";
+import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { physicalToSymbolic } from "../basicCalculations";
 
 interface TempoWithEndDate extends Tempo {
     endDate: number

@@ -6,9 +6,9 @@ export class Pipeline {
     head: Transformer | null
     length: number
 
-    constructor(head: Transformer) {
+    constructor(head?: Transformer) {
         this.head = head
-        let current: Transformer | undefined = this.head
+        let current = this.head
         let counter = 0;
         while (current) {
             counter++
