@@ -3,7 +3,7 @@ import { MSM, MsmNote } from "../msm"
 import { BeatLengthBasis, calculateBeatLength } from "./BeatLengthBasis"
 import { AbstractTransformer, TransformationOptions } from "./Transformer"
 import { v4 } from "uuid"
-import { isDefined } from "./InterpolateTempoMap"
+
 /**
  * This function calculates the effect of the rubato
  * on the MSM notes
@@ -231,7 +231,6 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
         mpm.insertInstructions(instructions, this.options?.part !== undefined ? this.options.part : 'global')
 
-        // this.removeRubatoDistortion(msm, chords, instructions)
         this.removeRubatoDistortion(msm, mpm)
 
         // hand it over to the next transformer

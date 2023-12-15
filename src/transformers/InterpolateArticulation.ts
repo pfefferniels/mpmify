@@ -23,8 +23,8 @@ export interface InterpolateArticulationOptions extends TransformationOptions {
 /**
  * Interpolates the relative duration attribute of the <articulation> element.
  * It can be applied to different parts (melodic preset) or globally (chordal preset).
- * Should be applied after the `InterpolatePhysicalOrnamentation` and the 
- * `InterpolateTempoMap` transformer.
+ * Should be applied after the `InterpolatePhysicalOrnamentation` and a 
+ * tempo transformer (simple or curved).
  * 
  * @note Interpolation of relative duration is tempo-dependent, meaning that its 
  * precision depends on the precision of the tempo interpolation.
