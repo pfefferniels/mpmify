@@ -22,7 +22,8 @@ export interface InsertTempoInstructionsOptions extends TransformationOptions {
 }
 
 /**
- * Interpolates the global tempo and inserts it into the MPM
+ * Inserts tempo instructions into the given part based on the
+ * given beat length.
  */
 export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInstructionsOptions> {
     constructor(options?: InsertTempoInstructionsOptions) {
