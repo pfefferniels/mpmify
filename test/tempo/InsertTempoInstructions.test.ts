@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM } from "../src/msm"
+import { MSM } from "../../src/msm"
 import { MPM, Tempo } from 'mpm-ts'
-import { InsertTempoInstructions } from "../src/transformers/InsertTempoInstructions"
+import { InsertTempoInstructions } from "../../src/transformers/InsertTempoInstructions"
 
 /**
  * Quickly generates a simple MSM note

@@ -2,7 +2,7 @@ import { MPM, Tempo } from "mpm-ts";
 import { MSM } from "../msm";
 import { BeatLengthBasis } from "./BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "./Transformer";
-import { CurvedTempoTransformer } from "./CurvedTempoTransformer";
+import { CurvedTempoTransformer } from "./SimplifyTempo";
 import { SimpleTempoTransformer } from "./SimpleTempoTransformer";
 
 export type TempoApproximation = 'constant' | 'linear' | 'curved'
