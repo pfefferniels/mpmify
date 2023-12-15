@@ -121,7 +121,6 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
                 // replace MIDI time with tick time.
                 n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
-                console.log('new n.tick date=', n.tickDate)
             })
 
             currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
@@ -208,9 +207,6 @@ const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
     console.log('approximating date for', targetMilliseconds, 'withing tempo instruction', effectiveTempoInstruction["xml:id"])
     if (!isTransition(effectiveTempoInstruction)) {
-        console.log('not within a tempo transition, calling physical to symbolic', (
-            effectiveTempoInstruction.date))
-
         return (
             +effectiveTempoInstruction.date +
             physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
