@@ -1,6 +1,6 @@
 export * from "./InterpolateAsynchrony"
 export * from "./InterpolateArticulation"
-export * from "./InterpolateDynamicsMap"
+export * from "./dynamics/InterpolateDynamicsMap"
 export * from "./InterpolatePhysicalOrnamentation"
 export * from "./InterpolateSymbolicOrnamentation"
 export * from "./tempo"
