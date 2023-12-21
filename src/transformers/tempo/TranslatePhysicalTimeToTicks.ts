@@ -14,6 +14,13 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
      * should be translated into symbolic ones too.
      */
     translatePhysicalModifiers: boolean
+
+    /**
+     * Defines whether the pedal instruction in the MSM should be 
+     * translated to tick time as well.
+     * @todo not yet implemented
+     */
+    translatePedalling?: boolean 
 }
 
 /**
