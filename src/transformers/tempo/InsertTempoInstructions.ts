@@ -61,7 +61,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         // make sure to delete the arbitrary silence before the first note onset
         this.shiftToFirstOnset(msm)
 
-        const chords = Object.entries(msm.asChords())
+        const chords = Object.entries(msm.asChords(this.options.part))
         const tempos = chords
             .filter(filterByBeatLength(this.options.beatLength, msm.timeSignature))
             .filter(([_, chord]) => {
