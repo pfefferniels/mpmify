@@ -1,7 +1,6 @@
 import { MPM, Ornament, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { physicalToSymbolic } from "../basicCalculations";
 
 interface TempoWithEndDate extends Tempo {
     endDate: number
@@ -170,6 +169,10 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
             currentFrameBeginMilliseconds += endMilliseconds
         }
     }
+}
+
+const physicalToSymbolic = (physicalDate: number, bpm: number, beatLength: number) => {
+    return (physicalDate * (bpm * beatLength * 4 / 60)) * 720
 }
 
 const isTransition = (tempo: Tempo) => {
