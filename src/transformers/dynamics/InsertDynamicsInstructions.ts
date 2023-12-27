@@ -15,7 +15,7 @@ export interface InsertDynamicsInstructionsOptions extends TransformationOptions
      * Defines the beat length, on which the calculation of dynamics
      * is done.
      */
-    beatLengthBasis: BeatLengthBasis
+    beatLength: BeatLengthBasis
 }
 
 export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynamicsInstructionsOptions> {
@@ -25,7 +25,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // set the default options
         this.setOptions(options || {
             part: 'global',
-            beatLengthBasis: 'everything'
+            beatLength: 'everything'
         })
     }
 
@@ -34,7 +34,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     public transform(msm: MSM, mpm: MPM): string {
         const dynamics = Object
             .entries(msm.asChords(this.options.part))
-            .reduce(splitByBeatLength(this.options.beatLengthBasis, msm.timeSignature), [])
+            .reduce(splitByBeatLength(this.options.beatLength, msm.timeSignature), [])
             .map((chunk) => {
                 let volume = 0
                 for (const [_, chord] of chunk) {
