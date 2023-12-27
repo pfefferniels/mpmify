@@ -1,7 +1,7 @@
 import { MPM, Part, Rubato } from "mpm-ts"
-import { MSM, MsmNote } from "../msm"
-import { BeatLengthBasis, calculateBeatLength } from "./BeatLengthBasis"
-import { AbstractTransformer, TransformationOptions } from "./Transformer"
+import { MSM, MsmNote } from "../../msm"
+import { BeatLengthBasis, calculateBeatLength } from "../BeatLengthBasis"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
 /**

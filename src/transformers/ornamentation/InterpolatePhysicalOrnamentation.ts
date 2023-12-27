@@ -1,7 +1,7 @@
 import { DynamicsGradient, MPM, Ornament, Part } from "mpm-ts"
-import { MSM } from "../msm"
-import { isDefined } from "../utils/isDefined"
-import { AbstractTransformer, TransformationOptions } from "./Transformer"
+import { MSM } from "../../msm"
+import { isDefined } from "../../utils/isDefined"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate'

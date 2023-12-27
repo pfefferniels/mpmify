@@ -130,7 +130,7 @@ const douglasPeucker = (dynamics: Dynamics[], epsilon = 1): Dynamics[] => {
     return [guess]
 }
 
-export interface InterpolateDynamicsMapOptions extends TransformationOptions {
+export interface SimplifyDynamicsOptions extends TransformationOptions {
     /**
      * Defines if the dynamics will be interpolated globally as opposed
      * to referring to parts. Default is 'global'.
@@ -140,8 +140,8 @@ export interface InterpolateDynamicsMapOptions extends TransformationOptions {
     epsilon: number
 }
 
-export class InsertDynamicsInstructions extends AbstractTransformer<InterpolateDynamicsMapOptions> {
-    constructor(options?: InterpolateDynamicsMapOptions) {
+export class SimplifyDynamics extends AbstractTransformer<SimplifyDynamicsOptions> {
+    constructor(options?: SimplifyDynamicsOptions) {
         super()
 
         // set the default options
