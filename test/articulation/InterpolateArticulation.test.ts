@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { Articulation, MPM } from "mpm-ts"
-import { InterpolateArticulation } from "../../src/transformers"
+import { InsertRelativeDuration } from "../../src/transformers"
 
 /**
  * Quickly generates a simple MSM note
@@ -36,7 +36,7 @@ test('correctly interpolates articulation', () => {
     const mpm = new MPM()
 
     // Act
-    const transformer = new InterpolateArticulation({
+    const transformer = new InsertRelativeDuration({
         part: 'global', 
         relativeDurationPrecision: 0,
         relativeDurationTolerance: 0

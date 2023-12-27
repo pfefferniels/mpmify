@@ -29,7 +29,7 @@ export interface InterpolateArticulationOptions extends TransformationOptions {
  * @note Interpolation of relative duration is tempo-dependent, meaning that its 
  * precision depends on the precision of the tempo interpolation.
  */
-export class InterpolateArticulation extends AbstractTransformer<InterpolateArticulationOptions> {
+export class InsertRelativeDuration extends AbstractTransformer<InterpolateArticulationOptions> {
     constructor(options?: InterpolateArticulationOptions) {
         super()
 
