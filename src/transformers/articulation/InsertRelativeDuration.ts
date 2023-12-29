@@ -1,6 +1,6 @@
 import { Articulation, MPM, Part } from "mpm-ts"
-import { MSM } from "../msm"
-import { AbstractTransformer, TransformationOptions } from "./Transformer"
+import { MSM } from "../../msm"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
 export interface InterpolateArticulationOptions extends TransformationOptions {
@@ -29,7 +29,7 @@ export interface InterpolateArticulationOptions extends TransformationOptions {
  * @note Interpolation of relative duration is tempo-dependent, meaning that its 
  * precision depends on the precision of the tempo interpolation.
  */
-export class InterpolateArticulation extends AbstractTransformer<InterpolateArticulationOptions> {
+export class InsertRelativeDuration extends AbstractTransformer<InterpolateArticulationOptions> {
     constructor(options?: InterpolateArticulationOptions) {
         super()
 

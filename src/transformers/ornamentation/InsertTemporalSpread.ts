@@ -1,7 +1,7 @@
 import { DynamicsGradient, MPM, Ornament, Part } from "mpm-ts"
-import { MSM } from "../msm"
-import { isDefined } from "./CurvedTempoTransformer"
-import { AbstractTransformer, TransformationOptions } from "./Transformer"
+import { MSM } from "../../msm"
+import { isDefined } from "../../utils/isDefined"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate'
@@ -21,7 +21,7 @@ const determineSortDirection = (arr: number[]) => {
         Math.sign(val - arr[i]) === direction) ? direction : 0;
 }
 
-export interface InterpolatePhysicalOrnamentationOptions extends TransformationOptions {
+export interface InsertTemporalSpreadOptions extends TransformationOptions {
     /**
      * the minimum number of notes an arpeggio is expected to have (inclusive)
      */
@@ -54,8 +54,8 @@ export interface InterpolatePhysicalOrnamentationOptions extends TransformationO
  * that after the transformation all notes of the chord will have the same
  * onset.
  */
-export class InterpolatePhysicalOrnamentation extends AbstractTransformer<InterpolatePhysicalOrnamentationOptions> {
-    constructor(options?: InterpolatePhysicalOrnamentationOptions) {
+export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpreadOptions> {
+    constructor(options?: InsertTemporalSpreadOptions) {
         super()
 
         // set the default options
@@ -68,7 +68,7 @@ export class InterpolatePhysicalOrnamentation extends AbstractTransformer<Interp
         })
     }
 
-    public name() { return 'InterpolatePhysicalOrnamentation' }
+    public name() { return 'InsertTemporalSpread' }
 
     public transform(msm: MSM, mpm: MPM): string {
         const ornaments: Ornament[] = []
@@ -94,20 +94,6 @@ export class InterpolatePhysicalOrnamentation extends AbstractTransformer<Interp
             const duration = sortedByOnset[sortedByOnset.length - 1]["midi.onset"] - sortedByOnset[0]["midi.onset"]
             if (duration * 1000 <= (this.options?.durationThreshold || 0)) continue
 
-            // The dynamics gradient is the transition between first and last arpeggio note
-            // If a dynamics gradient exists, the temporal spread might be 
-            // inserted by Welte-Mignon in order to allow dynamic gradating.
-            const firstVel = arpeggioNotes[0]["midi.velocity"]
-            const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
-            const dynamicDiff = lastVel - firstVel
-
-            let gradient: DynamicsGradient
-            if (dynamicDiff > 0) gradient = 'crescendo'
-            else if (dynamicDiff < 0) gradient = 'decrescendo'
-            else gradient = 'no-gradient'
-
-            const avarageVelocity = (lastVel + firstVel) / 2
-
             // helper function to check wether a value is in the shift tolerance
             const shiftTolerance = this.options?.noteOffShiftTolerance || 0
             const inToleranceRange = (x: number, target: number) => x >= (target - (shiftTolerance / 1000) / 2) && x <= (target + (shiftTolerance / 1000) / 2)
@@ -123,12 +109,14 @@ export class InterpolatePhysicalOrnamentation extends AbstractTransformer<Interp
                 if (i === 0) return true
                 const lastOffset = notes[i - 1]['midi.onset'] + notes[i - 1]['midi.duration']
                 return inToleranceRange(note['midi.onset'], lastOffset)
-            }))
+            })) {
                 noteOffShift = 'monophonic'
+            }
             // if every note has the same duration (including tolerance) like the first note, 
             // set noteoff.shift to true
-            else if (sortedByOnset.every(note => inToleranceRange(note['midi.duration'], firstNote['midi.duration'])))
+            else if (sortedByOnset.every(note => inToleranceRange(note['midi.duration'], firstNote['midi.duration']))) {
                 noteOffShift = 'true'
+            }
 
             // define the frame start based on the given option
             const frameLength = +(duration * 1000).toFixed(0)
@@ -156,15 +144,11 @@ export class InterpolatePhysicalOrnamentation extends AbstractTransformer<Interp
                 'note.order': noteOrder,
                 'frame.start': frameStart,
                 'frameLength': frameLength,
-                'scale': Math.max(lastVel, firstVel) - avarageVelocity,
                 'time.unit': 'milliseconds',
-                'gradient': gradient
             })
 
             arpeggioNotes.forEach(note => {
-                console.log('changing from', note['midi.onset'], 'to', newOnset)
                 note['midi.onset'] = newOnset
-                note['midi.velocity'] = avarageVelocity
             })
         }
 

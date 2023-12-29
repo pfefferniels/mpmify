@@ -1,162 +1,54 @@
-import { v4 } from "uuid";
 import { MPM, Ornament, Tempo } from "mpm-ts";
-import { MSM } from "../msm";
-import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "./BeatLengthBasis";
-import { AbstractTransformer, TransformationOptions } from "./Transformer";
-import { physicalToSymbolic } from "./basicCalculations";
+import { MSM } from "../../msm";
+import { AbstractTransformer, TransformationOptions } from "../Transformer";
 
 interface TempoWithEndDate extends Tempo {
     endDate: number
 }
 
-const isDefined = (onset?: number) => {
-    return onset !== undefined && !isNaN(onset)
-}
-
-export interface SimpleTempoTransformerOptions extends TransformationOptions {
-    /**
-     * The basis on which to calculate the beat lengths on. 
-     * @todo It should be possible to define ranges in a piece
-     * with different beat lengthes.
-     */
-    beatLength: BeatLengthBasis
-
-    /**
-     * Tolerance of the Dogulas-Peucker algorithm
-     */
-    epsilon: number
-
-    /**
-     * The number of digits to appear after the decimal point of a BPM value
-     */
-    precision: number
-
+export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptions {
     /**
      * Defines whether physical modifiers which are already present in the MPM
      * (e.g. because of a previous <ornamentation> or <asynchrony> interpolation)
-     * should be translated into symbolic ones.
+     * should be translated into symbolic ones too.
      */
     translatePhysicalModifiers: boolean
 
-    linearTransitions: boolean
+    /**
+     * Defines whether the pedal instruction in the MSM should be 
+     * translated to tick time as well.
+     * @todo not yet implemented
+     */
+    translatePedalling?: boolean 
 }
 
 /**
  * Interpolates the global tempo and inserts it into the MPM
  */
-export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTransformerOptions> {
-    constructor(options?: SimpleTempoTransformerOptions) {
+export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslatePhyiscalTimeToTicksOptions> {
+    constructor(options?: TranslatePhyiscalTimeToTicksOptions) {
         super()
 
         // set the default options
         this.setOptions(options || {
-            beatLength: 'denominator',
-            epsilon: 4,
-            precision: 0,
-            translatePhysicalModifiers: true,
-            linearTransitions: false
+            translatePhysicalModifiers: true
         })
     }
 
-    public name() { return 'SimpleTempoTransformer' }
-
-    /**
-     * Deletes the silence before the first note is being played 
-     * 
-     * @param msm MSM to perform the shifting on
-     */
-    private shiftToFirstOnset(msm: MSM) {
-        const firstOnset = Math.min(...msm.allNotes.map(n => n["midi.onset"]).filter(isDefined))
-        msm.allNotes.forEach(n => n["midi.onset"] -= firstOnset)
-    }
+    public name() { return 'TranslatePhyiscalTimeToTicks' }
 
     transform(msm: MSM, mpm: MPM): string {
-        console.log(msm.allNotes.map(n => n['midi.onset']))
-        if (!msm.timeSignature) {
-            console.warn('A time signature must be given to interpolate a tempo map.')
-            return super.transform(msm, mpm);
-        }
-
-        // const precision = this.options?.precision || 0
-
-        // before starting to calculate the <tempo> instructions,
-        // make sure to delete the arbitrary silence before the first note onset
-        this.shiftToFirstOnset(msm)
-
-        const chords = Object.entries(msm.asChords())
-        const tempos = chords
-            .filter(filterByBeatLength(this.options.beatLength, msm.timeSignature))
-            .filter(([_, chord]) => {
-                if (chord.length === 0) {
-                    console.warn('Empty chord found. This is not supposed to happen.')
-                }
-
-                return chord.length !== 0
-            })
-            .map(([date, chord]) => {
-                const firstNote = chord[0]
-                if (chord.some(note => note["midi.onset"] !== firstNote["midi.onset"])) {
-                    console.log(`Not all notes in the chord at ${date}
-                    occur at the same physical time. Make sure that a global physical
-                    ornamentation map and/or asynchrony map are calculated before
-                    applying this transformer.`)
-                }
-                return firstNote
-            })
-            .map((currentNote, i, selectedNotes) => {
-                const currentOnset = currentNote["midi.onset"]
-                // TODO consider beatLength in case of beat length basis = 'everything'
-                // and deal with left-out beats.
-                const nextNote = selectedNotes[i + 1]
-
-                let nextOnset, beatLength
-                if (nextNote) {
-                    nextOnset = nextNote['midi.onset']
-                    if (this.options.beatLength === 'everything') {
-                        beatLength = currentNote['duration'] / 720 / 4
-                    }
-                    else {
-                        beatLength = calculateBeatLength(this.options.beatLength, msm.timeSignature) / 720 / 4
-                    }
-                }
-                else {
-                    nextOnset = currentOnset + currentNote['midi.duration']
-                    beatLength = currentNote['duration'] / 720 / 4
-                }
-
-                const bpm = nextOnset !== undefined ? 60 / (nextOnset - currentOnset) : 60
-
-                return {
-                    type: 'tempo',
-                    date: currentNote.date,
-                    'xml:id': `tempo_${v4()}`,
-                    beatLength,
-                    bpm
-                } as Tempo
-            })
-            .filter(tempo => !isNaN(tempo.bpm))
-
-        if (this.options.linearTransitions) {
-            tempos.forEach((tempo, i) => {
-                if (i === tempos.length - 1) return
-
-                tempo['transition.to'] = tempos[i + 1].bpm
-                tempo['meanTempoAt'] = 0.5
-            })
-        }
-
-        mpm.insertInstructions(tempos, 'global')
-
         this.addTickOnsets(msm, mpm)
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm)
-
         this.addTickDurations(msm, mpm)
 
         return super.transform(msm, mpm)
     }
 
     /**
-     * 
+     * Walks through physical attributes in the
+     * given MPM and translates them into tick values.
+     * @todo Currently, only ornaments are taken into account.
      */
     translatePhysicalMPMModifiers(mpm: MPM) {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
@@ -237,25 +129,6 @@ export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTrans
                 n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
             })
 
-            // find all ornaments that fit into the tempo frame
-            const ornaments = mpm.instructionEffectiveInRange<Ornament>(tempo.date, tempoWithEndDate.endDate, 'ornament')
-            for (const ornament of ornaments) {
-                const ornamentMs = computeMillisecondsForTransition(ornament.date, tempoWithEndDate)
-                const frameStart = ornamentMs + ornament["frame.start"]
-                if (frameStart < 0) {
-                    // use previous tempo frame
-                    continue
-                }
-                const tickFrameStart = approximateDate(frameStart, tempoWithEndDate)
-
-                const frameEnd = frameStart + ornament.frameLength
-                const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
-
-                ornament["frame.start"] = tickFrameStart - ornament.date
-                ornament['frameLength'] = tickFrameEnd - tickFrameStart
-                ornament['time.unit'] = 'ticks'
-            }
-
             currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
         }
     }
@@ -298,6 +171,10 @@ export class SimpleTempoTransformer extends AbstractTransformer<SimpleTempoTrans
     }
 }
 
+const physicalToSymbolic = (physicalDate: number, bpm: number, beatLength: number) => {
+    return (physicalDate * (bpm * beatLength * 4 / 60)) * 720
+}
+
 const isTransition = (tempo: Tempo) => {
     return tempo["transition.to"] && tempo.meanTempoAt
 }
@@ -338,8 +215,12 @@ const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
 }
 
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
+    console.log('approximating date for', targetMilliseconds, 'withing tempo instruction', effectiveTempoInstruction["xml:id"])
     if (!isTransition(effectiveTempoInstruction)) {
-        return effectiveTempoInstruction.date + physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
+        return (
+            +effectiveTempoInstruction.date +
+            physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
+        )
     }
 
     let guess = initialGuess;

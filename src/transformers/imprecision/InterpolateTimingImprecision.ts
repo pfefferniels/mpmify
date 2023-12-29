@@ -1,6 +1,6 @@
 import { MPM } from "mpm-ts"
-import { MSM } from "../msm"
-import { AbstractTransformer, TransformationOptions } from "./Transformer"
+import { MSM } from "../../msm"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
 export interface InterpolateTimingImprecisionOptions extends TransformationOptions {
     predefinedImprecision: number

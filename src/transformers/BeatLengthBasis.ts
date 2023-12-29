@@ -36,3 +36,24 @@ export const filterByBeatLength = (beatLengthBasis: BeatLengthBasis, timeSignatu
         return (+date % calculateBeatLength(beatLengthBasis, timeSignature) === 0)
     }
 }
+
+export const splitByBeatLength = (beatLengthBasis: BeatLengthBasis, timeSignature: TimeSignature) => {
+    return (
+        prev: [string, MsmNote[]][][],
+        [date, chord]: [string, MsmNote[]]) => {
+        if (beatLengthBasis === 'everything') {
+            prev.push([[date, chord]])
+        }
+
+        if (+date % calculateBeatLength(beatLengthBasis, timeSignature) === 0) {
+            prev.push([[date, chord]])
+        }
+        else {
+            const lastChunk = prev[prev.length - 1]
+            if (!lastChunk) return prev 
+
+            lastChunk.push([date, chord])
+        }
+        return prev
+    }
+}
