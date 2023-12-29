@@ -99,7 +99,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             const inToleranceRange = (x: number, target: number) => x >= (target - (shiftTolerance / 1000) / 2) && x <= (target + (shiftTolerance / 1000) / 2)
 
             // by default, no offset shifting is applied
-            let noteOffShift = 'false'
+            let noteOffShift: boolean | 'monophonic' = false
             const firstNote = sortedByOnset[0]
 
             // if every onset is in the tolerance range of the previous offset, 
@@ -115,7 +115,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             // if every note has the same duration (including tolerance) like the first note, 
             // set noteoff.shift to true
             else if (sortedByOnset.every(note => inToleranceRange(note['midi.duration'], firstNote['midi.duration']))) {
-                noteOffShift = 'true'
+                noteOffShift = true
             }
 
             // define the frame start based on the given option

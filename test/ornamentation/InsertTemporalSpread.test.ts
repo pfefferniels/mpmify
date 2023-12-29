@@ -54,4 +54,5 @@ test('Inserts a temporal spread', () => {
     const arpeggios = mpm.getInstructions<Ornament>('ornament', 'global')
     expect(arpeggios[0]['frame.start']).toEqual(-500)
     expect(arpeggios[0]['frameLength']).toEqual(1000)
+    expect(arpeggios[0]['noteoff.shift']).toEqual('monophonic')
 })
