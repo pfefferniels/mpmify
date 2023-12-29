@@ -4,8 +4,6 @@ import { isDefined } from "../../utils/isDefined"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
-export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate'
-
 export interface InsertDynamicsGradientOptions extends TransformationOptions {
     /**
      * The part on which the transformer is to be applied to.
