@@ -52,8 +52,8 @@ export class InsertRelativeDuration extends AbstractTransformer<InterpolateArtic
         // Interpolate relativeDuration
 
         const articulations: Articulation[] = []
-        const chords = Object.entries(msm.asChords(this.options?.part))
-        chords.forEach(([date, chord], i) => {
+        const chords = msm.asChords(this.options?.part)
+        for (const [date, chord] of chords) {
             if (!chord.length) {
                 console.log('empty chord encountered.')
                 return
@@ -86,7 +86,7 @@ export class InsertRelativeDuration extends AbstractTransformer<InterpolateArtic
                 chordArticulations.push({
                     type: 'articulation',
                     'xml:id': `articulation_${v4()}`,
-                    date: +date,
+                    date,
                     noteid: '#' + note['xml:id'],
                     relativeDuration: +relativeDuration.toFixed(relativeDurationPrecision)
                 })
@@ -100,7 +100,7 @@ export class InsertRelativeDuration extends AbstractTransformer<InterpolateArtic
             }
 
             articulations.push(...chordArticulations)
-        })
+        }
 
         mpm.insertInstructions(articulations, this.options?.part !== undefined ? this.options.part : 'global')
 

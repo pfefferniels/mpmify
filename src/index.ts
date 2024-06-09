@@ -1,6 +1,5 @@
-import { MSM } from "./msm";
-import { MPM, parseMPM } from 'mpm-ts'
-import { getDefaultPipeline, TempoApproximation, TransformerSettings } from "./transformers";
-import { BeatLengthBasis } from "./transformers/BeatLengthBasis";
+export { MSM } from "./msm";
+export { MPM, parseMPM } from 'mpm-ts'
+export { Pipeline } from "./transformers";
+export { BeatLengthBasis } from "./transformers/BeatLengthBasis";
 
-export { getDefaultPipeline, MSM, MPM, parseMPM, BeatLengthBasis, TempoApproximation, TransformerSettings }

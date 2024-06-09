@@ -6,3 +6,6 @@ export * from "./tempo"
 export * from "./imprecision/InterpolateTimingImprecision"
 export * from "./Pipeline"
 export * from "./rubato/InterpolateRubato"
+export * from "./ExtractStyleDefinitions"
+export { TransformationOptions } from "./Transformer"
+export * from './tempo/tempoCalculations'

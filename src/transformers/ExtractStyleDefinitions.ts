@@ -52,6 +52,7 @@ export class ExtractStyleDefinitions extends AbstractTransformer<ExtractStyleDef
     public transform(msm: MSM, mpm: MPM): string {
         ([0, 1, 'global'] as Part[]).forEach((part => {
             mpm.getInstructions<Ornament>('ornament', part as Part).forEach(ornament => {
+                console.log('extracting info from', ornament)
                 if (ornament['frame.start'] !== undefined && ornament['frameLength'] !== undefined) {
                     // TODO: find a possibly existing definition which is in the
                     // range of tolerance. If found, merge.
@@ -67,7 +68,7 @@ export class ExtractStyleDefinitions extends AbstractTransformer<ExtractStyleDef
                         'type': 'ornament',
                         'frameLength': ornament.frameLength,
                         'frame.start': ornament['frame.start'],
-                        'noteoff.shift': ornament['noteoff.shift'],
+                        'noteoff.shift': ornament['noteoff.shift'] || true,
                         'time.unit': ornament['time.unit'],
                         'transition.from': transition[0],
                         'transition.to': transition[1]

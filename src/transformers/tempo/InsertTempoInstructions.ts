@@ -4,21 +4,26 @@ import { MSM } from "../../msm";
 import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "../BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { isDefined } from "../../utils/isDefined";
+import { approximateFromPoints } from "./SimplifyTempo";
+
+export type Marker = {
+    date: number
+    beatLength: number
+}
 
 export interface InsertTempoInstructionsOptions extends TransformationOptions {
+    /**
+     * Defines where new tempo instructions should be
+     * set. Alternatively, a beat length can be passed
+     * @default 'denominator'
+     */
+    markers: Marker[] | BeatLengthBasis
+
     /**
      * Defines on which part to apply to transformer to.
      * @default 'global'
      */
     part: Part
-
-    /**
-     * The basis on which to calculate the beat lengths on. 
-     * @todo It should be possible to define ranges in a piece
-     * with different beat lengthes.
-     * @default 'denominator'
-     */
-    beatLength: BeatLengthBasis
 }
 
 /**
@@ -32,7 +37,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         // set the default options
         this.setOptions(options || {
             part: 'global',
-            beatLength: 'denominator',
+            markers: 'denominator',
         })
     }
 
@@ -49,21 +54,71 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
     }
 
     transform(msm: MSM, mpm: MPM): string {
-        console.log(msm.allNotes.map(n => n['midi.onset']))
         if (!msm.timeSignature) {
             console.warn('A time signature must be given to interpolate a tempo map.')
             return super.transform(msm, mpm);
         }
 
-        // const precision = this.options?.precision || 0
-
         // before starting to calculate the <tempo> instructions,
         // make sure to delete the arbitrary silence before the first note onset
         this.shiftToFirstOnset(msm)
 
+        if (typeof this.options.markers === 'object') {
+            this.insertInstructionsByMarkers(msm, mpm, this.options.markers)
+        }
+        else {
+            const beatLength = this.options.markers
+            this.insertInstructionsByBeatLength(msm, mpm, beatLength)
+        }
+
+        return super.transform(msm, mpm)
+    }
+
+    insertInstructionsByMarkers(msm: MSM, mpm: MPM, markers: Marker[]) {
+        const onsetAtDate = (date: number) => {
+            const currentNotes = msm.notesAtDate(date, this.options.part)
+            if (currentNotes.length === 0) return
+            return currentNotes[0]["midi.onset"]
+        }
+
+        if (markers.length <= 1) {
+            console.log('At least two markers need to be specified')
+            return super.transform(msm, mpm)
+        }
+
+        // make sure the markers are sorted
+        markers.sort((a, b) => a.date - b.date)
+
+        // remove duplicate markers at the same time
+        // prefer longer beat length over the shorter
+        for (let i = 0; i < markers.length - 1; i++) {
+            if (markers[i].date === markers[i + 1].date) {
+                markers.splice(markers[i].beatLength > markers[i + 1].beatLength ? i : i + 1, 1)
+            }
+        }
+
+        const tempos = markers
+            .slice(0, -1)
+            .map((marker, i) => {
+                const nextDate = markers[i + 1].date
+
+                const points = []
+                const firstOnset = onsetAtDate(marker.date)
+                for (let date = marker.date; date <= nextDate; date += marker.beatLength) {
+                    if (onsetAtDate(date) === undefined) continue
+                    points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
+                }
+
+                return approximateFromPoints(points, marker.beatLength / 720 / 4)
+            })
+
+        mpm.insertInstructions(tempos, this.options?.part || 'global')
+    }
+
+    insertInstructionsByBeatLength(msm: MSM, mpm: MPM, beatLength: BeatLengthBasis) {
         const chords = Object.entries(msm.asChords(this.options.part))
         const tempos = chords
-            .filter(filterByBeatLength(this.options.beatLength, msm.timeSignature))
+            .filter(filterByBeatLength(beatLength, msm.timeSignature))
             .filter(([_, chord]) => {
                 if (chord.length === 0) {
                     console.warn('Empty chord found. This is not supposed to happen.')
@@ -89,11 +144,11 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                 let nextOnset, beatLength
                 if (nextNote) {
                     nextOnset = nextNote['midi.onset']
-                    if (this.options.beatLength === 'everything') {
+                    if (beatLength === 'everything') {
                         beatLength = currentNote['duration'] / 720 / 4
                     }
                     else {
-                        const givenBeatLength = calculateBeatLength(this.options.beatLength, msm.timeSignature)
+                        const givenBeatLength = calculateBeatLength(beatLength, msm.timeSignature)
 
                         if (nextNote.date !== currentNote.date + givenBeatLength) {
                             const newBeatLength = nextNote.date - currentNote.date
@@ -121,8 +176,6 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             .filter(tempo => !isNaN(tempo.bpm))
 
         mpm.insertInstructions(tempos, this.options?.part || 'global')
-
-        return super.transform(msm, mpm)
     }
 }
 

@@ -32,9 +32,7 @@ export type MsmNote = {
 /**
  * Used to represent a homophonized version of the score.
  */
-export type Chords = {
-    [tstamp: number]: MsmNote[]
-}
+export type ChordMap = Map<number, MsmNote[]>
 
 export type TimeSignature = {
     numerator: number
@@ -64,16 +62,18 @@ export class MSM {
         }
     }
 
-    public addPerformanceInfo(scoreId: string, midiNote: any) {
+    public clone() {
+        const clone = new MSM(this.allNotes, this.timeSignature)
+        return clone
+    }
+
+    public addCustomInfo(scoreId: string, info: any) {
         const target = this.allNotes.find(note => note["xml:id"] === scoreId)
         if (!target) return
 
-        if (!midiNote.pitch) return
-
-        target['midi.pitch'] = midiNote.pitch
-        target['midi.onset'] = +(midiNote.ontime)
-        target['midi.duration'] = midiNote.offtime - midiNote.ontime,
-        target['midi.velocity'] = midiNote.onvel
+        for (const [key, value] of Object.entries(info)) {
+            target[key] = value
+        }
     }
 
     public serialize(filterIntermediateAttributes = true) {
@@ -188,17 +188,22 @@ export class MSM {
      * Generates a homophonized version of the MSM score.
      * @returns 
      */
-    public asChords(part: Part = 'global'): Chords {
-        const notes = part === 'global' ? this.allNotes : this.allNotes.filter(n => n.part - 1 === part)
-        return notes.reduce((prev: any, curr) => {
-            if (prev[curr.date]) {
-                prev[curr.date].push(curr)
+    public asChords(part: Part = 'global'): ChordMap {
+        const notes = part === 'global'
+            ? this.allNotes
+            : this.allNotes.filter(n => n.part - 1 === part)
+
+        notes.sort((a, b) => a.date - b.date)
+
+        return notes.reduce((prev, curr) => {
+            if (prev.has(curr.date)) {
+                prev.set(curr.date, [...prev.get(curr.date), curr])
             }
             else {
-                prev[curr.date] = [curr]
+                prev.set(curr.date, [curr])
             }
             return prev
-        }, {})
+        }, new Map() as ChordMap)
     }
 
     /**

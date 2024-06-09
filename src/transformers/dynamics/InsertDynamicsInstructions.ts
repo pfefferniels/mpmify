@@ -32,10 +32,10 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     public name() { return 'InsertDynamicsInstructions' }
 
     public transform(msm: MSM, mpm: MPM): string {
-        const dynamics = Object
-            .entries(msm.asChords(this.options.part))
-            .reduce(splitByBeatLength(this.options.beatLength, msm.timeSignature), [])
-            .map((chunk) => {
+        const chords = msm.asChords(this.options.part)
+        const chunks = splitByBeatLength(chords, this.options.beatLength, msm.timeSignature)
+
+        const dynamics = chunks.map((chunk) => {
                 let volume = 0
                 for (const [_, chord] of chunk) {
                     volume += chord.reduce((prev, curr) =>

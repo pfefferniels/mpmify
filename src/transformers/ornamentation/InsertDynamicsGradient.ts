@@ -31,7 +31,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
     public transform(msm: MSM, mpm: MPM): string {
         const chords = msm.asChords(this.options?.part)
-        for (let [date, arpeggioNotes] of Object.entries(chords)) {
+        for (let [date, arpeggioNotes] of chords) {
             // only consider notes with a defined onset time
             arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
 
@@ -52,7 +52,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             const ornament: Ornament = {
                 'type': 'ornament',
                 'xml:id': 'ornament_' + v4(),
-                'date': +date,
+                date,
                 'name.ref': 'neutralArpeggio',
                 gradient,
                 scale

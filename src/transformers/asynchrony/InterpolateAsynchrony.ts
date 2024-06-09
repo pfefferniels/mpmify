@@ -53,7 +53,7 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
         const asynchronies: Asynchrony[] = []
 
         const chords = msm.asChords(this.options?.part as Part || 0)
-        for (const [date, chord] of Object.entries(chords)) {
+        for (const [date, chord] of chords) {
             if (!chord.length) {
                 // This is not supposed to happen. Throw an error instead?
                 continue
@@ -71,7 +71,7 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
             }
 
             const otherChords = msm.asChords(this.options?.part === 1 ? 0 : 1)
-            const otherChord = otherChords[+date]
+            const otherChord = otherChords.get(date)
 
             if (!onset || !otherChord || !otherChord.length || !otherChord[0]['midi.onset']) {
                 console.log(`Cannot interpolate asynchrony if no MIDI onset is defined
@@ -96,7 +96,7 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
             asynchronies.push({
                 'type': 'asynchrony',
                 'xml:id': 'asynchrony_' + v4(),
-                'date': +date,
+                date,
                 'milliseconds.offset': +offset.toFixed(this.options?.precision || 0)
             })
             chord.forEach(note => note["midi.onset"] -= (offset / 1000))

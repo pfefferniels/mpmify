@@ -23,7 +23,7 @@ export class Pipeline {
         let current = this.head;
         while (current.nextTransformer) current = current.nextTransformer
         current.setNext(transformer)
-        this.length++
+        this.length += 1
     }
 
     at(n: number): Transformer | null {

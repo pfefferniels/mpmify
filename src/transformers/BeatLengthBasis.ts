@@ -3,13 +3,14 @@
  * whole bar, half bar, the denominator or for every single given note.
  */
 
-import { TimeSignature, MsmNote } from "../msm";
+import { TimeSignature, MsmNote, ChordMap } from "../msm";
 
 export const beatLengthBasis = ['bar', 'halfbar', 'thirdbar', 'denominator', 'everything'] as const;
-export type BeatLengthBasis = typeof beatLengthBasis[number];
+export type BeatLengthBasis = typeof beatLengthBasis[number] | number;
 
-export const calculateBeatLength = (beatLength: Omit<'everything', BeatLengthBasis>, timeSignature: TimeSignature) => {
+export const calculateBeatLength = (beatLength: number | Omit<'everything', BeatLengthBasis>, timeSignature: TimeSignature) => {
     let result = 720;
+    if (typeof beatLength === 'number') return beatLength * 4 * 720
     switch (beatLength) {
         case 'denominator':
             result = (4 / timeSignature.denominator);
@@ -37,23 +38,19 @@ export const filterByBeatLength = (beatLengthBasis: BeatLengthBasis, timeSignatu
     }
 }
 
-export const splitByBeatLength = (beatLengthBasis: BeatLengthBasis, timeSignature: TimeSignature) => {
-    return (
-        prev: [string, MsmNote[]][][],
-        [date, chord]: [string, MsmNote[]]) => {
-        if (beatLengthBasis === 'everything') {
-            prev.push([[date, chord]])
+export const splitByBeatLength = (
+    chords: ChordMap,
+    beatLengthBasis: BeatLengthBasis,
+    timeSignature: TimeSignature) => {
+    if (beatLengthBasis === 'everything') return [chords]
+    const newMaps = []
+    let currentMap = new Map()
+    for (const [date, chord] of chords) {
+        if (date !== 0 && date % calculateBeatLength(beatLengthBasis, timeSignature) === 0) {
+            newMaps.push(new Map(currentMap))
+            currentMap = new Map()
         }
-
-        if (+date % calculateBeatLength(beatLengthBasis, timeSignature) === 0) {
-            prev.push([[date, chord]])
-        }
-        else {
-            const lastChunk = prev[prev.length - 1]
-            if (!lastChunk) return prev 
-
-            lastChunk.push([date, chord])
-        }
-        return prev
+        currentMap.set(date, chord)
     }
+    return newMaps
 }

@@ -1,6 +1,7 @@
 import { MPM, Ornament, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { computeMillisecondsAt } from "./tempoCalculations";
 
 interface TempoWithEndDate extends Tempo {
     endDate: number
@@ -73,7 +74,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                     continue
                 }
 
-                const ornamentMs = computeMillisecondsForTransition(ornament.date, tempoWithEndDate)
+                const ornamentMs = computeMillisecondsAt(ornament.date, tempoWithEndDate)
                 const frameStart = ornamentMs + ornament["frame.start"]
                 console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
                 if (frameStart < 0) {
@@ -84,13 +85,16 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
                 const frameEnd = frameStart + ornament.frameLength
                 const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
+                console.log('frame: ', tickFrameStart, tickFrameEnd)
 
                 ornament["frame.start"] = tickFrameStart - ornament.date
                 ornament['frameLength'] = tickFrameEnd - tickFrameStart
                 ornament['time.unit'] = 'ticks'
+
+                console.log('new ornament', ornament)
             }
 
-            currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
+            currentMilliseconds += computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
         }
     }
 
@@ -129,7 +133,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
             })
 
-            currentMilliseconds += computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
+            currentMilliseconds += computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
         }
     }
 
@@ -154,7 +158,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 endDate: nextTempo?.date || tempo.date + tempo.beatLength * 100 * 720
             }
 
-            const endMilliseconds = computeMillisecondsForTransition(tempoWithEndDate.endDate, tempoWithEndDate)
+            const endMilliseconds = computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
 
             msm.allNotes
                 .filter(n => n["midi.duration"])
@@ -179,43 +183,8 @@ const isTransition = (tempo: Tempo) => {
     return tempo["transition.to"] && tempo.meanTempoAt
 }
 
-const computeMillisecondsForTransition = (date: number, tempo: TempoWithEndDate): number => {
-    const N = 2 * Math.floor((date - tempo.date) / (720 / 4));
-    const adjustedN = (N === 0) ? 2 : N;
-
-    const n = adjustedN / 2;
-    const x = (date - tempo.date) / adjustedN;
-
-    const resultConst = (date - tempo.date) * 5000 / (adjustedN * tempo.beatLength * 720);
-    let resultSum = 1 / tempo.bpm + 1 / getTempoAt(date, tempo);
-
-    for (let k = 1; k < n; k++) {
-        resultSum += 2 / getTempoAt(tempo.date + 2 * k * x, tempo);
-    }
-
-    for (let k = 1; k <= n; k++) {
-        resultSum += 4 / getTempoAt(tempo.date + (2 * k - 1) * x, tempo);
-    }
-
-    return resultConst * resultSum;
-}
-
-const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
-    // no tempo
-    if (!tempo.bpm) return 100.0;
-
-    // constant tempo
-    if (!tempo["transition.to"]) return tempo.bpm
-
-    if (date === tempo.endDate) return tempo["transition.to"]
-
-    const result = (date - tempo.date) / (tempo.endDate - tempo.date);
-    const exponent = Math.log(0.5) / Math.log(tempo.meanTempoAt);
-    return Math.pow(result, exponent) * (tempo["transition.to"] - tempo.bpm) + tempo.bpm;
-}
-
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
-    console.log('approximating date for', targetMilliseconds, 'withing tempo instruction', effectiveTempoInstruction["xml:id"])
+    console.log('approximating date for', targetMilliseconds, 'within tempo instruction', effectiveTempoInstruction["xml:id"])
     if (!isTransition(effectiveTempoInstruction)) {
         return (
             +effectiveTempoInstruction.date +
@@ -224,10 +193,10 @@ const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: 
     }
 
     let guess = initialGuess;
-    let guessedMilliseconds = computeMillisecondsForTransition(guess, effectiveTempoInstruction);
+    let guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     for (let i = 0; i < 1000 && Math.abs(guessedMilliseconds - targetMilliseconds) > tolerance; i++) {
         guess += 0.1 * (targetMilliseconds - guessedMilliseconds)
-        guessedMilliseconds = computeMillisecondsForTransition(guess, effectiveTempoInstruction);
+        guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     }
 
     return Math.round(guess);

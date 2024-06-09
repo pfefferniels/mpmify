@@ -73,8 +73,10 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
     public transform(msm: MSM, mpm: MPM): string {
         const ornaments: Ornament[] = []
 
+        console.log('inserting')
+
         const chords = msm.asChords(this.options?.part)
-        for (let [date, arpeggioNotes] of Object.entries(chords)) {
+        for (let [date, arpeggioNotes] of chords) {
             // only consider notes with a defined onset time
             arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
 
@@ -138,7 +140,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             ornaments.push({
                 'type': 'ornament',
                 'xml:id': 'ornament_' + v4(),
-                'date': +date,
+                date,
                 'name.ref': 'neutralArpeggio',
                 'noteoff.shift': noteOffShift,
                 'note.order': noteOrder,
@@ -151,6 +153,8 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 note['midi.onset'] = newOnset
             })
         }
+
+        console.log('ornaments=', ornaments)
 
         mpm.insertInstructions(ornaments, this.options?.part !== undefined ? this.options.part : 'global')
 
