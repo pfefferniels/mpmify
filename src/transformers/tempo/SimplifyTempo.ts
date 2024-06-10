@@ -5,6 +5,13 @@ import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { isDefined } from "../../utils/isDefined";
 import { TempoWithEndDate, computeMillisecondsAt } from "./tempoCalculations";
 
+/**
+ * Returns a number whose value is limited to the given range.
+ */
+const clamp = (min: number, middle: number, max: number) => {
+    return Math.max(min, Math.min(middle, max))
+}
+
 export type Point = [number, number];
 
 const simulatedAnnealing = (points: Point[], initialTempo: TempoWithEndDate, initialTemperature: number = 500, coolingRate: number = 0.995, maxIterations: number = 1000): TempoWithEndDate => {
@@ -48,7 +55,11 @@ const generateNeighboringTempo = (tempo: TempoWithEndDate): TempoWithEndDate => 
     const isAcc = tempo.bpm < tempo["transition.to"]!
     const newBPM = tempo.bpm + (isAcc ? -randomVariation : randomVariation)
     const newTransitionTo = tempo["transition.to"]! + (isAcc ? randomVariation : -randomVariation)
-    const newMeanTempoAt = tempo.meanTempoAt + (Math.random() - 0.5) * 0.1
+    const newMeanTempoAt = clamp(
+        0.01,
+        tempo.meanTempoAt + (Math.random() - 0.5) * 0.1,
+        0.99
+    )
 
     return {
         type: 'tempo',
