@@ -11,6 +11,11 @@ export type Marker = {
     beatLength: number
 }
 
+export type SilentOnset = {
+    date: number 
+    onset: number
+}
+
 export interface InsertTempoInstructionsOptions extends TransformationOptions {
     /**
      * Defines where new tempo instructions should be
@@ -18,6 +23,8 @@ export interface InsertTempoInstructionsOptions extends TransformationOptions {
      * @default 'denominator'
      */
     markers: Marker[] | BeatLengthBasis
+
+    silentOnsets: SilentOnset[]
 
     /**
      * Defines on which part to apply to transformer to.
@@ -38,20 +45,11 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         this.setOptions(options || {
             part: 'global',
             markers: 'denominator',
+            silentOnsets: []
         })
     }
 
     public name() { return 'InsertTempoInstructions' }
-
-    /**
-     * Deletes the silence before the first note is being played 
-     * 
-     * @param msm MSM to perform the shifting on
-     */
-    private shiftToFirstOnset(msm: MSM) {
-        const firstOnset = Math.min(...msm.allNotes.map(n => n["midi.onset"]).filter(isDefined))
-        msm.allNotes.forEach(n => n["midi.onset"] -= firstOnset)
-    }
 
     transform(msm: MSM, mpm: MPM): string {
         if (!msm.timeSignature) {
@@ -61,7 +59,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
 
         // before starting to calculate the <tempo> instructions,
         // make sure to delete the arbitrary silence before the first note onset
-        this.shiftToFirstOnset(msm)
+        msm.shiftToFirstOnset()
 
         if (typeof this.options.markers === 'object') {
             this.insertInstructionsByMarkers(msm, mpm, this.options.markers)
@@ -77,7 +75,10 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
     insertInstructionsByMarkers(msm: MSM, mpm: MPM, markers: Marker[]) {
         const onsetAtDate = (date: number) => {
             const currentNotes = msm.notesAtDate(date, this.options.part)
-            if (currentNotes.length === 0) return
+            if (currentNotes.length === 0) {
+                const silent = this.options.silentOnsets.find(s => s.date === date)
+                return silent?.onset
+            }
             return currentNotes[0]["midi.onset"]
         }
 

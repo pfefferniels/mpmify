@@ -1,5 +1,6 @@
 import { Part } from "mpm-ts";
 import { parse } from "js2xmlparser";
+import { isDefined } from "../utils/isDefined";
 
 /**
  * Temporary attributes used and manipulated in the process of interpolation.
@@ -74,6 +75,15 @@ export class MSM {
         for (const [key, value] of Object.entries(info)) {
             target[key] = value
         }
+    }
+
+    /**
+     * Deletes the silence before the first note is being played 
+     */
+    public shiftToFirstOnset() {
+        const notesWithOnset = this.allNotes.filter(n => isDefined(n['midi.onset']))
+        const min = Math.min(...notesWithOnset.map(n => n['midi.onset']))
+        if (min) notesWithOnset.forEach(n => n['midi.onset'] -= min)
     }
 
     public serialize(filterIntermediateAttributes = true) {
