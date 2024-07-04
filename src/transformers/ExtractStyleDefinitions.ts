@@ -23,7 +23,7 @@ export interface ExtractStyleDefinitionsOptions extends TransformationOptions {
 
 /**
  * This transformer tries to combine multiple instructions
- * into fewer definitions, taking a given tolerance into account.
+ * into fewer archetype definitions, taking a given tolerance into account.
  * Style definitions will always be written into the global environment.
  */
 export class ExtractStyleDefinitions extends AbstractTransformer<ExtractStyleDefinitionsOptions> {
@@ -58,10 +58,10 @@ export class ExtractStyleDefinitions extends AbstractTransformer<ExtractStyleDef
                     // range of tolerance. If found, merge.
                     let transition: [number | undefined, number | undefined] = [undefined, undefined]
                     if (ornament.gradient === 'crescendo') {
-                        transition = [-1, 1]
+                        transition = [-1, 0]
                     }
                     else if (ornament.gradient === 'decrescendo') {
-                        transition = [1, -1]
+                        transition = [0, -1]
                     }
 
                     const definitionName = mpm.insertDefinition({

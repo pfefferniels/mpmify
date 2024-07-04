@@ -1,8 +1,10 @@
-import { BeatLengthBasis, splitByBeatLength } from "../BeatLengthBasis"
 import { Dynamics, MPM, Part } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
-import { v4 } from "uuid"
+import { approximateDynamics, DynamicsPoints } from "./Approximation"
+import { WithEndDate } from "../tempo/tempoCalculations"
+
+export type DynamicsWithEndDate = Dynamics & WithEndDate
 
 export interface InsertDynamicsInstructionsOptions extends TransformationOptions {
     /**
@@ -11,11 +13,7 @@ export interface InsertDynamicsInstructionsOptions extends TransformationOptions
      */
     part: Part
 
-    /**
-     * Defines the beat length, on which the calculation of dynamics
-     * is done.
-     */
-    beatLength: BeatLengthBasis
+    markers: number[]
 }
 
 export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynamicsInstructionsOptions> {
@@ -25,34 +23,47 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // set the default options
         this.setOptions(options || {
             part: 'global',
-            beatLength: 'everything'
+            markers: [0]
         })
     }
 
     public name() { return 'InsertDynamicsInstructions' }
 
     public transform(msm: MSM, mpm: MPM): string {
-        const chords = msm.asChords(this.options.part)
-        const chunks = splitByBeatLength(chords, this.options.beatLength, msm.timeSignature)
+        const markers = this.options.markers
+        const points = this.asPoints(msm, this.options.part)
 
-        const dynamics = chunks.map((chunk) => {
-                let volume = 0
-                for (const [_, chord] of chunk) {
-                    volume += chord.reduce((prev, curr) =>
-                        prev + (curr['midi.velocity'] || 0), 0) / chord.length
-                }
-                volume /= chunk.length
+        const dynamics: Dynamics[] = []
+        for (let i = 0; i < this.options.markers.length - 1; i++) {
+            const startDate = markers[i]
+            const endDate = markers[i + 1]
 
-                return {
-                    'xml:id': `dynamics_${v4()}`,
-                    type: 'dynamics',
-                    date: +chunk[0][0],
-                    volume
-                } as Dynamics
-            })
+            const instruction = approximateDynamics(points.filter(p => p.date >= startDate && p.date <= endDate))
+            if (instruction) {
+                dynamics.push(instruction)
+            }
+        }
 
         mpm.insertInstructions(dynamics, this.options?.part)
 
         return super.transform(msm, mpm)
+    }
+
+    private asPoints(msm: MSM, part: Part): DynamicsPoints[] {
+        const points: DynamicsPoints[] = []
+        const chords = msm.asChords(part)
+        for (const [date, notes] of chords) {
+            const notesWithVolume = notes
+                .filter(n => n["midi.velocity"] !== undefined)
+            const velocity = notesWithVolume
+                .reduce((sum, curr) => sum + curr["midi.velocity"], 0) / notesWithVolume.length
+
+            points.push({
+                date,
+                velocity
+            })
+        }
+
+        return points
     }
 }

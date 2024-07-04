@@ -231,6 +231,10 @@ export class MSM {
     public lastNote(): MsmNote | undefined {
         return this.allNotes.find(n => n.date === this.lastDate())
     }
+
+    public parts() {
+        return new Set(this.allNotes.map(note => note.part - 1))
+    }
 }
 
 export const parseMSM = (msm: string) => {

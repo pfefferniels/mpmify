@@ -46,8 +46,9 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             else if (dynamicDiff < 0) gradient = 'decrescendo'
             else gradient = 'no-gradient'
 
-            const avarageVelocity = (lastVel + firstVel) / 2
-            const scale = Math.max(lastVel, firstVel) - avarageVelocity
+            const loudest = Math.max(lastVel, firstVel)
+            const softest = Math.min(lastVel, firstVel)
+            const scale =  loudest - softest
 
             const ornament: Ornament = {
                 'type': 'ornament',
@@ -60,7 +61,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             mpm.insertInstruction(ornament, this.options.part || 'global')
 
             arpeggioNotes.forEach(note => {
-                note['midi.velocity'] = avarageVelocity
+                note['midi.velocity'] = loudest
             })
         }
 

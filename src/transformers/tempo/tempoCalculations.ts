@@ -1,8 +1,10 @@
 import { Tempo } from "mpm-ts";
 
-export interface TempoWithEndDate extends Tempo {
+export interface WithEndDate {
     endDate: number
 }
+
+export type TempoWithEndDate = Tempo & WithEndDate
 
 export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) => {
     if (!tempo["transition.to"]) {
