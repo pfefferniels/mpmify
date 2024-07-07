@@ -1,6 +1,5 @@
 import { MPM, Part, Rubato } from "mpm-ts"
-import { MSM, MsmNote } from "../../msm"
-import { BeatLengthBasis, calculateBeatLength } from "../BeatLengthBasis"
+import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
@@ -42,18 +41,13 @@ const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
     return lowerBound - rubato.date;
 };
 
-export interface InterpolateRubatoOptions extends TransformationOptions {
-    /**
-     * Tolerance in ticks to deviate from score onset time. Default value is 5.
-     */
-    tolerance: number
+export type Frame = {
+    date: number
+    length: number
+}
 
-    /**
-     * On which beat length to base the calculation of tempo rubato. If
-     * set to 'everything', it will try to compensate the remaining onset 
-     * times from a previous tempo calculation.
-     */
-    beatLength: BeatLengthBasis
+export interface InterpolateRubatoOptions extends TransformationOptions {
+    frames: Frame[]
 
     /**
      * The part on which the transformer is to be applied to.
@@ -70,166 +64,59 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
         // set the default options
         this.setOptions(options || {
-            tolerance: 5,
             part: 'global',
-            beatLength: 'everything'
+            frames: []
         })
     }
 
     public name() { return 'InterpolateRubato' }
 
     public transform(msm: MSM, mpm: MPM): string {
-        const tolerance = this.options?.tolerance || 20
+        const rubatos: Rubato[] = []
+        for (const frame of this.options.frames) {
+            const chords = [...msm.asChords(this.options.part).entries()]
+                .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
 
-        // The rubato transformation can only be placed
-        // after a tempo interpolation. Make sure that 
-        // all notes have a tick date and a tick duration.
-        if (msm.allNotes.some(note => note.tickDate === undefined || note.tickDuration === undefined)) {
-            console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
-            return super.transform(msm, mpm)
-        }
 
-        const chords = Object.entries(msm.asChords(this.options?.part))
-
-        type RubatoChunk = {
-            events: {
-                date: number,
-                shift: number
-            }[]
-            frameLength: number
-        }
-
-        // slice the chords into chunks
-        let chunks: RubatoChunk[] = []
-
-        if (this.options?.beatLength === 'everything') {
-            // in the default case, try compensate the "left-overs" 
-            // of the previous tempo interpolation with rubato elements.
-            let currentPos = 0
-            while (currentPos < chords.length - 1) {
-                // from the current position onwards, find the next chord where
-                // the difference between score onset and performed onset is 
-                // in an acceptable range.
-                const nextNull = chords.slice(currentPos + 1).find(([_, chord]) => {
-                    // at this point, all notes inside a chord should be aligned
-                    // to the same onset, so we simply take the first note of the
-                    // chord.
-                    const note = chord[0]
-                    return (note.tickDate - note.date) < tolerance
-                })
-
-                if (nextNull) {
-                    const nextPos = chords.indexOf(nextNull, currentPos + 1)
-
-                    // filter out single events
-                    if (nextPos === currentPos + 1) {
-                        currentPos = nextPos
-                        continue
-                    }
-
-                    chunks.push({
-                        events: chords.slice(currentPos, nextPos).map(([date, chord]) => {
-                            return {
-                                date: +date,
-                                shift: chord[0].tickDate - chord[0].date
-                            }
-                        }),
-                        frameLength: +chords[nextPos][0] - +chords[currentPos][0]
-                    })
-                    currentPos = nextPos
-                }
-                else {
-                    // use everything from here to the end and stop slicing
-                    chunks.push({
-                        events: chords.slice(currentPos).map(([date, chord]) => ({
-                            date: +date,
-                            shift: chord[0].tickDate - chord[0].date
-                        })),
-                        frameLength: +chords[currentPos][0] + chords[currentPos][1][0].duration
-                    })
-                    break
-                }
-            }
-        }
-        else {
-            if (!msm.timeSignature) {
-                console.log('no time signature specified in MSM.')
-
-                // hand it over to the next transformer
+            // The rubato transformation can only be placed
+            // after a tempo interpolation. Make sure that 
+            // all notes have a tick date and a tick duration.
+            if (chords.some(([_, notes]) =>
+                notes.some(note => note.tickDate === undefined || note.tickDuration === undefined))
+            ) {
+                console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
                 return super.transform(msm, mpm)
             }
-            const beatLength = calculateBeatLength(this.options?.beatLength || 'bar', msm.timeSignature!);
-            console.log('beat length=', beatLength)
 
-            for (let date = 0; date <= msm.lastDate(); date += beatLength) {
-                // filter those chords which are inside the current frame
-                const internalChords = chords
-                    .filter(([chordDate, _]) => {
-                        return (+chordDate) >= date && (+chordDate) < (date + beatLength)
-                    })
+            const intensities = chords.map(([date, notes]) => {
+                const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
 
-                // for a successfull rubato interpolation, at least two 
-                // chords are required.
-                if (internalChords.length <= 1) continue
+                // scale both vertical and horizontal to [0,1]
+                const relativeDate = (date - frame.date) / frame.length
+                const relativeDateShifted = (realDate - frame.date) / frame.length
 
-                chunks.push({
-                    events: internalChords
-                        .map(([date, chord]) => {
-                            return {
-                                date: +date,
-                                shift: chord[0].tickDate - chord[0].date
-                            }
-                        }),
-                    frameLength: beatLength
-                })
-            }
+                if (relativeDateShifted === 0 || relativeDate === 0) {
+                    return 0.5
+                }
+
+                return Math.log(relativeDateShifted) / Math.log(relativeDate)
+            })
+
+            // Then take its avarage.
+            // TODO: Should be replace be a better method.
+            const avgIntensity = intensities.reduce((p, c) => p + c, 0) / intensities.length
+
+            rubatos.push({
+                'type': 'rubato',
+                'xml:id': `rubato${v4()}`,
+                'date': frame.date,
+                'frameLength': frame.length,
+                'intensity': +avgIntensity.toFixed(2),
+                'loop': false
+            })
         }
 
-        console.log(JSON.stringify(chunks, null, 4));
-
-        const instructions: Rubato[] = chunks
-            .map(chunk => {
-                // every chunk becomes a rubato instruction
-
-                // calculate the intensity for every given point inside the chunk
-                let intensities = chunk.events.slice(1).map(({ date, shift }) => {
-                    // scale both vertical and horizontal to [0,1]
-                    const relativeDate = (date - chunk.events[0].date) / chunk.frameLength
-                    const relativeDateShifted = (date + shift - chunk.events[0].date) / chunk.frameLength
-
-                    return Math.log(relativeDateShifted) / Math.log(relativeDate)
-                })
-
-                // Then take its avarage.
-                // TODO: Should be replace be a better method.
-                const avgIntensity = intensities.reduce((p, c) => p + c, 0) / intensities.length
-
-                return {
-                    'type': 'rubato',
-                    'xml:id': `rubato${v4()}`,
-                    'date': chunk.events[0].date,
-                    'frameLength': chunk.frameLength,
-                    'intensity': +avgIntensity.toFixed(2),
-                    'loop': false
-                }
-            })
-            .reduce((all, curr) => {
-                // find repeating rubato instructions and merge them
-
-                const last = all[all.length - 1]
-                if (last && curr.frameLength === last.frameLength && curr.intensity === last.intensity) {
-                    last.loop = true
-                    return all
-                }
-
-                // make sure that we use only valid intensities
-                if (isFinite((curr as Rubato).intensity)) {
-                    all.push(curr as Rubato)
-                }
-                return all
-            }, new Array<Rubato>())
-
-        mpm.insertInstructions(instructions, this.options?.part !== undefined ? this.options.part : 'global')
+        mpm.insertInstructions(rubatos, this.options.part)
 
         this.removeRubatoDistortion(msm, mpm)
 
@@ -259,6 +146,9 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
                 : note.date
 
             const onsetDiff = onsetInTicks - note.date
+            if (note.tickDate) {
+                note.tickDate += onsetDiff
+            }
             note.tickDuration += onsetDiff
 
             const offset = note.date + note.tickDuration
