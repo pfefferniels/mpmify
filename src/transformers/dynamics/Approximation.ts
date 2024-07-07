@@ -6,7 +6,7 @@ export type DynamicsPoints = {
     velocity: number
 }
 
-type InnerControlPoints = {
+export type InnerControlPoints = {
     x1: number
     x2: number
 }

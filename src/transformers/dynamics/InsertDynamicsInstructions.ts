@@ -1,7 +1,7 @@
 import { Dynamics, MPM, Part } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
-import { approximateDynamics, DynamicsPoints } from "./Approximation"
+import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
 export type DynamicsWithEndDate = Dynamics & WithEndDate
@@ -45,6 +45,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         }
 
         mpm.insertInstructions(dynamics, this.options?.part)
+        this.setRelativeVolume(msm, mpm)
 
         return super.transform(msm, mpm)
     }
@@ -65,5 +66,33 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         }
 
         return points
+    }
+
+    private setRelativeVolume(msm: MSM, mpm: MPM) {
+        const instructions = mpm.getInstructions<Dynamics>('dynamics', this.options.part)
+        const instructionsWithEndDate = []
+        for (let i=0; i<instructions.length - 1; i++) {
+            instructionsWithEndDate.push({
+                ...instructions[i],
+                endDate: instructions[i + 1].date,
+                ...computeInnerControlPointsXPositions(
+                    instructions[i].curvature,
+                    instructions[i].protraction)
+            })
+        }
+
+        const chords = msm.asChords(this.options.part)
+
+        for (const [date, notes] of chords) {
+            const corresp = instructionsWithEndDate.find(i => date >= i.date && date < i.endDate)
+            if (!corresp) continue 
+
+            for (const note of notes) {
+                if (!note["midi.velocity"]) continue 
+
+                const should = volumeAtDate(corresp, note.date)
+                note.relativeVolume = note["midi.velocity"] - should
+            }
+        }
     }
 }
