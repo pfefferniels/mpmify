@@ -20,7 +20,7 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
      * translated to tick time as well.
      * @todo not yet implemented
      */
-    translatePedalling?: boolean 
+    translatePedalling?: boolean
 }
 
 /**
@@ -145,7 +145,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      * @param msm 
      * @param mpm 
      */
-    addTickDurations(msm: MSM, mpm: MPM) {
+    addTickDurations(msm: MSM, mpm: MPM, deleteMIDI: boolean = false) {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
 
         let currentFrameBeginMilliseconds = 0
@@ -166,8 +166,11 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                     const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000 - currentFrameBeginMilliseconds
                     if (offsetMs > endMilliseconds) return
                     n.tickDuration = approximateDate(offsetMs, tempoWithEndDate) - n.tickDate
-                    delete n["midi.duration"]
-                    delete n["midi.onset"]
+
+                    if (deleteMIDI) {
+                        delete n["midi.duration"]
+                        delete n["midi.onset"]
+                    }
                 })
 
             currentFrameBeginMilliseconds += endMilliseconds
@@ -192,12 +195,17 @@ const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: 
         )
     }
 
+    console.log('initial=', initialGuess)
+
     let guess = initialGuess;
     let guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     for (let i = 0; i < 1000 && Math.abs(guessedMilliseconds - targetMilliseconds) > tolerance; i++) {
         guess += 0.1 * (targetMilliseconds - guessedMilliseconds)
         guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     }
+
+    console.log('after=', guess)
+
 
     return Math.round(guess);
 }
