@@ -147,9 +147,9 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
             const onsetDiff = onsetInTicks - note.date
             if (note.tickDate) {
-                note.tickDate += onsetDiff
+                note.tickDate -= onsetDiff
             }
-            note.tickDuration += onsetDiff
+            note.tickDuration -= onsetDiff
 
             const offset = note.date + note.tickDuration
 
