@@ -47,7 +47,7 @@ export const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
     // constant tempo
     if (!tempo["transition.to"]) return tempo.bpm
 
-    if (date === tempo.endDate) return tempo["transition.to"]
+    if (date >= tempo.endDate) return tempo["transition.to"]
 
     const result = (date - tempo.date) / (tempo.endDate - tempo.date);
     const exponent = Math.log(0.5) / Math.log(tempo.meanTempoAt || 0.5);
