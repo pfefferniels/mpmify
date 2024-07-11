@@ -1,4 +1,4 @@
-import { Dynamics, MPM, Part } from "mpm-ts"
+import { Dynamics, MPM, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -135,7 +135,7 @@ export interface SimplifyDynamicsOptions extends TransformationOptions {
      * Defines if the dynamics will be interpolated globally as opposed
      * to referring to parts. Default is 'global'.
      */
-    part: Part
+    part: Scope
 
     epsilon: number
 }

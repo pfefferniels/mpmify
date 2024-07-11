@@ -1,4 +1,4 @@
-import { Dynamics, MPM, Part } from "mpm-ts"
+import { Dynamics, MPM, Part, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
@@ -11,7 +11,7 @@ export interface InsertDynamicsInstructionsOptions extends TransformationOptions
      * Defines if the dynamics will be interpolated globally as opposed
      * to referring to parts. Default is 'global'.
      */
-    part: Part
+    part: Scope
 
     markers: number[]
 }
@@ -50,7 +50,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         return super.transform(msm, mpm)
     }
 
-    private asPoints(msm: MSM, part: Part): DynamicsPoints[] {
+    private asPoints(msm: MSM, part: Scope): DynamicsPoints[] {
         const points: DynamicsPoints[] = []
         const chords = msm.asChords(part)
         for (const [date, notes] of chords) {

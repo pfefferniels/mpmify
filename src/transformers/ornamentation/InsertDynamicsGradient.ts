@@ -1,4 +1,4 @@
-import { DynamicsGradient, MPM, Ornament, Part } from "mpm-ts"
+import { DynamicsGradient, MPM, Ornament, Part, Scope, SimpleDynamicsGradient } from "mpm-ts"
 import { MSM } from "../../msm"
 import { isDefined } from "../../utils/isDefined"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
@@ -8,7 +8,7 @@ export interface InsertDynamicsGradientOptions extends TransformationOptions {
     /**
      * The part on which the transformer is to be applied to.
      */
-    part: Part
+    part: Scope
 }
 
 /**
@@ -41,14 +41,16 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
             const dynamicDiff = lastVel - firstVel
 
-            let gradient: DynamicsGradient
+            let gradient: SimpleDynamicsGradient
             if (dynamicDiff > 0) gradient = 'crescendo'
             else if (dynamicDiff < 0) gradient = 'decrescendo'
             else gradient = 'no-gradient'
 
             const loudest = Math.max(lastVel, firstVel)
             const softest = Math.min(lastVel, firstVel)
-            const scale =  loudest - softest
+            const scale = loudest - softest
+
+            if (scale === 0) continue
 
             const ornament: Ornament = {
                 'type': 'ornament',
@@ -58,7 +60,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
                 gradient,
                 scale
             }
-            mpm.insertInstruction(ornament, this.options.part || 'global')
+            mpm.insertInstruction(ornament, this.options.part)
 
             arpeggioNotes.forEach(note => {
                 note['midi.velocity'] = loudest

@@ -1,4 +1,4 @@
-import { Part } from "mpm-ts";
+import { Scope } from "mpm-ts";
 import { parse } from "js2xmlparser";
 import { isDefined } from "../utils/isDefined";
 
@@ -187,7 +187,7 @@ export class MSM {
      * @param part if "global", all parts will be considered
      * @returns array of MSM notes
      */
-    public notesAtDate(tstamp: number, part: Part): MsmNote[] {
+    public notesAtDate(tstamp: number, part: Scope): MsmNote[] {
         return this.allNotes.filter(note => {
             return (typeof part === 'number') ?
                 (note.date === tstamp && note.part === part + 1) // a specific part
@@ -199,7 +199,7 @@ export class MSM {
      * Generates a homophonized version of the MSM score.
      * @returns 
      */
-    public asChords(part: Part = 'global'): ChordMap {
+    public asChords(part: Scope = 'global'): ChordMap {
         const notes = part === 'global'
             ? this.allNotes
             : this.allNotes.filter(n => n.part - 1 === part)

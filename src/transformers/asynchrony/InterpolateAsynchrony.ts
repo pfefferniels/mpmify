@@ -1,5 +1,5 @@
 import { v4 } from "uuid"
-import { Asynchrony, MPM, Part } from "mpm-ts"
+import { Asynchrony, MPM, Part, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
@@ -7,7 +7,7 @@ export interface InterpolateAsynchronyOptions extends TransformationOptions {
     /**
      * Defines which part to apply asynchrony for. Global asynchrony is impossible.
      */
-    part: Omit<Part, 'global'>
+    part: Omit<Scope, 'global'>
 
     /**
      * Tolerance in milliseconds for not inserting a new asynchrony instruction
@@ -52,7 +52,7 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
         // for every tstamp
         const asynchronies: Asynchrony[] = []
 
-        const chords = msm.asChords(this.options?.part as Part || 0)
+        const chords = msm.asChords(this.options?.part as Scope)
         for (const [date, chord] of chords) {
             if (!chord.length) {
                 // This is not supposed to happen. Throw an error instead?

@@ -1,4 +1,4 @@
-import { DynamicsGradient, MPM, Ornament, Part } from "mpm-ts"
+import { DynamicsGradient, MPM, Ornament, Part, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { isDefined } from "../../utils/isDefined"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
@@ -45,7 +45,7 @@ export interface InsertTemporalSpreadOptions extends TransformationOptions {
     /**
      * The part on which the transformer is to be applied to.
      */
-    part: Part
+    part: Scope
 }
 
 /**
@@ -136,7 +136,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 const onsetSum = arpeggioNotes.map(note => note['midi.onset']).reduce((a, b) => a + b, 0)
                 newOnset = (onsetSum / arpeggioNotes.length) || 0
             }
-
+            
             ornaments.push({
                 'type': 'ornament',
                 'xml:id': 'ornament_' + v4(),
@@ -156,7 +156,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
 
         console.log('ornaments=', ornaments)
 
-        mpm.insertInstructions(ornaments, this.options?.part !== undefined ? this.options.part : 'global')
+        mpm.insertInstructions(ornaments, this.options.part)
 
         // hand it over to the next transformer
         return super.transform(msm, mpm)

@@ -1,9 +1,8 @@
 import { v4 } from "uuid";
-import { MPM, Part, Tempo } from "mpm-ts";
+import { MPM, Scope, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "../BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { isDefined } from "../../utils/isDefined";
 import { approximateFromPoints } from "./SimplifyTempo";
 
 export type Marker = {
@@ -30,7 +29,7 @@ export interface InsertTempoInstructionsOptions extends TransformationOptions {
      * Defines on which part to apply to transformer to.
      * @default 'global'
      */
-    part: Part
+    part: Scope
 }
 
 /**

@@ -1,5 +1,5 @@
 import { v4 } from "uuid";
-import { MPM, Part, Tempo } from "mpm-ts";
+import { MPM, Scope, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { isDefined } from "../../utils/isDefined";
@@ -248,7 +248,7 @@ export interface SimplifyTempoOptions extends TransformationOptions {
     /**
      * On which part to apply the simplifaction of tempo instructions
      */
-    part: Part
+    part: Scope
 
     /**
      * Tolerance of the Dogulas-Peucker algorithm

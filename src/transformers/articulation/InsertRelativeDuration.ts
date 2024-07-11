@@ -1,4 +1,4 @@
-import { Articulation, MPM, Part } from "mpm-ts"
+import { Articulation, MPM, Part, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -7,7 +7,7 @@ export interface InterpolateArticulationOptions extends TransformationOptions {
     /**
      * The part on which the transformer is to be applied to.
      */
-    part: Part
+    part: Scope
 }
 
 /**
