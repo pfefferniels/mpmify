@@ -195,6 +195,12 @@ export class MSM {
         })
     }
 
+    public getByID(id: string): MsmNote | null {
+        return this.allNotes.find(note => {
+            return note["xml:id"] === id
+        })
+    }
+
     /**
      * Generates a homophonized version of the MSM score.
      * @returns 

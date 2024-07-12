@@ -1,10 +1,17 @@
-import { MPM } from "mpm-ts";
+import { MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 
 /**
  * 
  */
 export interface TransformationOptions {
+}
+
+/**
+ * The part on which the transformer is to be applied to.
+ */
+export interface ScopedTransformationOptions extends TransformationOptions {
+    scope: Scope
 }
 
 /**

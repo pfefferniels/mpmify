@@ -1,2 +1,2 @@
-export * from './InsertRelativeDuration'
+export * from './InsertArticulation'
 export * from './StylizeArticulation'
