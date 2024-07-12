@@ -148,7 +148,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
     addTickDurations(msm: MSM, mpm: MPM, deleteMIDI: boolean = false) {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
 
-        let currentFrameBeginMilliseconds = 0
+        let currentFrameBeginMs = 0
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
@@ -158,14 +158,18 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 endDate: nextTempo?.date || tempo.date + tempo.beatLength * 100 * 720
             }
 
-            const endMilliseconds = computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
+            const endMs = computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
 
             msm.allNotes
                 .filter(n => n["midi.duration"])
                 .forEach(n => {
-                    const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000 - currentFrameBeginMilliseconds
-                    if (offsetMs > endMilliseconds) return
-                    n.tickDuration = approximateDate(offsetMs, tempoWithEndDate) - n.tickDate
+                    const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000
+                    if (offsetMs < currentFrameBeginMs) return 
+                    
+                    const relativeOffsetMs = offsetMs - currentFrameBeginMs
+                    if (relativeOffsetMs > endMs) return
+
+                    n.tickDuration = approximateDate(relativeOffsetMs, tempoWithEndDate) - n.tickDate
 
                     if (deleteMIDI) {
                         delete n["midi.duration"]
@@ -173,7 +177,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                     }
                 })
 
-            currentFrameBeginMilliseconds += endMilliseconds
+            currentFrameBeginMs += endMs
         }
     }
 }
