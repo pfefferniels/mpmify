@@ -67,6 +67,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
             }
             articulation["name.ref"] = name
             delete articulation.relativeDuration
+            delete articulation.absoluteVelocityChange
         }
 
         return super.transform(msm, mpm)
