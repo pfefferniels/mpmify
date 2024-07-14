@@ -31,14 +31,15 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
 
     public transform(msm: MSM, mpm: MPM): string {
         const markers = this.options.markers
+        this.options.markers.sort((a, b) => a - b)
         const points = this.asPoints(msm, this.options.part)
 
         const dynamics: Dynamics[] = []
-        for (let i = 0; i < this.options.markers.length - 1; i++) {
+        for (let i = 0; i < this.options.markers.length; i++) {
             const startDate = markers[i]
             const endDate = markers[i + 1]
 
-            const instruction = approximateDynamics(points.filter(p => p.date >= startDate && p.date <= endDate))
+            const instruction = approximateDynamics(points.filter(p => p.date >= startDate && (endDate ? p.date <= endDate : true)))
             if (instruction) {
                 dynamics.push(instruction)
             }
