@@ -1,15 +1,23 @@
 import { MPM, Rubato, Scope } from "mpm-ts"
-import { MSM } from "../../msm"
+import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
+import { clamp, DefinedProperty } from "../../utils/utils"
+
+const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
+    return notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
+}
 
 /**
  * This function calculates the effect of the rubato
  * on the MSM notes
  */
 const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
-    const localDate = (date - rubato.date) % rubato.frameLength;      // compute the position of the map element within the rubato frame
-    const d = Math.pow(localDate / rubato.frameLength, rubato.intensity) * rubato.frameLength;
+    // compute the position of the map element within the rubato frame
+    const localDate = (date - rubato.date) % rubato.frameLength;
+    const lateStart = Math.max(Math.min(rubato.lateStart || 0, 0.9), 0)
+    const earlyEnd = Math.max(Math.min(rubato.earlyEnd || 1, 1), 0.1)
+    const d = (Math.pow(localDate / rubato.frameLength, rubato.intensity) * (earlyEnd - lateStart) + lateStart) * rubato.frameLength;
     return date + d - localDate
 }
 
@@ -75,8 +83,10 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
         const rubatos: Rubato[] = []
         for (const frame of this.options.frames) {
             const chords = [...msm.asChords(this.options.part).entries()]
-                .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
+                .filter(([date, _]) => date >= frame.date && date <= frame.date + frame.length)
 
+            console.log('dealing with frame', frame, 'and adjusting', chords)
+            if (chords.length < 2) continue
 
             // The rubato transformation can only be placed
             // after a tempo interpolation. Make sure that 
@@ -85,34 +95,64 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
                 notes.some(note => note.tickDate === undefined || note.tickDuration === undefined))
             ) {
                 console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
-                return super.transform(msm, mpm)
+                continue
             }
 
-            const intensities = chords.map(([date, notes]) => {
-                const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
+            const startDate = avarageTickDate(chords[0][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+            let lateStart =
+                clamp(
+                    0,
+                    (startDate - frame.date) / frame.length,
+                    0.9
+                )
+            if (lateStart === 0) lateStart = undefined
 
-                // scale both vertical and horizontal to [0,1]
-                const relativeDate = (date - frame.date) / frame.length
-                const relativeDateShifted = (realDate - frame.date) / frame.length
+            let earlyEnd: number | undefined
+            const endDate = avarageTickDate(chords[chords.length - 1][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+            earlyEnd =
+                clamp(
+                    0.1,
+                    (endDate - frame.date) / frame.length,
+                    1
+                )
+            if (earlyEnd === 1) earlyEnd = undefined
 
-                if (relativeDateShifted === 0 || relativeDate === 0) {
-                    return 0.5
-                }
+            chords.splice(chords.length - 1, 1)
+            chords.splice(0, 1)
 
-                return Math.log(relativeDateShifted) / Math.log(relativeDate)
-            })
+            let intensity: number | undefined
+            if (chords.length > 0) {
+                const intensities = chords.map(([date, notes]) => {
+                    const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
 
-            // Then take its avarage.
-            // TODO: Should be replace be a better method.
-            const avgIntensity = intensities.reduce((p, c) => p + c, 0) / intensities.length
+                    // scale both vertical and horizontal to [0,1]
+                    const relativeDate = (date - frame.date) / frame.length
+                    const relativeDateShifted = (realDate - frame.date) / frame.length
+
+                    if (relativeDateShifted === 0 || relativeDate === 0) {
+                        return 1
+                    }
+
+                    console.log(relativeDate, relativeDateShifted, Math.log(relativeDateShifted), Math.log(relativeDate))
+
+                    return Math.log(relativeDateShifted) / Math.log(relativeDate)
+                })
+
+                // Then take its avarage.
+                // TODO: Should be replace be a better method.
+                intensity = intensities.reduce((p, c) => p + c, 0) / intensities.length
+            }
+            if (intensity === 1) intensity = undefined
 
             rubatos.push({
-                'type': 'rubato',
+                type: 'rubato',
                 'xml:id': `rubato${v4()}`,
-                'date': frame.date,
-                'frameLength': frame.length,
-                'intensity': +avgIntensity.toFixed(2),
-                'loop': false
+                date: frame.date,
+                frameLength: frame.length,
+                intensity,
+                loop: false,
+                lateStart,
+                earlyEnd
             })
         }
 
@@ -141,11 +181,15 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
             if (!note.tickDuration) continue
 
             const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', this.options?.part !== undefined ? this.options.part : 'global')[0]
+            if (!onsetRubato) continue
+
             const onsetInTicks = onsetRubato
                 ? calculateRubatoOnDate(note.date, onsetRubato)
                 : note.date
 
+
             const onsetDiff = onsetInTicks - note.date
+            console.log('note', note, 'should be at date', onsetInTicks, 'instead of', note.date, 'so we shift it by', onsetDiff)
             if (note.tickDate) {
                 note.tickDate -= onsetDiff
             }

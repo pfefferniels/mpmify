@@ -1,0 +1,13 @@
+export type DefinedProperty<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+export const isDefined = (onset?: number) => {
+    return onset !== undefined && !isNaN(onset)
+}
+
+/**
+ * Returns a number whose value is limited to the given range.
+ */
+export const clamp = (min: number, middle: number, max: number) => {
+    return Math.max(min, Math.min(middle, max))
+}
+

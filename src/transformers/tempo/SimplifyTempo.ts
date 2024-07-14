@@ -2,15 +2,8 @@ import { v4 } from "uuid";
 import { MPM, Scope, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { isDefined } from "../../utils/isDefined";
+import { clamp, isDefined } from "../../utils/utils";
 import { TempoWithEndDate, computeMillisecondsAt } from "./tempoCalculations";
-
-/**
- * Returns a number whose value is limited to the given range.
- */
-const clamp = (min: number, middle: number, max: number) => {
-    return Math.max(min, Math.min(middle, max))
-}
 
 export type Point = [number, number];
 

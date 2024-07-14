@@ -1,6 +1,6 @@
 import { Scope } from "mpm-ts";
 import { parse } from "js2xmlparser";
-import { isDefined } from "../utils/isDefined";
+import { isDefined } from "../utils/utils";
 
 /**
  * Temporary attributes used and manipulated in the process of interpolation.

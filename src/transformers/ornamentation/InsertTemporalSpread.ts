@@ -1,6 +1,6 @@
 import { DynamicsGradient, MPM, Ornament, Part, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
-import { isDefined } from "../../utils/isDefined"
+import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 

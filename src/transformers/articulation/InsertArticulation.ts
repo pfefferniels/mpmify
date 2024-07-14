@@ -2,6 +2,7 @@ import { Articulation, MPM } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
+import { DefinedProperty } from "../../utils/utils"
 
 export interface InsertArticulationOptions extends ScopedTransformationOptions {
     /**
@@ -11,7 +12,6 @@ export interface InsertArticulationOptions extends ScopedTransformationOptions {
     noteIDs?: string[]
 }
 
-type DefinedProperty<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration' & 'relativeVelocity'>
 const isArticulatedNote = (note: MsmNote) => note.tickDuration !== undefined && note.relativeVolume !== undefined
 
