@@ -11,3 +11,11 @@ export const clamp = (min: number, middle: number, max: number) => {
     return Math.max(min, Math.min(middle, max))
 }
 
+export const toFixed = (num: number, precision: number) => {
+    return +(+(Math.round(+(num + 'e' + precision)) + 'e' + -precision)).toFixed(precision);
+}
+
+export const fix = <T extends object>(obj: T, key: keyof T, precision: number) => {
+    const property = obj[key]
+    if (property && typeof property === 'number') (obj[key] as number) = toFixed(property, precision)
+}

@@ -1,12 +1,11 @@
 import { Articulation, ArticulationDef, MPM, Part, Scope } from "mpm-ts";
 import { MSM } from "../../msm";
-import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { AbstractTransformer, ScopedTransformationOptions, TransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 
-interface StylizeArticulationOptions extends TransformationOptions {
+interface StylizeArticulationOptions extends ScopedTransformationOptions {
     volumeTolerance: number
     relativeDurationTolerance: number
-    scope: Scope
 }
 
 export class StylizeArticulation extends AbstractTransformer<StylizeArticulationOptions> {

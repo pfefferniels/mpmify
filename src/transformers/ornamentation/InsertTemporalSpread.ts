@@ -73,8 +73,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
     public transform(msm: MSM, mpm: MPM): string {
         const ornaments: Ornament[] = []
 
-        console.log('inserting')
-
         const chords = msm.asChords(this.options?.part)
         for (let [date, arpeggioNotes] of chords) {
             // only consider notes with a defined onset time
@@ -121,7 +119,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             }
 
             // define the frame start based on the given option
-            const frameLength = +(duration * 1000).toFixed(0)
+            const frameLength = duration * 1000
             let frameStart: number, newOnset: number
             if (this.options?.placement === 'on-beat') {
                 frameStart = 0
@@ -153,8 +151,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 note['midi.onset'] = newOnset
             })
         }
-
-        console.log('ornaments=', ornaments)
 
         mpm.insertInstructions(ornaments, this.options.part)
 

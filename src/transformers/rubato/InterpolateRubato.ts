@@ -146,7 +146,7 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
 
             rubatos.push({
                 type: 'rubato',
-                'xml:id': `rubato${v4()}`,
+                'xml:id': `rubato_${v4()}`,
                 date: frame.date,
                 frameLength: frame.length,
                 intensity,
