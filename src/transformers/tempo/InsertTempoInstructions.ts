@@ -11,7 +11,7 @@ export type Marker = {
 }
 
 export type SilentOnset = {
-    date: number 
+    date: number
     onset: number
 }
 
@@ -104,8 +104,16 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
 
                 const points = []
                 const firstOnset = onsetAtDate(marker.date)
+
                 for (let date = marker.date; date <= nextDate; date += marker.beatLength) {
-                    if (onsetAtDate(date) === undefined) continue
+                    if (onsetAtDate(date) === undefined) {
+                        // when the frames are overlapping, take the first onset
+                        // of the next frame as the last data point
+                        if (date + marker.beatLength > nextDate) {
+                            points.push([nextDate, (onsetAtDate(nextDate) - firstOnset) * 1000])
+                        }
+                        continue
+                    }
                     points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
                 }
 
