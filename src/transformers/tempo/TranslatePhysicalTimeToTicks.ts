@@ -40,7 +40,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
     transform(msm: MSM, mpm: MPM): string {
         this.addTickOnsets(msm, mpm)
-        if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm)
+        if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
         this.addTickDurations(msm, mpm)
 
         return super.transform(msm, mpm)
@@ -51,19 +51,20 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      * given MPM and translates them into tick values.
      * @todo Currently, only ornaments are taken into account.
      */
-    translatePhysicalMPMModifiers(mpm: MPM) {
+    translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
 
         let currentMilliseconds = 0
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
+            const endDate = nextTempo ? nextTempo.date : msm.end
 
             console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
 
             const tempoWithEndDate: TempoWithEndDate = {
                 ...tempo,
-                endDate: nextTempo?.date || tempo.date + tempo.beatLength * 4 * 720
+                endDate
             }
 
             // find all ornaments that fit into the tempo frame
@@ -94,7 +95,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 console.log('new ornament', ornament)
             }
 
-            currentMilliseconds += computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
+            currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
         }
     }
 
@@ -114,12 +115,11 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
-
-            console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
+            const endDate = nextTempo ? nextTempo.date : msm.end
 
             const tempoWithEndDate: TempoWithEndDate = {
                 ...tempo,
-                endDate: nextTempo?.date || tempo.date + tempo.beatLength * 4 * 720
+                endDate
             }
 
             msm.allNotes.forEach(n => {
@@ -133,7 +133,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
             })
 
-            currentMilliseconds += computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
+            currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
         }
     }
 
@@ -152,13 +152,14 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
+            const endDate = nextTempo ? nextTempo.date : msm.end
 
             const tempoWithEndDate: TempoWithEndDate = {
                 ...tempo,
-                endDate: nextTempo?.date || tempo.date + tempo.beatLength * 100 * 720
+                endDate
             }
 
-            const endMs = computeMillisecondsAt(tempoWithEndDate.endDate, tempoWithEndDate)
+            const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
 
             msm.allNotes
                 .filter(n => n["midi.duration"])

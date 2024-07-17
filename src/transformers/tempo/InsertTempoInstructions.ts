@@ -98,9 +98,15 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         }
 
         const tempos = markers
-            .slice(0, -1)
             .map((marker, i) => {
-                const nextDate = markers[i + 1].date
+                let nextDate
+                const nextMarker = markers[i + 1]
+                if (nextMarker) {
+                    nextDate = nextMarker.date
+                }
+                else {
+                    nextDate = Math.max(...msm.allNotes.map(n => n.date))
+                }
 
                 const points = []
                 const firstOnset = onsetAtDate(marker.date)

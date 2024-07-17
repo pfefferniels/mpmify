@@ -231,6 +231,10 @@ export class MSM {
         return Math.max(...this.allNotes.map(note => note.date))
     }
 
+    public get end(): number {
+        return Math.max(...this.allNotes.map(note => note.date + note.duration))
+    }
+
     /**
      * Returns the last note
      * @returns MSM note
@@ -241,6 +245,12 @@ export class MSM {
 
     public parts() {
         return new Set(this.allNotes.map(note => note.part - 1))
+    }
+
+    public notesInPart(part: Scope) {
+        return part === 'global'
+            ? this.allNotes
+            : this.allNotes.filter(n => n.part - 1 === part)
     }
 }
 
