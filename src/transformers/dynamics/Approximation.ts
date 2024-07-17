@@ -118,8 +118,27 @@ const generateNeighbour = (prev: DynamicsWithEndDate) => {
 
 export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDate | undefined => {
     if (points.length === 0) {
-        console.log('approximateDynamics requires at least one points')
-        return 
+        console.log('approximateDynamics requires at least one point')
+        return
+    }
+    else if (points.length === 1) {
+        return {
+            type: 'dynamics',
+            "xml:id": v4(),
+            date: points[0].date,
+            endDate: points[0].date,
+            volume: points[0].velocity,
+        }
+    }
+    else if (points.length === 2) {
+        return {
+            type: 'dynamics',
+            "xml:id": v4(),
+            date: points[0].date,
+            endDate: points[points.length - 1].date,
+            volume: points[0].velocity,
+            "transition.to": points[points.length - 1].velocity,
+        }
     }
 
     const initial: DynamicsWithEndDate = {

@@ -39,7 +39,8 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
             const startDate = markers[i]
             const endDate = markers[i + 1]
 
-            const instruction = approximateDynamics(points.filter(p => p.date >= startDate && (endDate ? p.date <= endDate : true)))
+            const relevantPoints = points.filter(p => p.date >= startDate && (endDate ? p.date <= endDate : true))
+            const instruction = approximateDynamics(relevantPoints)
             if (instruction) {
                 dynamics.push(instruction)
             }
