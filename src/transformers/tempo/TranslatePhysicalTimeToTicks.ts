@@ -52,50 +52,52 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      * @todo Currently, only ornaments are taken into account.
      */
     translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        for (const [scope,] of mpm.doc.performance.parts) {
+            const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
-        let currentMilliseconds = 0
-        for (let i = 0; i < tempos.length; i++) {
-            const tempo = tempos[i]
-            const nextTempo = tempos[i + 1]
-            const endDate = nextTempo ? nextTempo.date : msm.end
+            let currentMilliseconds = 0
+            for (let i = 0; i < tempos.length; i++) {
+                const tempo = tempos[i]
+                const nextTempo = tempos[i + 1]
+                const endDate = nextTempo ? nextTempo.date : msm.end
 
-            console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
+                console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
 
-            const tempoWithEndDate: TempoWithEndDate = {
-                ...tempo,
-                endDate
-            }
-
-            // find all ornaments that fit into the tempo frame
-            const ornaments = mpm.instructionEffectiveInRange<Ornament>(tempo.date, tempoWithEndDate.endDate + 1, 'ornament')
-            for (const ornament of ornaments) {
-                if (ornament["time.unit"] === 'ticks') {
-                    // the job is done already
-                    continue
+                const tempoWithEndDate: TempoWithEndDate = {
+                    ...tempo,
+                    endDate
                 }
 
-                const ornamentMs = computeMillisecondsAt(ornament.date, tempoWithEndDate)
-                const frameStart = ornamentMs + ornament["frame.start"]
-                console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
-                if (frameStart < 0) {
-                    // use previous tempo frame
-                    continue
+                // find all ornaments that fit into the tempo frame
+                const ornaments = mpm.instructionEffectiveInRange<Ornament>(tempo.date, tempoWithEndDate.endDate + 1, 'ornament', scope)
+                for (const ornament of ornaments) {
+                    if (ornament["time.unit"] === 'ticks') {
+                        // the job is done already
+                        continue
+                    }
+
+                    const ornamentMs = computeMillisecondsAt(ornament.date, tempoWithEndDate)
+                    const frameStart = ornamentMs + ornament["frame.start"]
+                    console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
+                    if (frameStart < 0) {
+                        // use previous tempo frame
+                        continue
+                    }
+                    const tickFrameStart = approximateDate(frameStart, tempoWithEndDate)
+
+                    const frameEnd = frameStart + ornament.frameLength
+                    const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
+                    console.log('frame: ', tickFrameStart, tickFrameEnd)
+
+                    ornament["frame.start"] = tickFrameStart - ornament.date
+                    ornament['frameLength'] = tickFrameEnd - tickFrameStart
+                    ornament['time.unit'] = 'ticks'
+
+                    console.log('new ornament', ornament)
                 }
-                const tickFrameStart = approximateDate(frameStart, tempoWithEndDate)
 
-                const frameEnd = frameStart + ornament.frameLength
-                const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
-                console.log('frame: ', tickFrameStart, tickFrameEnd)
-
-                ornament["frame.start"] = tickFrameStart - ornament.date
-                ornament['frameLength'] = tickFrameEnd - tickFrameStart
-                ornament['time.unit'] = 'ticks'
-
-                console.log('new ornament', ornament)
+                currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
             }
-
-            currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
         }
     }
 
@@ -109,31 +111,33 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      *            It must contain a `tempoMap`.
      */
     addTickOnsets(msm: MSM, mpm: MPM) {
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        for (const [scope,] of mpm.doc.performance.parts) {
+            const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
-        let currentMilliseconds = 0
-        for (let i = 0; i < tempos.length; i++) {
-            const tempo = tempos[i]
-            const nextTempo = tempos[i + 1]
-            const endDate = nextTempo ? nextTempo.date : msm.end
+            let currentMilliseconds = 0
+            for (let i = 0; i < tempos.length; i++) {
+                const tempo = tempos[i]
+                const nextTempo = tempos[i + 1]
+                const endDate = nextTempo ? nextTempo.date : msm.end
 
-            const tempoWithEndDate: TempoWithEndDate = {
-                ...tempo,
-                endDate
+                const tempoWithEndDate: TempoWithEndDate = {
+                    ...tempo,
+                    endDate
+                }
+
+                msm.notesInPart(scope).forEach(n => {
+                    // are out of the scope of the current tempo instruction? 
+                    if (nextTempo && n.date >= nextTempo.date) return
+                    if (n.date < tempo.date) return
+
+                    const onsetMilliseconds = n["midi.onset"] * 1000
+
+                    // replace MIDI time with tick time.
+                    n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
+                })
+
+                currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
             }
-
-            msm.allNotes.forEach(n => {
-                // are out of the scope of the current tempo instruction? 
-                if (nextTempo && n.date >= nextTempo.date) return
-                if (n.date < tempo.date) return
-
-                const onsetMilliseconds = n["midi.onset"] * 1000
-
-                // replace MIDI time with tick time.
-                n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
-            })
-
-            currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
         }
     }
 
@@ -146,39 +150,41 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      * @param mpm 
      */
     addTickDurations(msm: MSM, mpm: MPM, deleteMIDI: boolean = false) {
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        for (const [scope,] of mpm.doc.performance.parts) {
+            const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
-        let currentFrameBeginMs = 0
-        for (let i = 0; i < tempos.length; i++) {
-            const tempo = tempos[i]
-            const nextTempo = tempos[i + 1]
-            const endDate = nextTempo ? nextTempo.date : msm.end
+            let currentFrameBeginMs = 0
+            for (let i = 0; i < tempos.length; i++) {
+                const tempo = tempos[i]
+                const nextTempo = tempos[i + 1]
+                const endDate = nextTempo ? nextTempo.date : msm.end
 
-            const tempoWithEndDate: TempoWithEndDate = {
-                ...tempo,
-                endDate
+                const tempoWithEndDate: TempoWithEndDate = {
+                    ...tempo,
+                    endDate
+                }
+
+                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+
+                msm.notesInPart(scope)
+                    .filter(n => n["midi.duration"])
+                    .forEach(n => {
+                        const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000
+                        if (offsetMs < currentFrameBeginMs) return
+
+                        const relativeOffsetMs = offsetMs - currentFrameBeginMs
+                        if (relativeOffsetMs > endMs) return
+
+                        n.tickDuration = approximateDate(relativeOffsetMs, tempoWithEndDate) - n.tickDate
+
+                        if (deleteMIDI) {
+                            delete n["midi.duration"]
+                            delete n["midi.onset"]
+                        }
+                    })
+
+                currentFrameBeginMs += endMs
             }
-
-            const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
-
-            msm.allNotes
-                .filter(n => n["midi.duration"])
-                .forEach(n => {
-                    const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000
-                    if (offsetMs < currentFrameBeginMs) return 
-                    
-                    const relativeOffsetMs = offsetMs - currentFrameBeginMs
-                    if (relativeOffsetMs > endMs) return
-
-                    n.tickDuration = approximateDate(relativeOffsetMs, tempoWithEndDate) - n.tickDate
-
-                    if (deleteMIDI) {
-                        delete n["midi.duration"]
-                        delete n["midi.onset"]
-                    }
-                })
-
-            currentFrameBeginMs += endMs
         }
     }
 }
