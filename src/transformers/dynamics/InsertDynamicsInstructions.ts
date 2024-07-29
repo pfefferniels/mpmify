@@ -93,7 +93,8 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
                 if (!note["midi.velocity"]) continue 
 
                 const should = volumeAtDate(corresp, note.date)
-                note.relativeVolume = note["midi.velocity"] - should
+                
+                note.relativeVolume = note["midi.velocity"] / should
             }
         }
     }
