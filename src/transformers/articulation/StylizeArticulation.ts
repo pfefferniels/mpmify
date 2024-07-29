@@ -3,7 +3,7 @@ import { MSM } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions, TransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 
-interface StylizeArticulationOptions extends ScopedTransformationOptions {
+interface StylizeArticulationOptions extends TransformationOptions {
     volumeTolerance: number
     relativeDurationTolerance: number
 }
@@ -17,9 +17,8 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         super()
 
         this.options = {
-            volumeTolerance: 2,
+            volumeTolerance: 0.01,
             relativeDurationTolerance: 0.2,
-            scope: 'global'
         }
     }
 
@@ -30,43 +29,46 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         const inDurationTolerance = (x: number, target: number): boolean => x >= (target - relativeDurationTolerance) && x <= (target + relativeDurationTolerance)
         const inVolumeTolerance = (x: number, target: number): boolean => x >= (target - volumeTolerance) && x <= (target + volumeTolerance)
 
-        const articulations = mpm.getInstructions<Articulation>('articulation', this.options.scope)
-        for (const articulation of articulations) {
-            const all = mpm.getDefinitions<ArticulationDef>('articulationDef', this.options.scope)
+        for (const [scope,] of mpm.doc.performance.parts) {
+            const articulations = mpm.getInstructions<Articulation>('articulation', scope)
+            console.log('dealing with articulations in scope', scope, articulations)
+            for (const articulation of articulations) {
+                const all = mpm.getDefinitions<ArticulationDef>('articulationDef', scope)
 
-            // if the articulation represents nothing out of the
-            // ordinary we do not actually need it
-            if (inDurationTolerance(articulation.relativeDuration, 1.0) && inVolumeTolerance(articulation.absoluteVelocityChange, 0)) {
-                mpm.removeInstruction(articulation)
-                continue
+                // if the articulation represents nothing out of the
+                // ordinary we do not actually need it
+                if (inDurationTolerance(articulation.relativeDuration, 1.0) && inVolumeTolerance(articulation.relativeVelocity, 0)) {
+                    mpm.removeInstruction(articulation)
+                    continue
+                }
+
+                // TODO: is it possible to just combine this with an existing
+                // articulation instruction at the same date?
+
+                const existing = all.find(def => (
+                    inDurationTolerance(articulation.relativeDuration, def.relativeDuration)
+                    && inVolumeTolerance(articulation.relativeVelocity, def.relativeVelocity)
+                ))
+
+                let name = `def_${v4()}`
+                if (existing) {
+                    // take the avarage
+                    existing.relativeDuration = (existing.relativeDuration + articulation.relativeDuration) / 2
+                    existing.relativeVelocity = (existing.relativeVelocity + articulation.relativeVelocity) / 2
+                    name = existing.name
+                }
+                else {
+                    mpm.insertDefinition({
+                        type: 'articulationDef',
+                        name,
+                        relativeDuration: articulation.relativeDuration,
+                        relativeVelocity: articulation.relativeVelocity
+                    }, scope)
+                }
+                articulation["name.ref"] = name
+                delete articulation.relativeDuration
+                delete articulation.relativeVelocity
             }
-
-            // TODO: is it possible to just combine this with an existing
-            // articulation instruction at the same date?
-
-            const existing = all.find(def => (
-                inDurationTolerance(articulation.relativeDuration, def.relativeDuration)
-                && inVolumeTolerance(articulation.absoluteVelocityChange, def.absoluteVelocityChange)
-            ))
-
-            let name = `def_${v4()}`
-            if (existing) {
-                // take the avarage
-                existing.relativeDuration = (existing.relativeDuration + articulation.relativeDuration) / 2
-                existing.absoluteVelocityChange = (existing.absoluteVelocityChange + articulation.absoluteVelocityChange) / 2
-                name = existing.name
-            }
-            else {
-                mpm.insertDefinition({
-                    type: 'articulationDef',
-                    name: `def_${v4()}`,
-                    relativeDuration: articulation.relativeDuration,
-                    absoluteVelocityChange: articulation.absoluteVelocityChange
-                }, this.options.scope)
-            }
-            articulation["name.ref"] = name
-            delete articulation.relativeDuration
-            delete articulation.absoluteVelocityChange
         }
 
         return super.transform(msm, mpm)

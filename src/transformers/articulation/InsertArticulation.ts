@@ -17,7 +17,7 @@ const isArticulatedNote = (note: MsmNote) => note.tickDuration !== undefined && 
 
 /**
  * Defines the articulation of a note through the attributes relativeDuration and
- * relativeVelocityChange. This transformer can be applied to either all notes,
+ * relativeVelocity. This transformer can be applied to either all notes,
  * a selection of notes or a specific part.
  * 
  * @note This transformation can only be applied after both dynamics and tempo transformation.
@@ -36,7 +36,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {
         const relativeDuration = note.tickDuration / note.duration
-        const absoluteVelocityChange = note.relativeVolume
+        const relativeVelocity = note.relativeVolume
 
         if (adjust) {
             note.tickDuration = note.duration
@@ -49,7 +49,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             date: note.date,
             noteid: '#' + note['xml:id'],
             relativeDuration,
-            absoluteVelocityChange
+            relativeVelocity
         }
     }
 

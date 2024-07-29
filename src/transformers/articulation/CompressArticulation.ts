@@ -17,7 +17,7 @@ export class CompressArticulation extends AbstractTransformer<CompressArticulati
         super()
 
         this.options = {
-            volumePrecision: 0,
+            volumePrecision: 3,
             relativePrecision: 2,
         }
     }
@@ -27,7 +27,7 @@ export class CompressArticulation extends AbstractTransformer<CompressArticulati
         for (const part of parts) {
             const defs = mpm.getDefinitions<ArticulationDef>('articulationDef', part)
             for (const def of defs) {
-                fix(def, 'absoluteVelocityChange', this.options.volumePrecision)
+                fix(def, 'relativeVelocity', this.options.volumePrecision)
                 fix(def, 'relativeDuration', this.options.relativePrecision)
             }
         }
