@@ -126,7 +126,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                 return approximateFromPoints(points, marker.beatLength / 720 / 4)
             })
 
-        mpm.insertInstructions(tempos, this.options?.part || 'global')
+        mpm.insertInstructions(tempos, this.options?.part)
     }
 
     insertInstructionsByBeatLength(msm: MSM, mpm: MPM, beatLength: BeatLengthBasis) {
