@@ -73,16 +73,15 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
 
     insertInstructionsByMarkers(msm: MSM, mpm: MPM, markers: Marker[]) {
         const onsetAtDate = (date: number) => {
+            const silent = this.options.silentOnsets.find(s => s.date === date)
+            if (silent) return silent.onset
+
             const currentNotes = msm.notesAtDate(date, this.options.part)
-            if (currentNotes.length === 0) {
-                const silent = this.options.silentOnsets.find(s => s.date === date)
-                return silent?.onset
-            }
-            return currentNotes[0]["midi.onset"]
+            if (currentNotes.length) return currentNotes[0]["midi.onset"]
         }
 
-        if (markers.length <= 1) {
-            console.log('At least two markers need to be specified')
+        if (markers.length < 1) {
+            console.log('At least one markers need to be specified')
             return super.transform(msm, mpm)
         }
 
@@ -105,6 +104,8 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                     nextDate = nextMarker.date
                 }
                 else {
+                    // when reaching the end, take the overall last onset 
+                    // as a virtual next date
                     nextDate = Math.max(...msm.allNotes.map(n => n.date))
                 }
 
@@ -112,15 +113,17 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                 const firstOnset = onsetAtDate(marker.date)
 
                 for (let date = marker.date; date <= nextDate; date += marker.beatLength) {
-                    if (onsetAtDate(date) === undefined) {
-                        // when the frames are overlapping, take the first onset
-                        // of the next frame as the last data point
-                        if (date + marker.beatLength > nextDate) {
-                            points.push([nextDate, (onsetAtDate(nextDate) - firstOnset) * 1000])
-                        }
-                        continue
+                    // when the frames are overlapping, take the first onset
+                    // of the next frame as the last data point
+                    if (date + marker.beatLength > nextDate) {
+                        points.push([nextDate, (onsetAtDate(nextDate) - firstOnset) * 1000])
+                        break
                     }
-                    points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
+
+                    const correspondingOnset = onsetAtDate(date)
+                    if (correspondingOnset !== undefined) {
+                        points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
+                    }
                 }
 
                 return approximateFromPoints(points, marker.beatLength / 720 / 4)
