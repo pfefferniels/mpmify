@@ -24,65 +24,58 @@ const msmFixture = new MSM(
     [
         {
             ...generateNote(0, 0.5),    // half note ...
-            'midi.onset': 1,            
+            'midi.onset': 1,
             'midi.duration': 2,         // lasting 2 seconds
-            'midi.velocity': 100
+            'midi.velocity': 100,
+            relativeVolume: 0
         },
         {
             ...generateNote(0.5, 0.25), // quarter note ...
-            'midi.onset': 3,            
+            'midi.onset': 3,
             'midi.duration': 1,         // lasting 1 second
-            'midi.velocity': 100
+            'midi.velocity': 100,
+            relativeVolume: 0
         },
         {
             ...generateNote(0.75, 0.125),   // eighth note ...
             'midi.onset': 4,
             'midi.duration': 0.5,           // lasting half a second 
-            'midi.velocity': 100
+            'midi.velocity': 100,
+            relativeVolume: 0
         },
         {
             ...generateNote(0.875, 0.125),  // eighth note ...
-            'midi.onset': 4,
+            'midi.onset': 4.5,
             'midi.duration': 0.5,           // lasting half a second 
-            'midi.velocity': 100
+            'midi.velocity': 100,
+            relativeVolume: 0
         }
     ],
     { numerator: 4, denominator: 4 }
 )
 
 
-test('It inserts the right tempo instructions using beat length = denominator', () => {
+test('It inserts the right tempo instructions', () => {
     // Arrange
     const mpm = new MPM()
 
     // Act
     const tempo = new InsertTempoInstructions({
         part: 'global',
-        beatLength: 'denominator'
+        markers: [{
+            date: 0,
+            beatLength: 720
+        }],
+        silentOnsets: []
     })
     tempo.transform(msmFixture, mpm)
 
     // Assert
     const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
 
-    expect(tempos.every(tempo => tempo.bpm === 60)).toBeTruthy()
-    expect(tempos.every(tempo => tempo.beatLength === 0.25)).toBeTruthy()
-})
+    console.log('tempi=', tempos)
 
-test('It inserts the right tempo instructions using beat length = everything', () => {
-    // Arrange
-    const mpm = new MPM()
-
-    // Act
-    const tempo = new InsertTempoInstructions({
-        part: 'global',
-        beatLength: 'everything'
-    })
-    tempo.transform(msmFixture, mpm)
-
-    // Assert
-    const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
-
-    expect(tempos.map(tempo => tempo.bpm)).toEqual([30, 60, 60])
-    expect(tempos.map(tempo => tempo.beatLength)).toEqual([0.5, 0.25, 0.25])
+    expect(tempos).toHaveLength(1)
+    expect(tempos[0].bpm).toEqual(60)
+    expect(tempos[0].beatLength).toEqual(0.25)
 })
