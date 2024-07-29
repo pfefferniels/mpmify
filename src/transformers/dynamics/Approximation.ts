@@ -124,7 +124,7 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
     else if (points.length === 1) {
         return {
             type: 'dynamics',
-            "xml:id": v4(),
+            "xml:id": `dynamics_${v4()}`,
             date: points[0].date,
             endDate: points[0].date,
             volume: points[0].velocity,
@@ -133,7 +133,7 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
     else if (points.length === 2) {
         return {
             type: 'dynamics',
-            "xml:id": v4(),
+            "xml:id": `dynamics_${v4()}`,
             date: points[0].date,
             endDate: points[points.length - 1].date,
             volume: points[0].velocity,
@@ -143,7 +143,7 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
 
     const initial: DynamicsWithEndDate = {
         type: 'dynamics',
-        "xml:id": v4(),
+        "xml:id": `dynamics_${v4()}`,
         date: points[0].date,
         endDate: points[points.length - 1].date,
         volume: points[0].velocity,
