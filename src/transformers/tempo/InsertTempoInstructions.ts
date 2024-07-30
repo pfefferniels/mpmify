@@ -130,6 +130,19 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             })
 
         mpm.insertInstructions(tempos, this.options?.part)
+
+        // insert another tempo instruction at the very end
+        if (tempos.length > 0) {
+            const lastTempo = tempos[tempos.length - 1]
+
+            mpm.insertInstruction({
+                type: 'tempo',
+                date: lastTempo.endDate,
+                bpm: lastTempo["transition.to"] || lastTempo.bpm,
+                beatLength: lastTempo.beatLength,
+                "xml:id": `tempo_${v4()}`
+            }, this.options?.part)
+        }
     }
 
     insertInstructionsByBeatLength(msm: MSM, mpm: MPM, beatLength: BeatLengthBasis) {
