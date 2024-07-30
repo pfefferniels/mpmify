@@ -3,14 +3,14 @@
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { Articulation, MPM } from "mpm-ts"
-import { InsertRelativeDuration } from "../../src/transformers"
+import { InsertArticulation } from "../../src/transformers"
 
 /**
  * Quickly generates a simple MSM note
  * @note Example for duration and position: 0.25 = quarter note etc.
  */
-const generateNote = (position: number, duration: number, part: number = 1) => ({
-    'xml:id': `n_${part}_${position}`,
+const generateNote = (position: number, duration: number, id: string, part: number = 1) => ({
+    'xml:id': id,
     date: position * 4 * 720,
     part: part,
     pitchname: 'g',
@@ -22,11 +22,19 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
 
 const msmFixture = new MSM([
     {
-        ...generateNote(0, 0.25),   // duration = 720 ticks
+        ...generateNote(0, 0.25, 'note0'),   // duration = 720 ticks
         'midi.onset': 1,
         'midi.duration': 1,
         'midi.velocity': 50,
-        'tickDuration': 360         // real duration = 360 ticks
+        'tickDuration': 360,         // real duration = 360 ticks,
+    },
+    {
+        ...generateNote(0, 0.25, 'note1'),   // duration = 720 ticks
+        'midi.onset': 1,
+        'midi.duration': 1,
+        'midi.velocity': 50,
+        'tickDuration': 1440,         // real duration = 360 ticks,
+        relativeVolume: -10,
     }],
     { numerator: 1, denominator: 4 })
 
@@ -36,18 +44,17 @@ test('correctly interpolates articulation', () => {
     const mpm = new MPM()
 
     // Act
-    const transformer = new InsertRelativeDuration({
-        part: 'global', 
-        relativeDurationPrecision: 0,
-        relativeDurationTolerance: 0
+    const transformer = new InsertArticulation({
+        scope: 'global', 
     })
     transformer.transform(msmFixture, mpm)
 
     // Assert
     const articulations = mpm.getInstructions<Articulation>('articulation', 'global')
 
-    expect(articulations.map(artic => [artic.date, artic.relativeDuration]))
+    expect(articulations.map(artic => [artic.noteid, artic.relativeDuration, artic.relativeVelocity]))
         .toEqual([
-            [0, 0.5]
+            ['#note0', 0.5, undefined],
+            ['#note1', 2, -10],
         ])
 })

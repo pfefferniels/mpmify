@@ -13,7 +13,6 @@ export interface InsertArticulationOptions extends ScopedTransformationOptions {
 }
 
 type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration' & 'relativeVelocity'>
-const isArticulatedNote = (note: MsmNote) => note.tickDuration !== undefined && note.relativeVolume !== undefined
 
 /**
  * Defines the articulation of a note through the attributes relativeDuration and
@@ -35,7 +34,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
     public name() { return 'InsertArticulation' }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {
-        const relativeDuration = note.tickDuration / note.duration
+        const relativeDuration = note.tickDuration ? (note.tickDuration / note.duration) : undefined
         const relativeVelocity = note.relativeVolume
 
         if (adjust) {
@@ -59,7 +58,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         if (this.options.noteIDs) {
             for (const id of this.options.noteIDs) {
                 const note = msm.getByID(id)
-                if (!note || !isArticulatedNote(note)) continue
+                if (!note) continue
                 articulations.push(this.noteToArticulation(note as ArticulatedNote))
             }
         }
@@ -69,9 +68,11 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             for (const [, chord] of chords) {
                 const chordArticulations: Articulation[] = []
                 for (const note of chord) {
-                    if (!note || !isArticulatedNote(note)) continue
+                    if (!note) continue
                     chordArticulations.push(this.noteToArticulation(note as ArticulatedNote))
                 }
+
+                console.log('chord articulations', chordArticulations)
 
                 // if the articulated chord is actually a single 
                 // note, there is no need to define a particular 
