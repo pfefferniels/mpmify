@@ -13,7 +13,7 @@ type TemporaryAttributes = {
 
     'tickDate'?: number
     'tickDuration'?: number
-    'relativeVolume': number
+    'relativeVolume'?: number
 }
 
 /**
