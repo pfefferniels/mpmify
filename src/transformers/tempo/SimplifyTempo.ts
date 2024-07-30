@@ -9,10 +9,10 @@ export type Point = [number, number];
 
 const simulatedAnnealing = (points: Point[], initialTempo: TempoWithEndDate, initialTemperature: number = 500, coolingRate: number = 0.995, maxIterations: number = 1000): TempoWithEndDate => {
     let currentTempo = { ...initialTempo };
-    console.log('trying to optimize', currentTempo)
+    // console.log('trying to optimize', currentTempo)
     let bestTempo = { ...initialTempo };
     let bestError = computeTotalError(currentTempo, points);
-    console.log('best error:', bestError)
+    // console.log('best error:', bestError)
     let temperature = initialTemperature;
 
     for (let iteration = 0; iteration < maxIterations && temperature > 0.001; iteration++) {
@@ -27,7 +27,7 @@ const simulatedAnnealing = (points: Point[], initialTempo: TempoWithEndDate, ini
 
         if (neighborError < bestError) {
             bestError = neighborError;
-            console.log('new best error=', neighborError, 'for', neighboringTempo)
+            // console.log('new best error=', neighborError, 'for', neighboringTempo)
             bestTempo = { ...neighboringTempo };
         }
 
@@ -81,7 +81,7 @@ const computeTotalError = (tempo: TempoWithEndDate, points: Point[]) => {
 }
 
 export const approximateFromPoints = (data: Point[], targetBeatLength: number = 0.25): TempoWithEndDate => {
-    console.log('approximating for', data[0][0], 'starting with', data[0][1])
+    console.log('approximating points', data, 'starting with', data[0][1])
     if (data.length <= 1) {
         throw new Error('At least 2 data points are required in order to approximate')
     }
@@ -235,87 +235,3 @@ export const createTempoMapFromPoints = (points: Point[]) => {
 }
 
 
-export type SimplifactionMode = 'curved' | 'linear'
-
-export interface SimplifyTempoOptions extends TransformationOptions {
-    /**
-     * On which part to apply the simplifaction of tempo instructions
-     */
-    part: Scope
-
-    /**
-     * Tolerance of the Dogulas-Peucker algorithm
-     */
-    epsilon: number
-
-    /**
-     * Whether to interpolate linear or curved. In the former case, 
-     * the @meanTempoAt attribute will always be 0.5.
-     * @note Note that regardless of this parameter, the Douglas-Peucker
-     * segmentation will always be based on lines rather than curves.
-     */
-    mode: SimplifactionMode
-}
-
-/**
- * Interpolates the global tempo and inserts it into the MPM
- */
-export class SimplifyTempo extends AbstractTransformer<SimplifyTempoOptions> {
-    constructor(options?: SimplifyTempoOptions) {
-        super()
-
-        // set the default options
-        this.setOptions(options || {
-            epsilon: 4,
-            part: 'global',
-            mode: 'curved'
-        })
-    }
-
-    public name() { return 'SimplifyTempo' }
-
-    /**
-     * Deletes the silence before the first note is being played 
-     * 
-     * @param msm MSM to perform the shifting on
-     */
-    private shiftToFirstOnset(msm: MSM) {
-        const firstOnset = Math.min(...msm.allNotes.map(n => n["midi.onset"]).filter(isDefined))
-        msm.allNotes.forEach(n => n["midi.onset"] -= firstOnset)
-    }
-
-    transform(msm: MSM, mpm: MPM): string {
-        console.log(msm.allNotes.map(n => n['midi.onset']))
-        if (!msm.timeSignature) {
-            console.warn('A time signature must be given to interpolate a tempo map.')
-            return super.transform(msm, mpm);
-        }
-
-        // const precision = this.options?.precision || 0
-
-        // before starting to calculate the <tempo> instructions,
-        // make sure to delete the arbitrary silence before the first note onset
-        this.shiftToFirstOnset(msm)
-
-        const points = (mpm.getInstructions('tempo', this.options?.part || 'global') as Tempo[])
-            .map(tempo => {
-                const correspondingNote = msm.allNotes.find(note => note.date === tempo.date)
-                if (!correspondingNote) {
-                    console.log('no corresponding onset found for tempo instruction', tempo)
-                }
-
-                return [tempo.date, (correspondingNote["midi.onset"] || 0)] as Point
-            })
-
-        console.log('points=', points)
-
-        const tempos: Tempo[] = createTempoMapFromPoints(
-            points
-        )
-
-        mpm.removeInstructions('tempo', this.options?.part || 'global')
-        mpm.insertInstructions(tempos, this.options?.part || 'global')
-
-        return super.transform(msm, mpm)
-    }
-}
