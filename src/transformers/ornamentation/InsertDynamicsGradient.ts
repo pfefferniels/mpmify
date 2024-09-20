@@ -16,6 +16,10 @@ export interface InsertDynamicsGradientOptions extends TransformationOptions {
  * values into the MPM and substracts accordingly from the MIDI onset, so
  * that after the transformation all notes of the chord will have the same
  * onset.
+ * 
+ * @note Inserting the dynamics gradient should always take place before 
+ * inserting temporal spread, since temporal spread will destroy the original
+ * order of MIDI onsets.
  */
 export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGradientOptions> {
     constructor(options?: InsertDynamicsGradientOptions) {
@@ -33,8 +37,10 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         const chords = msm.asChords(this.options?.part)
         for (let [date, arpeggioNotes] of chords) {
             // only consider notes with a defined onset time
-            arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
-
+            arpeggioNotes = arpeggioNotes
+                .filter(note => isDefined(note['midi.onset']))
+                .sort((a, b) => a['midi.onset'] - b['midi.onset'])
+            
             // The dynamics gradient is the transition
             // between first and last arpeggio note
             const firstVel = arpeggioNotes[0]["midi.velocity"]
