@@ -100,17 +100,17 @@ export const approximateFromPoints = (data: Point[], targetBeatLength: number = 
     const startBpm = 60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / beatLengthTicks))
     const endBpm = 60000 / ((data[data.length - 1][1] - data[data.length - 2][1]) / ((data[data.length - 1][0] - data[data.length - 2][0]) / beatLengthTicks))
 
-    if (data.length === 3) {
-        return {
-            type: 'tempo' as 'tempo',
-            'xml:id': `tempo_${v4()}`,
-            'bpm': startBpm,
-            date: data[0][0],
-            endDate: data[data.length - 1][0],
-            'transition.to': endBpm,
-            beatLength: targetBeatLength
-        }
-    }
+    // if (data.length === 3) {
+    //     return {
+    //         type: 'tempo' as 'tempo',
+    //         'xml:id': `tempo_${v4()}`,
+    //         'bpm': startBpm,
+    //         date: data[0][0],
+    //         endDate: data[data.length - 1][0],
+    //         'transition.to': endBpm,
+    //         beatLength: targetBeatLength
+    //     }
+    // }
 
     // initial guess, which will then be refined to 
     // fit the actual onset times (in milliseconds)
