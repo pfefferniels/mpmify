@@ -1,4 +1,4 @@
-import { MPM, Scope } from "mpm-ts";
+import { AppInfo, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 
 /**
@@ -22,6 +22,7 @@ export interface Transformer {
     setNext(transformer: Transformer): Transformer
     transform(msm: MSM, mpm: MPM): string
     setOptions(options: TransformationOptions): void
+    insertMetadata(mpm: MPM): void
     name(): string
 }
 
@@ -39,6 +40,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
     public transform(msm: MSM, mpm: MPM): string {
         if (this.nextTransformer) {
+            this.nextTransformer.insertMetadata(mpm)
             return this.nextTransformer.transform(msm, mpm)
         }
 
@@ -47,6 +49,26 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
     public setOptions(options: OptionsType) {
         this.options = options
+    }
+
+    public insertMetadata(mpm: MPM) {
+        let appInfo = mpm.doc.metadata.find(el => el.type === 'appInfo') as AppInfo | undefined
+        if (!appInfo) {
+            appInfo = {
+                type: 'appInfo',
+                name: 'mpmify',
+                url: 'https://github.com/pfefferniels/mpmify',
+                version: '0.1',
+                children: []
+            }
+            mpm.doc.metadata.push(appInfo)
+        }
+
+        appInfo.children.push({
+            type: 'transformation',
+            name: this.name(),
+            cdata: JSON.stringify(this.options)
+        })
     }
 
     abstract name(): string
