@@ -8,6 +8,7 @@ import { approximateFromPoints } from "./SimplifyTempo";
 export type Marker = {
     date: number
     beatLength: number
+    continuous: boolean
 }
 
 export type SilentOnset = {
