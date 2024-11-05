@@ -5,34 +5,37 @@ import { TempoWithEndDate, computeMillisecondsAt } from "./tempoCalculations";
 export type Point = [number, number];
 
 const simulatedAnnealing = (
-    points: Point[],
-    initialTempo: TempoWithEndDate,
-    fixedStartBPM: boolean,
+    serieses: Point[][],
+    initialTempos: TempoWithEndDate[],
     initialTemperature: number = 500,
     coolingRate: number = 0.995,
     maxIterations: number = 1000,
-): TempoWithEndDate => {
-    let currentTempo = { ...initialTempo };
+): TempoWithEndDate[] => {
+    if (serieses.length !== initialTempos.length) {
+        throw new Error('The number of serieses and initial tempos must match.')
+    }
+
+    let currentTempos = initialTempos.slice();
     // console.log('trying to optimize', currentTempo)
-    let bestTempo = { ...initialTempo };
-    let bestError = computeTotalError(currentTempo, points);
+    let bestTempos = { ...initialTempos };
+    let bestError = currentTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
     // console.log('best error:', bestError)
     let temperature = initialTemperature;
 
     for (let iteration = 0; iteration < maxIterations && temperature > 0.001; iteration++) {
-        const neighboringTempo = generateNeighboringTempo(currentTempo, fixedStartBPM);
-        const currentError = computeTotalError(currentTempo, points);
-        const neighborError = computeTotalError(neighboringTempo, points);
+        const neighboringTempos = generateNeighboringTempos(currentTempos);
+        const currentError = currentTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
+        const neighborError = neighboringTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
         // console.log('trying', neighborError, 'for', neighboringTempo)
 
         if (Math.exp((currentError - neighborError) / temperature) > Math.random()) {
-            currentTempo = { ...neighboringTempo };
+            currentTempos = neighboringTempos;
         }
 
         if (neighborError < bestError) {
             bestError = neighborError;
             // console.log('new best error=', neighborError, 'for', neighboringTempo)
-            bestTempo = { ...neighboringTempo };
+            bestTempos = neighboringTempos;
         }
 
         if (bestError < 10.0) {
@@ -42,37 +45,44 @@ const simulatedAnnealing = (
         temperature *= coolingRate;
     }
 
-    return bestTempo;
+    return bestTempos;
 };
 
-const generateNeighboringTempo = (tempo: TempoWithEndDate, fixedStartBPM: boolean): TempoWithEndDate => {
+const generateNeighboringTempos = (tempos: TempoWithEndDate[]): TempoWithEndDate[] => {
     const variation = 0.2;
     const randomVariation = Math.random() * variation
 
-    const isAcc = tempo.bpm < tempo["transition.to"]!
+    const newTempos: TempoWithEndDate[] = [];
 
-    // If the start point is fixed, do not apply 
-    // any variation to it
-    const newBPM = fixedStartBPM
-        ? tempo.bpm 
-        : tempo.bpm + (isAcc ? -randomVariation : randomVariation)
-    const newTransitionTo = tempo["transition.to"]! + (isAcc ? randomVariation : -randomVariation)
-    const newMeanTempoAt = clamp(
-        0.01,
-        tempo.meanTempoAt + (Math.random() - 0.5) * 0.1,
-        0.99
-    )
+    let prevTransitionTo
+    for (const tempo of tempos) {
+        const isAcc = tempo.bpm < tempo["transition.to"]!
 
-    return {
-        type: 'tempo',
-        'xml:id': tempo["xml:id"],
-        date: tempo.date,
-        endDate: tempo.endDate,
-        bpm: newBPM,
-        'transition.to': newTransitionTo,
-        meanTempoAt: newMeanTempoAt,
-        beatLength: tempo.beatLength
-    };
+        // If the start point is fixed, do not apply 
+        // any variation to it
+        const newBPM = prevTransitionTo || tempo.bpm + (isAcc ? -randomVariation : randomVariation)
+        const newTransitionTo = tempo["transition.to"]! + (isAcc ? randomVariation : -randomVariation)
+        const newMeanTempoAt = clamp(
+            0.01,
+            tempo.meanTempoAt + (Math.random() - 0.5) * 0.1,
+            0.99
+        )
+
+        newTempos.push({
+            type: 'tempo',
+            'xml:id': tempo["xml:id"],
+            date: tempo.date,
+            endDate: tempo.endDate,
+            bpm: newBPM,
+            'transition.to': newTransitionTo,
+            meanTempoAt: newMeanTempoAt,
+            beatLength: tempo.beatLength
+        });
+
+        prevTransitionTo = newTransitionTo
+    }
+
+    return newTempos
 };
 
 /**
@@ -108,44 +118,48 @@ const computeTotalError = (tempo: TempoWithEndDate, points: Point[]) => {
  * @returns The approximated tempo curve.
  */
 export const approximateFromPoints = (
-    data: Point[],
-    targetBeatLength: number = 0.25,
-    fixedStartBPM?: number
-): TempoWithEndDate => {
-    console.log('approximating points', data, 'starting with', data[0][1])
-    if (data.length <= 1) {
+    serieses: Point[][],
+    targetBeatLength: number = 0.25
+): TempoWithEndDate[] => {
+    // console.log('approximating points', data, 'starting with', data[0][1])
+    if (serieses.some(series => series.length <= 1)) {
         throw new Error('At least 2 data points are required in order to approximate')
     }
-    else if (data.length === 2) {
-        return {
+
+    const initialGuesses: TempoWithEndDate[] = serieses.map(data => {
+        if (data.length === 2) {
+            return {
+                type: 'tempo' as 'tempo',
+                'xml:id': `tempo_${v4()}`,
+                'bpm': 60000 / (data[1][1] - data[0][1]),
+                'date': data[0][0],
+                endDate: data[1][0],
+                'beatLength': (data[1][0] - data[0][0]) / 720 / 4
+            }
+        }
+
+        const beatLengthTicks = targetBeatLength * 4 * 720
+        const startBpm = (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / beatLengthTicks)))
+        const endBpm = 60000 / ((data[data.length - 1][1] - data[data.length - 2][1]) / ((data[data.length - 1][0] - data[data.length - 2][0]) / beatLengthTicks))
+
+        // initial guess, which will then be refined to 
+        // fit the actual onset times (in milliseconds)
+        // using a simulated annealing approach.
+        const tmpTempo = {
             type: 'tempo' as 'tempo',
             'xml:id': `tempo_${v4()}`,
-            'bpm': 60000 / (data[1][1] - data[0][1]),
-            'date': data[0][0],
-            endDate: data[1][0],
-            'beatLength': (data[1][0] - data[0][0]) / 720 / 4
+            'bpm': startBpm,
+            date: data[0][0],
+            endDate: data[data.length - 1][0],
+            'transition.to': endBpm,
+            meanTempoAt: 0.5,
+            beatLength: targetBeatLength
         }
-    }
 
-    const beatLengthTicks = targetBeatLength * 4 * 720
-    const startBpm = fixedStartBPM || (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / beatLengthTicks)))
-    const endBpm = 60000 / ((data[data.length - 1][1] - data[data.length - 2][1]) / ((data[data.length - 1][0] - data[data.length - 2][0]) / beatLengthTicks))
+        return tmpTempo
+    })
 
-    // initial guess, which will then be refined to 
-    // fit the actual onset times (in milliseconds)
-    // using a simulated annealing approach.
-    const tmpTempo = {
-        type: 'tempo' as 'tempo',
-        'xml:id': `tempo_${v4()}`,
-        'bpm': startBpm,
-        date: data[0][0],
-        endDate: data[data.length - 1][0],
-        'transition.to': endBpm,
-        meanTempoAt: 0.5,
-        beatLength: targetBeatLength
-    }
-
-    return simulatedAnnealing(data, tmpTempo, !!fixedStartBPM)
+    return simulatedAnnealing(serieses, initialGuesses)
 }
 
 export type Segment = {
@@ -221,36 +235,3 @@ type WithSegment = {
 }
 
 export type TempoWithSegmentData = (TempoWithEndDate & WithSegment)
-
-export const createTempoMapFromPoints = (points: Point[]) => {
-    if (!points.length) {
-        return []
-    }
-
-    const firstPoint = +`${points[0][1]}`
-    points.forEach(point => point[1] = (point[1] - firstPoint) * 1000)
-
-    const segments = segmentCurve(points);
-
-    const instructions = segments
-        .map(segment => {
-            const segmentPoints = [...segment.points.map(p => [p[0], p[1]] as [number, number])]
-            const firstPoint = +`${segmentPoints[0][1]}`
-            segmentPoints.forEach(point => point[1] = (point[1] - firstPoint))
-            // console.log('segment points=', segmentPoints)
-
-            const instruction = approximateFromPoints(segmentPoints)
-            return {
-                ...instruction,
-                // segment
-            }
-        })
-        .filter(instruction => {
-            // filter out impossible BPM values (they might come from low-quality alignments)
-            return instruction.bpm > 0 && !isNaN(instruction.bpm) && Math.abs(instruction.bpm) !== Infinity
-        })
-
-    return instructions
-}
-
-

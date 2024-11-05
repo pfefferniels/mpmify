@@ -4,6 +4,7 @@ import { MSM } from "../../msm";
 import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "../BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { approximateFromPoints } from "./SimplifyTempo";
+import { TempoWithEndDate } from "./tempoCalculations";
 
 export type Marker = {
     date: number
@@ -97,8 +98,10 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             }
         }
 
-        const tempos = markers
-            .map((marker, i) => {
+        console.log('markers=', markers)
+
+        const tempos: TempoWithEndDate[] = markers
+            .map((marker, i): Marker & { points: [number, number][] } => {
                 let nextDate
                 const nextMarker = markers[i + 1]
                 if (nextMarker) {
@@ -110,7 +113,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                     nextDate = Math.max(...msm.allNotes.map(n => n.date))
                 }
 
-                const points = []
+                const points: [number, number][] = []
                 const firstOnset = onsetAtDate(marker.date)
 
                 for (let date = marker.date; date <= nextDate; date += marker.beatLength) {
@@ -127,8 +130,20 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                     }
                 }
 
-                return approximateFromPoints(points, marker.beatLength / 720 / 4)
+                return { ...marker, points }
             })
+            .reduce((acc, marker) => {
+                if (marker.continuous) {
+                    acc[acc.length - 1].serieses.push(marker.points)
+                }
+                else {
+                    acc.push({ ...marker, serieses: [marker.points] })
+                }
+                return acc
+            }, [] as (Marker & { serieses: [number, number][][] })[])
+            .map(marker => approximateFromPoints(marker.serieses, marker.beatLength / 720 / 4))
+            .flat()
+
 
         mpm.insertInstructions(tempos, this.options?.part)
 
