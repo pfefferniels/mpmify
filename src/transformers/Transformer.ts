@@ -51,7 +51,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         this.options = options
     }
 
-    public insertMetadata(mpm: MPM) {
+    public insertMetadata(mpm: MPM, overwrite = true) {
         let appInfo = mpm.doc.metadata.find(el => el.type === 'appInfo') as AppInfo | undefined
         if (!appInfo) {
             appInfo = {
@@ -62,6 +62,10 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
                 children: []
             }
             mpm.doc.metadata.push(appInfo)
+        }
+
+        if (overwrite) {
+            appInfo.children = appInfo.children.filter(el => el.name !== this.name())
         }
 
         appInfo.children.push({
