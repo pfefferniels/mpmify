@@ -17,7 +17,7 @@ const simulatedAnnealing = (
 
     let currentTempos = initialTempos.slice();
     // console.log('trying to optimize', currentTempo)
-    let bestTempos = { ...initialTempos };
+    let bestTempos = [...initialTempos];
     let bestError = currentTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
     // console.log('best error:', bestError)
     let temperature = initialTemperature;

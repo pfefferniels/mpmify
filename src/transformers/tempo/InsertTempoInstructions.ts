@@ -144,7 +144,6 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             .map(marker => approximateFromPoints(marker.serieses, marker.beatLength / 720 / 4))
             .flat()
 
-
         mpm.insertInstructions(tempos, this.options?.part)
 
         // insert another tempo instruction at the very end
