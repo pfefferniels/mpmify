@@ -1,5 +1,6 @@
 import { v4 } from "uuid"
 import { DynamicsWithEndDate } from "./InsertDynamicsInstructions"
+import { Movement } from "mpm-ts"
 
 export type DynamicsPoints = {
     date: number
@@ -30,7 +31,7 @@ export const computeInnerControlPointsXPositions = (curvature: number, protracti
  * @param date time position
  * @return
  */
-const getTForDate = (instruction: DynamicsWithEndDate & InnerControlPoints, date: number) => {
+const getTForDate = (instruction: { date: number, endDate: number} & InnerControlPoints, date: number) => {
     if (date === instruction.date)
         return 0.0;
 
@@ -77,6 +78,22 @@ export const volumeAtDate = (instruction: DynamicsWithEndDate & InnerControlPoin
 
     const t = getTForDate(instruction, date);
     return ((((3.0 - (2.0 * t)) * t * t) * (instruction["transition.to"] - +instruction.volume)) + +instruction.volume);
+}
+
+export const positionAtDate = (instruction: Movement & { endDate: number } & InnerControlPoints, date: number) => {
+    if (date < instruction.date) {
+        return +instruction.position
+    }
+    if (instruction["transition.to"] === undefined || (instruction.position === instruction["transition.to"])) {
+        return +instruction.position;
+    }
+    if (date >= instruction.endDate) {
+        return instruction["transition.to"]
+    }
+
+    const t = getTForDate(instruction, date);
+
+    return ((((3.0 - (2.0 * t)) * t * t) * (instruction["transition.to"] - +instruction.position)) + +instruction.position);
 }
 
 const computeError = (instruction: DynamicsWithEndDate, points: DynamicsPoints[]) => {
