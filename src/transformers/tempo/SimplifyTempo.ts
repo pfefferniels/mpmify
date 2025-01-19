@@ -118,12 +118,13 @@ const computeTotalError = (tempo: TempoWithEndDate, points: Point[]) => {
  * @returns The approximated tempo curve.
  */
 export const approximateFromPoints = (
-    serieses: Point[][],
+    serieses_: Point[][],
     targetBeatLength: number = 0.25
 ): TempoWithEndDate[] => {
-    // console.log('approximating points', data, 'starting with', data[0][1])
+    const serieses = serieses_.filter(series => series.length > 1)
+
     if (serieses.some(series => series.length <= 1)) {
-        throw new Error('At least 2 data points are required in order to approximate')
+        console.warn('Some serieses have less than two points. Ignoring them.')
     }
 
     const initialGuesses: TempoWithEndDate[] = serieses.map(data => {
