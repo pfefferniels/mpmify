@@ -168,6 +168,7 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
      * This method removes any rubato distortions from the
      * duration of notes.
      * 
+     * @todo remove the distortion from pedals as well.
      * @param msm 
      * @param mpm 
      */

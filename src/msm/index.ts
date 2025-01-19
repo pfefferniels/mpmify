@@ -2,19 +2,27 @@ import { Scope } from "mpm-ts";
 import { parse } from "js2xmlparser";
 import { isDefined } from "../utils/utils";
 
-/**
- * Temporary attributes used and manipulated in the process of interpolation.
- */
-type TemporaryAttributes = {
-    /*readonly*/ 'midi.pitch': number
+type PhysicalAttributes = {
     'midi.onset': number
     'midi.duration': number
-    'midi.velocity': number
-
-    'tickDate'?: number
-    'tickDuration'?: number
-    'relativeVolume'?: number
 }
+
+/**
+ * Temporary attributes used and manipulated in the process of approximation.
+ */
+type TemporaryAttributes = Partial<{
+    tickDate: number
+    tickDuration: number
+    relativeVolume: number
+}>
+
+export type MsmPedal = {
+    'xml:id': string
+    date?: number
+    'date.end'?: number
+    type: 'sustain' | 'soft'
+} & PhysicalAttributes & TemporaryAttributes
+
 
 /**
  * Represents a score note as part of an MSM encoding. 
@@ -29,6 +37,9 @@ export type MsmNote = {
     readonly pitchname: string
     readonly accidentals: number
     readonly octave: number
+} & PhysicalAttributes & {
+    'midi.pitch': number
+    'midi.velocity': number
 } & TemporaryAttributes
 
 /**
@@ -46,6 +57,7 @@ export type TimeSignature = {
  */
 export class MSM {
     allNotes: MsmNote[]
+    pedals: MsmPedal[]
     timeSignature?: TimeSignature
 
     /**
@@ -57,6 +69,7 @@ export class MSM {
      * real (physical) time.
      */
     constructor(notes?: MsmNote[], timeSignature?: TimeSignature) {
+        this.pedals = []
         this.allNotes = notes ? notes.sort((a, b) => a['date'] - b['date']) : []
 
         if (timeSignature) {
@@ -66,6 +79,7 @@ export class MSM {
 
     public clone() {
         const clone = new MSM(this.allNotes, this.timeSignature)
+        clone.pedals = this.pedals
         return clone
     }
 
@@ -84,6 +98,15 @@ export class MSM {
     public shiftToFirstOnset() {
         const notesWithOnset = this.allNotes.filter(n => isDefined(n['midi.onset']))
         const min = Math.min(...notesWithOnset.map(n => n['midi.onset']))
+
+        const pedals = this.pedals.forEach(p => {
+            if (p["midi.onset"] < min) {
+                p["midi.duration"] -= (min - p["midi.onset"])
+                p['midi.onset'] = 0
+            }
+            else p['midi.onset'] -= min
+        })
+
         if (min) notesWithOnset.forEach(n => n['midi.onset'] -= min)
     }
 
@@ -119,6 +142,13 @@ export class MSM {
                             }
                         }
                     },
+                },
+                'pedalMap': {
+                    'pedal': this.pedals.map(pedal => {
+                        return {
+                            '@': pedal
+                        }
+                    })
                 }
             },
             'part': Array.from(Array(2).keys()).map(part => {

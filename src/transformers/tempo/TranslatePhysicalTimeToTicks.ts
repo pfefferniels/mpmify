@@ -61,7 +61,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 const nextTempo = tempos[i + 1]
                 const endDate = nextTempo ? nextTempo.date : msm.end
 
-                console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
+                // console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
 
                 const tempoWithEndDate: TempoWithEndDate = {
                     ...tempo,
@@ -78,7 +78,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
                     const ornamentMs = computeMillisecondsAt(ornament.date, tempoWithEndDate)
                     const frameStart = ornamentMs + ornament["frame.start"]
-                    console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
+                    // console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
                     if (frameStart < 0) {
                         // use previous tempo frame
                         continue
@@ -87,13 +87,13 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
                     const frameEnd = frameStart + ornament.frameLength
                     const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
-                    console.log('frame: ', tickFrameStart, tickFrameEnd)
+                    // console.log('frame: ', tickFrameStart, tickFrameEnd)
 
                     ornament["frame.start"] = tickFrameStart - ornament.date
                     ornament['frameLength'] = tickFrameEnd - tickFrameStart
                     ornament['time.unit'] = 'ticks'
 
-                    console.log('new ornament', ornament)
+                    // console.log('new ornament', ornament)
                 }
 
                 currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
@@ -104,7 +104,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
     /**
      * Translates MIDI onset times into tempo-dependent
      * ticks using the newly interpolated tempo curves.
-     * Adds the variable `tickDate` on every MSM note 
+     * Adds the variable `tickDate` on every MSM note/pedal
      * and removes the variable `midi.onset`. 
      * @param msm The MSM to modify.
      * @param mpm The MPM to take the tempo instructions from. 
@@ -114,7 +114,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         for (const [scope,] of mpm.doc.performance.parts) {
             const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
-            let currentMilliseconds = 0
+            let currentMs = 0
             for (let i = 0; i < tempos.length; i++) {
                 const tempo = tempos[i]
                 const nextTempo = tempos[i + 1]
@@ -133,10 +133,27 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                     const onsetMilliseconds = n["midi.onset"] * 1000
 
                     // replace MIDI time with tick time.
-                    n.tickDate = approximateDate(onsetMilliseconds - currentMilliseconds, tempoWithEndDate)
+                    n.tickDate = approximateDate(onsetMilliseconds - currentMs, tempoWithEndDate)
                 })
 
-                currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
+                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+
+                const pedals = msm.pedals
+                    .filter(p => p.tickDate === undefined) // not yet processed
+                    .filter(p => {
+                        // filter pedals that are within the current tempo frame
+                        const onsetMs = p['midi.onset'] * 1000
+                        return (
+                            onsetMs >= currentMs &&
+                            onsetMs < (currentMs + endMs)
+                        )
+                    })
+                    .forEach(p => {
+                        const onsetMs = p['midi.onset'] * 1000
+                        p.tickDate = approximateDate(onsetMs - currentMs, tempoWithEndDate)
+                    })
+
+                currentMs += endMs
             }
         }
     }
@@ -182,6 +199,25 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                             delete n["midi.onset"]
                         }
                     })
+                
+                msm.pedals
+                    .filter(p => p.tickDuration === undefined) // not yet processed
+                    .filter(p => {
+                        const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
+                        return (
+                            offsetMs >= currentFrameBeginMs &&
+                            offsetMs < currentFrameBeginMs + endMs
+                        )
+                    })
+                    .forEach(p => {
+                        const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
+                        p.tickDuration = approximateDate(offsetMs - currentFrameBeginMs, tempoWithEndDate) - p.tickDate
+
+                        if (deleteMIDI) {
+                            delete p['midi.duration']
+                            delete p['midi.onset']
+                        }
+                    })
 
                 currentFrameBeginMs += endMs
             }
@@ -198,7 +234,7 @@ const isTransition = (tempo: Tempo) => {
 }
 
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
-    console.log('approximating date for', targetMilliseconds, 'within tempo instruction', effectiveTempoInstruction["xml:id"])
+    // console.log('approximating date for', targetMilliseconds, 'within tempo instruction', effectiveTempoInstruction["xml:id"])
     if (!isTransition(effectiveTempoInstruction)) {
         return (
             +effectiveTempoInstruction.date +
@@ -206,7 +242,7 @@ const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: 
         )
     }
 
-    console.log('initial=', initialGuess)
+    // console.log('initial=', initialGuess)
 
     let guess = initialGuess;
     let guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
@@ -215,7 +251,7 @@ const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: 
         guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     }
 
-    console.log('after=', guess)
+    // console.log('after=', guess)
 
 
     return Math.round(guess);
