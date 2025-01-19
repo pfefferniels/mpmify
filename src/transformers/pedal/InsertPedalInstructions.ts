@@ -21,6 +21,8 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     public transform(msm: MSM, mpm: MPM): string {
         const validPedals = msm.pedals.filter(pedal => pedal.tickDate !== undefined && pedal.tickDuration !== undefined)
 
+        mpm.removeInstructions('movement', 'global')
+
         for (const pedal of validPedals) {
             const tickDate = pedal.tickDate
             const tickDuration = pedal.tickDuration
@@ -28,7 +30,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             mpm.insertInstruction({
                 'xml:id': `${pedal['xml:id']}_start`,
                 type: 'movement',
-                date: tickDate,
+                date: tickDate - this.options.changeDuration / 2, 
                 position: 0,
                 "transition.to": 1,
                 controller: pedal.type
@@ -37,7 +39,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             mpm.insertInstruction({
                 'xml:id': `${pedal['xml:id']}_moveDown`,
                 type: 'movement',
-                date: tickDate + this.options.changeDuration,
+                date: tickDate + this.options.changeDuration / 2,
                 position: 1,
                 controller: pedal.type
             }, 'global')
@@ -45,7 +47,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             mpm.insertInstruction({
                 'xml:id': `${pedal['xml:id']}_moveUp`,
                 type: 'movement',
-                date: tickDate + tickDuration - this.options.changeDuration,
+                date: tickDate + tickDuration - this.options.changeDuration / 2,
                 position: 1,
                 "transition.to": 0,
                 controller: pedal.type
@@ -54,7 +56,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             mpm.insertInstruction({
                 'xml:id': `${pedal['xml:id']}_end`,
                 type: 'movement',
-                date: tickDate + tickDuration,
+                date: tickDate + tickDuration + this.options.changeDuration / 2,
                 position: 0,
                 controller: pedal.type
             }, 'global')
