@@ -127,26 +127,33 @@ export const approximateFromPoints = (
         console.warn('Some serieses have less than two points. Ignoring them.')
     }
 
-    const initialGuesses: TempoWithEndDate[] = serieses.map(data => {
+    const initialGuesses: TempoWithEndDate[] = []
+
+    for (let i = 0; i < serieses.length; i++) {
+        const data = serieses[i]
+        const lastGuess = initialGuesses[i - 1]
+        const previousEndBpm = lastGuess ? lastGuess["transition.to"] : undefined
+
         if (data.length === 2) {
-            return {
+            initialGuesses.push({
                 type: 'tempo' as 'tempo',
                 'xml:id': `tempo_${v4()}`,
-                'bpm': 60000 / (data[1][1] - data[0][1]),
+                'bpm': previousEndBpm || (60000 / (data[1][1] - data[0][1])),
                 'date': data[0][0],
                 endDate: data[1][0],
                 'beatLength': (data[1][0] - data[0][0]) / 720 / 4
-            }
+            })
+            continue
         }
 
         const beatLengthTicks = targetBeatLength * 4 * 720
-        const startBpm = (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / beatLengthTicks)))
+        const startBpm = previousEndBpm || (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / beatLengthTicks)))
         const endBpm = 60000 / ((data[data.length - 1][1] - data[data.length - 2][1]) / ((data[data.length - 1][0] - data[data.length - 2][0]) / beatLengthTicks))
 
         // initial guess, which will then be refined to 
         // fit the actual onset times (in milliseconds)
         // using a simulated annealing approach.
-        const tmpTempo = {
+        initialGuesses.push({
             type: 'tempo' as 'tempo',
             'xml:id': `tempo_${v4()}`,
             'bpm': startBpm,
@@ -155,10 +162,8 @@ export const approximateFromPoints = (
             'transition.to': endBpm,
             meanTempoAt: 0.5,
             beatLength: targetBeatLength
-        }
-
-        return tmpTempo
-    })
+        })
+    }
 
     return simulatedAnnealing(serieses, initialGuesses)
 }
