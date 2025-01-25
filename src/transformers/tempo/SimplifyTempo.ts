@@ -16,14 +16,13 @@ const simulatedAnnealing = (
     }
 
     let currentTempos = initialTempos.slice();
-    // console.log('trying to optimize', currentTempo)
     let bestTempos = [...initialTempos];
     let bestError = currentTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
-    // console.log('best error:', bestError)
     let temperature = initialTemperature;
 
     for (let iteration = 0; iteration < maxIterations && temperature > 0.001; iteration++) {
         const neighboringTempos = generateNeighboringTempos(currentTempos);
+
         const currentError = currentTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
         const neighborError = neighboringTempos.reduce((acc, tempo, i) => acc + computeTotalError(tempo, serieses[i]), 0);
         // console.log('trying', neighborError, 'for', neighboringTempo)
@@ -54,15 +53,20 @@ const generateNeighboringTempos = (tempos: TempoWithEndDate[]): TempoWithEndDate
 
     const newTempos: TempoWithEndDate[] = [];
 
-    let prevTransitionTo
+    let prevTransitionTo: number | undefined = undefined
     for (const tempo of tempos) {
         const isAcc = tempo.bpm < tempo["transition.to"]!
 
         // If the start point is fixed, do not apply 
         // any variation to it
-        const newBPM = prevTransitionTo || tempo.bpm + (isAcc ? -randomVariation : randomVariation)
+        let newBPM = prevTransitionTo || (tempo.bpm + (isAcc ? -randomVariation : randomVariation))
         const newTransitionTo = tempo["transition.to"]! + (isAcc ? randomVariation : -randomVariation)
-        const newMeanTempoAt = clamp(
+
+        if (isAcc && newTransitionTo < newBPM || !isAcc && newTransitionTo > newBPM) {
+            newBPM = (tempo.bpm + (isAcc ? -randomVariation : randomVariation))
+        }
+
+        let newMeanTempoAt = clamp(
             0.01,
             tempo.meanTempoAt + (Math.random() - 0.5) * 0.1,
             0.99
@@ -122,7 +126,6 @@ export const approximateFromPoints = (
     targetBeatLength: number = 0.25
 ): TempoWithEndDate[] => {
     const serieses = serieses_.filter(series => series.length > 1)
-
     if (serieses.some(series => series.length <= 1)) {
         console.warn('Some serieses have less than two points. Ignoring them.')
     }
@@ -131,24 +134,30 @@ export const approximateFromPoints = (
 
     for (let i = 0; i < serieses.length; i++) {
         const data = serieses[i]
+
+        const targetBeatLengthTicks = targetBeatLength * 4 * 720
+        const startBpm = (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / targetBeatLengthTicks)))
+
+        const distanceMs = data[data.length - 1][1] - data[0][1]
+        const distanceTicks = data[data.length - 1][0] - data[0][0]
+        const endBpm = 60000 / (distanceMs / (distanceTicks / targetBeatLengthTicks))
+
         const lastGuess = initialGuesses[i - 1]
         const previousEndBpm = lastGuess ? lastGuess["transition.to"] : undefined
+        const meanConnection = previousEndBpm ? (previousEndBpm + startBpm) / 2 : undefined
 
         if (data.length === 2) {
             initialGuesses.push({
                 type: 'tempo' as 'tempo',
                 'xml:id': `tempo_${v4()}`,
-                'bpm': previousEndBpm || (60000 / (data[1][1] - data[0][1])),
+                'bpm': meanConnection || startBpm,
                 'date': data[0][0],
                 endDate: data[1][0],
-                'beatLength': (data[1][0] - data[0][0]) / 720 / 4
+                'beatLength': targetBeatLength
             })
             continue
         }
 
-        const beatLengthTicks = targetBeatLength * 4 * 720
-        const startBpm = previousEndBpm || (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / beatLengthTicks)))
-        const endBpm = 60000 / ((data[data.length - 1][1] - data[data.length - 2][1]) / ((data[data.length - 1][0] - data[data.length - 2][0]) / beatLengthTicks))
 
         // initial guess, which will then be refined to 
         // fit the actual onset times (in milliseconds)
@@ -156,7 +165,7 @@ export const approximateFromPoints = (
         initialGuesses.push({
             type: 'tempo' as 'tempo',
             'xml:id': `tempo_${v4()}`,
-            'bpm': startBpm,
+            'bpm': meanConnection || startBpm,
             date: data[0][0],
             endDate: data[data.length - 1][0],
             'transition.to': endBpm,
@@ -167,77 +176,3 @@ export const approximateFromPoints = (
 
     return simulatedAnnealing(serieses, initialGuesses)
 }
-
-export type Segment = {
-    direction: 'rising' | 'falling',
-    points: Point[],
-    tempoPoints: Point[]
-};
-
-export const segmentCurve = (points: Point[]): Segment[] => {
-    if (points.length < 3) {
-        throw new Error('At least three points are required to form a curve.');
-    }
-
-    const diffPoints: Point[] = []
-    for (let i = 0; i < points.length - 1; i++) {
-        const yDiff = (points[i + 1][1] - points[i][1]) / 1000
-        const xDiff = (points[i + 1][0] - points[i][0]) / 720
-
-        diffPoints.push([points[i][0], 60 / (yDiff / xDiff)])
-    }
-
-    const segments: Segment[] = [];
-    let currentSegment: Segment = {
-        direction: diffPoints[1][1] > diffPoints[0][1] ? 'rising' : 'falling',
-        points: [points[0]],
-        tempoPoints: [diffPoints[0]]
-    };
-
-    // Function to add the current segment to segments and start a new one
-    const startNewSegment = (point: Point, diffPoint: Point, direction: 'rising' | 'falling') => {
-        // currentSegment.points.push(point)
-        segments.push(currentSegment);
-
-        currentSegment = {
-            direction,
-            points: [currentSegment.points[currentSegment.points.length - 1], point],
-            tempoPoints: [currentSegment.tempoPoints[currentSegment.tempoPoints.length - 1], diffPoint]
-        };
-    };
-
-    for (let i = 1; i < diffPoints.length; i++) {
-        const [, previousTempo] = diffPoints[i - 1];
-        const [, currentTempo] = diffPoints[i];
-
-        if (currentTempo > previousTempo) { // The segment is rising
-            if (currentSegment.direction === 'falling') {
-                startNewSegment(points[i], diffPoints[i], 'rising');
-            } else {
-                currentSegment.points.push(points[i]);
-                currentSegment.tempoPoints.push(diffPoints[i])
-            }
-        } else if (currentTempo < previousTempo) { // The segment is falling
-            if (currentSegment.direction === 'rising') {
-                startNewSegment(points[i], diffPoints[i], 'falling');
-            } else {
-                currentSegment.points.push(points[i]);
-                currentSegment.tempoPoints.push(diffPoints[i])
-            }
-        } else {
-            currentSegment.points.push(points[i]);
-            currentSegment.tempoPoints.push(diffPoints[i])
-        }
-    }
-
-    // Add the last segment to the list
-    segments.push(currentSegment);
-
-    return segments;
-}
-
-type WithSegment = {
-    segment: Segment
-}
-
-export type TempoWithSegmentData = (TempoWithEndDate & WithSegment)
