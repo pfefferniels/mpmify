@@ -8,6 +8,7 @@ import { TempoWithEndDate } from "./tempoCalculations";
 
 export type Marker = {
     date: number
+    measureBeatLength?: number
     beatLength: number
     continuous: boolean
 }
@@ -76,7 +77,9 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
     insertInstructionsByMarkers(msm: MSM, mpm: MPM, markers: Marker[]) {
         const onsetAtDate = (date: number) => {
             const silent = this.options.silentOnsets.find(s => s.date === date)
-            if (silent) return silent.onset
+            if (silent) {
+                return silent.onset
+            }
 
             const currentNotes = msm.notesAtDate(date, this.options.part)
             if (currentNotes.length) return currentNotes[0]["midi.onset"]
@@ -98,8 +101,6 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             }
         }
 
-        console.log('markers=', markers)
-
         const tempos: TempoWithEndDate[] = markers
             .map((marker, i): Marker & { points: [number, number][] } => {
                 let nextDate
@@ -115,11 +116,12 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
 
                 const points: [number, number][] = []
                 const firstOnset = onsetAtDate(marker.date)
+                const beatLength = marker.measureBeatLength || marker.beatLength
 
-                for (let date = marker.date; date <= nextDate; date += marker.beatLength) {
+                for (let date = marker.date; date <= nextDate; date += beatLength) {
                     // when the frames are overlapping, take the first onset
                     // of the next frame as the last data point
-                    if (date + marker.beatLength > nextDate) {
+                    if (date + beatLength > nextDate) {
                         points.push([nextDate, (onsetAtDate(nextDate) - firstOnset) * 1000])
                         break
                     }
@@ -143,8 +145,9 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             }, [] as (Marker & { serieses: [number, number][][] })[])
             .map(marker => approximateFromPoints(marker.serieses, marker.beatLength / 720 / 4))
             .flat()
-
-        mpm.insertInstructions(tempos, this.options?.part)
+        
+        mpm.removeInstructions('tempo', this.options.part)
+        mpm.insertInstructions(tempos, this.options?.part, true)
 
         // insert another tempo instruction at the very end
         if (tempos.length > 0) {
