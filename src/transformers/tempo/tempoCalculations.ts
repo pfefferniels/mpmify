@@ -15,7 +15,6 @@ export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) => 
 }
 
 export const computeMillisecondsForConstantTempo = (date: number, tempo: TempoWithEndDate) => {
-    console.log('computing constant')
     return ((15000.0 * (date - tempo.date)) / (tempo.bpm * tempo.beatLength * 720));
 }
 
