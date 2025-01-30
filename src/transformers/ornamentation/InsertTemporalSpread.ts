@@ -1,10 +1,11 @@
-import { DynamicsGradient, MPM, Ornament, Part, Scope } from "mpm-ts"
+import { MPM, Ornament, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
-export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate'
+export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none'
+export type DatedArpeggioPlacement = Map<number, ArpeggioPlacement>
 
 /**
  * A little helper function to determine how an array is sorted.
@@ -39,8 +40,15 @@ export interface InsertTemporalSpreadOptions extends TransformationOptions {
 
     /**
      * Where to place the arpeggio in relation to the beat?
+     * Provides the placements for single dates. If a date
+     * is not provided, the default placement is used instead.
      */
-    placement: ArpeggioPlacement
+    placement: DatedArpeggioPlacement
+
+    /**
+     * Fallback placement if no placement is provided for a date.
+     */
+    defaultPlacement: ArpeggioPlacement 
 
     /**
      * The part on which the transformer is to be applied to.
@@ -62,7 +70,8 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         this.setOptions(options || {
             minimumArpeggioSize: 3,
             durationThreshold: 35,
-            placement: 'estimate',
+            placement: new Map(),
+            defaultPlacement: 'estimate',
             noteOffShiftTolerance: 500,
             part: 'global'
         })
@@ -121,18 +130,27 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             // define the frame start based on the given option
             const frameLength = duration * 1000
             let frameStart: number, newOnset: number
-            if (this.options?.placement === 'on-beat') {
+
+            const placement = this.options.placement.get(date) || this.options.defaultPlacement
+            
+            if (placement === 'none') {
+                // leave everything as it is
+                continue
+            }
+            else if (placement === 'on-beat') {
                 frameStart = 0
                 newOnset = arpeggioNotes[0]['midi.onset']
             }
-            else if (this.options?.placement === 'before-beat') {
+            else if (placement === 'before-beat') {
                 frameStart = -frameLength
                 newOnset = arpeggioNotes[arpeggioNotes.length - 1]['midi.onset']
             }
             else {
-                frameStart = -frameLength / 2
-                const onsetSum = arpeggioNotes.map(note => note['midi.onset']).reduce((a, b) => a + b, 0)
-                newOnset = (onsetSum / arpeggioNotes.length) || 0
+                // the estimated onset is the average of all onsets
+                newOnset = arpeggioNotes.map(note => note['midi.onset']).reduce((a, b) => a + b, 0) / arpeggioNotes.length
+
+                // frame start is the distance between the first note's onset and the estimated onset
+                frameStart = arpeggioNotes[0]['midi.onset'] - newOnset
             }
             
             ornaments.push({
