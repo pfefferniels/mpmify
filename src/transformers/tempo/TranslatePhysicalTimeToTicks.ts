@@ -1,4 +1,4 @@
-import { MPM, Ornament, Tempo } from "mpm-ts";
+import { MPM, Ornament, Scope, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt } from "./tempoCalculations";
@@ -46,6 +46,49 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         return super.transform(msm, mpm)
     }
 
+    private msToTicks(ms: number, tempos: Tempo[]) {
+        let currentMs = 0
+        for (let i = 0; i < tempos.length; i++) {
+            const tempo = tempos[i]
+            const nextTempo = tempos[i + 1]
+            const endDate = nextTempo && nextTempo.date
+
+            const tempoWithEndDate: TempoWithEndDate = {
+                ...tempo,
+                endDate
+            }
+
+            const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+
+            if (ms >= currentMs && ms < (currentMs + endMs)) {
+                return approximateDate(ms - currentMs, tempoWithEndDate)
+            }
+
+            currentMs += endMs
+        }
+    }
+
+    private ticksToMs(ticks: number, tempos: Tempo[]) {
+        let currentMs = 0
+        for (let i = 0; i < tempos.length; i++) {
+            const tempo = tempos[i]
+            const nextTempo = tempos[i + 1]
+            const endDate = nextTempo && nextTempo.date
+
+            const tempoWithEndDate: TempoWithEndDate = {
+                ...tempo,
+                endDate
+            }
+
+            if (ticks >= tempo.date && ticks < endDate) {
+                return currentMs + computeMillisecondsAt(ticks, tempoWithEndDate)
+            }
+
+            const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+            currentMs += endMs
+        }
+    }
+
     /**
      * Walks through physical attributes in the
      * given MPM and translates them into tick values.
@@ -55,48 +98,23 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         for (const [scope,] of mpm.doc.performance.parts) {
             const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
-            let currentMilliseconds = 0
-            for (let i = 0; i < tempos.length; i++) {
-                const tempo = tempos[i]
-                const nextTempo = tempos[i + 1]
-                const endDate = nextTempo ? nextTempo.date : msm.end
-
-                // console.log('within tempo instruction @', tempo.date, 'current start time=', currentMilliseconds)
-
-                const tempoWithEndDate: TempoWithEndDate = {
-                    ...tempo,
-                    endDate
+            const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
+            for (const ornament of ornaments) {
+                if (ornament["time.unit"] === 'ticks') {
+                    // the job is done already
+                    continue
                 }
 
-                // find all ornaments that fit into the tempo frame
-                const ornaments = mpm.instructionEffectiveInRange<Ornament>(tempo.date, tempoWithEndDate.endDate + 1, 'ornament', scope)
-                for (const ornament of ornaments) {
-                    if (ornament["time.unit"] === 'ticks') {
-                        // the job is done already
-                        continue
-                    }
+                const ornamentMs = this.ticksToMs(ornament.date, tempos)
+                const frameStartMs = ornamentMs + ornament["frame.start"]
+                const frameEndMs = frameStartMs + ornament.frameLength
 
-                    const ornamentMs = computeMillisecondsAt(ornament.date, tempoWithEndDate)
-                    const frameStart = ornamentMs + ornament["frame.start"]
-                    // console.log('ornament ms @', ornament.date, '=', ornamentMs, 'frameStart=', frameStart)
-                    if (frameStart < 0) {
-                        // use previous tempo frame
-                        continue
-                    }
-                    const tickFrameStart = approximateDate(frameStart, tempoWithEndDate)
+                const frameStartTicks = this.msToTicks(frameStartMs, tempos)
+                const frameEndTicks = this.msToTicks(frameEndMs, tempos)
 
-                    const frameEnd = frameStart + ornament.frameLength
-                    const tickFrameEnd = approximateDate(frameEnd, tempoWithEndDate)
-                    // console.log('frame: ', tickFrameStart, tickFrameEnd)
-
-                    ornament["frame.start"] = tickFrameStart - ornament.date
-                    ornament['frameLength'] = tickFrameEnd - tickFrameStart
-                    ornament['time.unit'] = 'ticks'
-
-                    // console.log('new ornament', ornament)
-                }
-
-                currentMilliseconds += computeMillisecondsAt(endDate, tempoWithEndDate)
+                ornament["frame.start"] = frameStartTicks - ornament.date
+                ornament['frameLength'] = frameEndTicks - frameStartTicks
+                ornament['time.unit'] = 'ticks'
             }
         }
     }
@@ -138,7 +156,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
                 const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
 
-                const pedals = msm.pedals
+                msm.pedals
                     .filter(p => p.tickDate === undefined) // not yet processed
                     .filter(p => {
                         // filter pedals that are within the current tempo frame
@@ -161,8 +179,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
     /**
      * Translates MIDI durations into tick durations
      * using the new <tempo> instructions.
-     * @todo Currently only consideres constant tempos.
-     * Approximation of tempo curves still a todo.
+     * 
      * @param msm 
      * @param mpm 
      */
@@ -199,7 +216,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                             delete n["midi.onset"]
                         }
                     })
-                
+
                 msm.pedals
                     .filter(p => p.tickDuration === undefined) // not yet processed
                     .filter(p => {
