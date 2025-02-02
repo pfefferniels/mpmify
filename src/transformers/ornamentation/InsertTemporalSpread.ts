@@ -150,7 +150,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 newOnset = arpeggioNotes.map(note => note['midi.onset']).reduce((a, b) => a + b, 0) / arpeggioNotes.length
 
                 // frame start is the distance between the first note's onset and the estimated onset
-                frameStart = arpeggioNotes[0]['midi.onset'] - newOnset
+                frameStart = (arpeggioNotes[0]['midi.onset'] - newOnset) * 1000
             }
             
             ornaments.push({
