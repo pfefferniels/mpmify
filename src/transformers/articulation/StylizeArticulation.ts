@@ -1,5 +1,5 @@
 import { Articulation, ArticulationDef, MPM } from "mpm-ts";
-import { MSM } from "../../msm";
+import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { dbscan } from "../../utils/dbscan";
@@ -23,16 +23,51 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         }
     }
 
+    private findConflicts(withinNotes: MsmNote[], clusteredArticulations: Articulation[]) {
+        const meanRelativeDuration = clusteredArticulations.reduce((acc, a) => acc + a.relativeDuration, 0) / clusteredArticulations.length
+
+        const conflictList: Set<Articulation> = new Set()
+
+        for (const articulation of clusteredArticulations) {
+            const date = articulation.date
+            let targetNotes = withinNotes.filter(n => n.date === date)
+            if (articulation.noteid) {
+                targetNotes = targetNotes.filter(n => n["xml:id"] === articulation.noteid.slice(1))
+            }
+
+            for (const note of targetNotes) {
+                const newDuration = note.duration * meanRelativeDuration
+                const newEnd = note.tickDate + newDuration
+                const conflicts = withinNotes.filter(n => {
+                    // find notes on the same pitch, where the articulated 
+                    // note starts before the current note and ends after it
+                    return (
+                        n["midi.pitch"] === note["midi.pitch"]
+                        && note.tickDate < n.tickDate
+                        && newEnd > n.tickDate
+                    )
+                })
+                if (conflicts.length > 0) {
+                    conflictList.add(articulation)
+                }
+            }
+        }
+
+        return conflictList
+    }
+
+    generateClusters(articulations: Articulation[]) {
+        return dbscan(
+            articulations.map(a => [a.relativeDuration, a.relativeVelocity]),
+            { epsilons: [this.options.relativeDurationTolerance, this.options.volumeTolerance] }
+        )
+    }
+
     transform(msm: MSM, mpm: MPM) {
         for (const [scope,] of mpm.doc.performance.parts) {
             // Find clusters
             const articulations = mpm.getInstructions<Articulation>('articulation', scope)
-            const points =
-                dbscan(
-                    articulations.map(a => [a.relativeDuration, a.relativeVelocity]),
-                    { epsilons: [this.options.relativeDurationTolerance, this.options.volumeTolerance] }
-                )
-            console.log('points=', points)
+            const points = this.generateClusters(articulations)
 
             const clusters = Object.groupBy(points, p => p.label)
             const defs: ArticulationDef[] = Object
@@ -52,8 +87,24 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
             mpm.insertDefinitions(defs, scope)
 
+            const labeledArticulations: Record<number, Articulation[]> = points.reduce((acc, p, i) => {
+                if (p.label === -1) return acc
+                if (!acc[p.label]) acc[p.label] = []
+                acc[p.label].push(articulations[i])
+                return acc
+            }, {})
+
+            const conflictList = []
+            for (const [, cluster] of Object.entries(labeledArticulations)) {
+                conflictList.push(...this.findConflicts(msm.allNotes, cluster))
+            }
+
+            console.log('conflict list:', conflictList)
+
             for (let i = 0; i < points.length; i++) {
+                if (conflictList.includes(articulations[i])) continue
                 if (points[i].label === -1) continue
+
                 articulations[i]["name.ref"] = `def_${points[i].label}`
                 articulations[i].relativeDuration = undefined
                 articulations[i].relativeVelocity = undefined
@@ -91,10 +142,5 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         }
 
         return super.transform(msm, mpm)
-    }
-
-    countPreview(mpm: MPM) {
-        // todo: implement
-        return 12;
     }
 }
