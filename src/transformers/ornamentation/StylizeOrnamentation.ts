@@ -1,101 +1,146 @@
-import { DynamicsGradient, MPM, Ornament, OrnamentDef, Part } from "mpm-ts"
+import { DynamicsGradient, MPM, Ornament, OrnamentDef } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
-
-const withinTolerance = (tolerance: number, given: number, search: number) => {
-    return search >= (given - tolerance) && search < given + tolerance
-}
+import { dbscan } from "../../utils/dbscan"
 
 export interface StylizeOrnamentationOptions extends TransformationOptions {
     /**
-     * given in ticks
+     * given in ticks; used as epsilon tolerance for both frame.start and frameLength
      */
     tolerance: number
 }
 
-/**
- * This transformer tries to combine multiple instructions
- * into fewer archetype definitions, taking a given tolerance into account.
- * Style definitions will always be written into the global environment.
- */
 export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentationOptions> {
-    constructor() {
+    constructor(options?: StylizeOrnamentationOptions) {
         super()
-
         this.options = {
-            tolerance: 10
+            tolerance: options?.tolerance || 10
         }
     }
 
     public name() { return 'StylizeOrnamentation' }
 
+    generateClusters(ornaments: Ornament[]) {
+        const points = ornaments.map(o => [o["frame.start"] as number, o.frameLength as number])
+        return dbscan(points, { epsilons: [this.options.tolerance, this.options.tolerance] })
+    }
+
     public transform(msm: MSM, mpm: MPM): string {
         for (const [scope, ] of mpm.doc.performance.parts) {
             const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
-            console.log('ornaments', ornaments)
-            for (const ornament of ornaments) {
-                if (ornament["frame.start"] === undefined || ornament.frameLength === undefined) continue
 
-                console.log('startin insertion')
+            const gradients = ["crescendo", "decrescendo"]
 
-                let dynamicsGradient: DynamicsGradient
-                if (ornament.gradient === 'crescendo') {
-                    dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': -1, 'transition.to': 0 }
-                }
-                else if (ornament.gradient === 'decrescendo') {
-                    dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': 0, 'transition.to': -1 }
-                }
+            for (const gradientType of gradients) {
+                // Filter ornaments that match the current gradient and have required fields
+                const filteredOrnaments = ornaments.filter(o =>
+                    o.gradient === gradientType &&
+                    o["frame.start"] !== undefined &&
+                    o.frameLength !== undefined
+                )
+                if (filteredOrnaments.length === 0) continue
 
-                const defs = mpm.getDefinitions<OrnamentDef>('ornamentDef', scope)
-                const existingDef = defs.find(def => {
-                    let sameGradient = true
-                    if (def.dynamicsGradient) {
-                        const gradient = def.dynamicsGradient
-                        const trans = (gradient["transition.to"] - gradient["transition.from"]) > 0 ? 'crescendo' : 'decrescendo'
-                        sameGradient = trans === ornament.gradient
-                    }
+                const clusters = this.generateClusters(filteredOrnaments)
 
-                    return (
-                        withinTolerance(this.options.tolerance, def.temporalSpread['frame.start'], ornament['frame.start'] || 0) &&
-                        withinTolerance(this.options.tolerance, def.temporalSpread['frameLength'], ornament['frameLength'] || 0) &&
-                        sameGradient
-                    )
-                })
+                // Group points by label
+                const clustersByLabel = clusters.reduce((acc, cur, i) => {
+                    const label = cur.label.toString()
+                    if (!acc[label]) acc[label] = []
+                    acc[label].push({ ornament: filteredOrnaments[i], point: cur.value as [number, number] })
+                    return acc
+                }, {} as { [label: string]: { ornament: Ornament, point: [number, number] }[] })
 
-                if (existingDef) {
-                    existingDef.temporalSpread["frame.start"] = (existingDef.temporalSpread['frame.start'] + ornament['frame.start']) / 2
-                    existingDef.temporalSpread['frameLength'] = (existingDef.temporalSpread['frameLength'] + ornament['frameLength']) / 2
-                    ornament["name.ref"] = existingDef.name
-                }
-                else {
-                    console.log('but really!')
-                    const defName = `def_${v4()}`
-                    mpm.insertDefinition({
-                        'type': 'ornamentDef',
-                        name: defName,
-                        dynamicsGradient,
-                        temporalSpread: {
-                            type: 'temporalSpread',
-                            'frameLength': ornament.frameLength,
-                            'frame.start': ornament['frame.start'],
-                            'noteoff.shift': ornament['noteoff.shift'] || true,
-                            'time.unit': ornament['time.unit'],
+                // Process each cluster
+                for (const label in clustersByLabel) {
+                    const group = clustersByLabel[label]
+                    if (label === "-1") {
+                        // For noise points, create individual ornamentDefs
+                        group.forEach(({ ornament, point }) => {
+                            let dynamicsGradient: DynamicsGradient
+                            if (gradientType === 'crescendo') {
+                                dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': -1, 'transition.to': 0 }
+                            } else {
+                                dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': 0, 'transition.to': -1 }
+                            }
+                            const defName = `def_${gradientType}_${v4()}`
+                            const def: OrnamentDef = {
+                                type: 'ornamentDef',
+                                name: defName,
+                                dynamicsGradient,
+                                temporalSpread: {
+                                    type: 'temporalSpread',
+                                    'frame.start': point[0],
+                                    'frameLength': point[1],
+                                    'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
+                                    'time.unit': ornament['time.unit']
+                                }
+                            }
+                            mpm.insertDefinition(def, scope)
+                            ornament["name.ref"] = defName
+                        })
+                    } else {
+                        // For clusters (more than one point), combine ornaments
+                        const sum = group.reduce((acc, cur) => {
+                            acc.x += cur.point[0]
+                            acc.y += cur.point[1]
+                            return acc
+                        }, { x: 0, y: 0 })
+                        const avgX = sum.x / group.length
+                        const avgY = sum.y / group.length
+
+                        let dynamicsGradient: DynamicsGradient
+                        if (gradientType === 'crescendo') {
+                            dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': -1, 'transition.to': 0 }
+                        } else {
+                            dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': 0, 'transition.to': -1 }
                         }
-                    }, scope)
-                    ornament["name.ref"] = defName
-                }
+                        const defName = `def_${gradientType}_${label}`
+                        // Use representative ornament from the group
+                        const repOrn = group[0].ornament
+                        const def: OrnamentDef = {
+                            type: 'ornamentDef',
+                            name: defName,
+                            dynamicsGradient,
+                            temporalSpread: {
+                                type: 'temporalSpread',
+                                'frame.start': avgX,
+                                'frameLength': avgY,
+                                'noteoff.shift': repOrn['noteoff.shift'] !== undefined ? repOrn['noteoff.shift'] : true,
+                                'time.unit': repOrn['time.unit']
+                            }
+                        }
+                        mpm.insertDefinition(def, scope)
+                        group.forEach(({ ornament }) => {
+                            ornament["name.ref"] = defName
+                        })
 
-                delete ornament['noteoff.shift']
-                delete ornament['time.unit']
-                delete ornament['gradient']
-                delete ornament["frame.start"]
-                delete ornament["frameLength"]
+                    }
+                }
             }
+
+            mpm.insertStyle({
+                date: 0,
+                type: 'style',
+                'xml:id': v4(),
+                'name.ref': 'performance_style',
+            }, 'ornament', scope)
+
+            // Remove temporary fields from ornaments
+            ornaments.forEach(o => {
+                if (o["name.ref"]) {
+                    delete o['noteoff.shift']
+                    delete o['time.unit']
+                    delete o['gradient']
+                    delete o["frame.start"]
+                    delete o["frameLength"]
+                }
+            })
+
+
         }
 
-
-        // hand it over to the next transformer
+        // Hand it over to the next transformer
         return super.transform(msm, mpm)
     }
 }

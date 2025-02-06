@@ -1,4 +1,4 @@
-interface IPoint {
+export interface IPoint {
     value: number[];
     index: number;
     label: number;
