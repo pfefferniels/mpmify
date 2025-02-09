@@ -22,99 +22,113 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     public name() { return 'StylizeOrnamentation' }
 
     generateClusters(ornaments: Ornament[]) {
-        const points = ornaments.map(o => [o["frame.start"] as number, o.frameLength as number])
+        const points = ornaments.map(o => {
+            return [
+                o["frame.start"] as number,
+                o.frameLength as number
+            ]
+        })
         return dbscan(points, { epsilons: [this.options.tolerance, this.options.tolerance] })
     }
 
+    generateSubClusters(ornaments: Ornament[]) {
+        const points = ornaments.map(o => {
+            return [
+                (o["transition.from"] || 0) as number,
+                (o["transition.to"] || 0) as number
+            ]
+        })
+        return dbscan(points, { epsilons: [0.1, 0.1] })
+    }
+
     public transform(msm: MSM, mpm: MPM): string {
-        for (const [scope, ] of mpm.doc.performance.parts) {
+        for (const [scope,] of mpm.doc.performance.parts) {
             const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
 
-            const gradients = ["crescendo", "decrescendo"]
+            const filteredOrnaments = ornaments.filter(o =>
+                o["frame.start"] !== undefined &&
+                o.frameLength !== undefined
+            )
+            if (filteredOrnaments.length === 0) continue
 
-            for (const gradientType of gradients) {
-                // Filter ornaments that match the current gradient and have required fields
-                const filteredOrnaments = ornaments.filter(o =>
-                    o.gradient === gradientType &&
-                    o["frame.start"] !== undefined &&
-                    o.frameLength !== undefined
-                )
-                if (filteredOrnaments.length === 0) continue
+            const clusters = this.generateClusters(filteredOrnaments)
 
-                const clusters = this.generateClusters(filteredOrnaments)
+            // Group points by label
+            const clustersByLabel = clusters.reduce((acc, cur, i) => {
+                const label = cur.label.toString()
+                if (!acc[label]) acc[label] = []
+                acc[label].push({ ornament: filteredOrnaments[i], point: cur.value as [number, number] })
+                return acc
+            }, {} as { [label: string]: { ornament: Ornament, point: [number, number] }[] })
 
-                // Group points by label
-                const clustersByLabel = clusters.reduce((acc, cur, i) => {
+            // Process each cluster
+            for (const label in clustersByLabel) {
+                const group = clustersByLabel[label]
+                if (label === "-1") {
+                    group.forEach(({ ornament }) => {
+                        const def = this.asDef(ornament)
+                        mpm.insertDefinition(def, scope)
+                    })
+                    continue
+                }
+
+                // Process subgroups
+                const subClusters = this.generateSubClusters(group.map(c => c.ornament))
+                const subClustersByLabel = subClusters.reduce((acc, cur, i) => {
                     const label = cur.label.toString()
                     if (!acc[label]) acc[label] = []
-                    acc[label].push({ ornament: filteredOrnaments[i], point: cur.value as [number, number] })
+                    acc[label].push({
+                        ornament: group[i].ornament,
+                        point: [...group[i].point, ...cur.value] as [number, number, number, number]
+                    })
                     return acc
-                }, {} as { [label: string]: { ornament: Ornament, point: [number, number] }[] })
+                }, {} as { [label: string]: { ornament: Ornament, point: [number, number, number, number] }[] })
 
-                // Process each cluster
-                for (const label in clustersByLabel) {
-                    const group = clustersByLabel[label]
-                    if (label === "-1") {
-                        // For noise points, create individual ornamentDefs
-                        group.forEach(({ ornament, point }) => {
-                            let dynamicsGradient: DynamicsGradient
-                            if (gradientType === 'crescendo') {
-                                dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': -1, 'transition.to': 0 }
-                            } else {
-                                dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': 0, 'transition.to': -1 }
-                            }
-                            const defName = `def_${gradientType}_${v4()}`
-                            const def: OrnamentDef = {
-                                type: 'ornamentDef',
-                                name: defName,
-                                dynamicsGradient,
-                                temporalSpread: {
-                                    type: 'temporalSpread',
-                                    'frame.start': point[0],
-                                    'frameLength': point[1],
-                                    'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
-                                    'time.unit': ornament['time.unit']
-                                }
-                            }
+                for (const subLabel in subClustersByLabel) {
+                    const subgroup = subClustersByLabel[subLabel]
+
+                    if (subLabel === "-1") {
+                        subgroup.forEach(({ ornament }) => {
+                            const def = this.asDef(ornament)
                             mpm.insertDefinition(def, scope)
-                            ornament["name.ref"] = defName
                         })
                     } else {
-                        // For clusters (more than one point), combine ornaments
-                        const sum = group.reduce((acc, cur) => {
-                            acc.x += cur.point[0]
-                            acc.y += cur.point[1]
+                        const sum = subgroup.reduce((acc, cur) => {
+                            acc.frameStart += cur.point[0]
+                            acc.frameLength += cur.point[1]
+                            acc.transitionFrom += cur.point[2]
+                            acc.transitionTo += cur.point[3]
                             return acc
-                        }, { x: 0, y: 0 })
-                        const avgX = sum.x / group.length
-                        const avgY = sum.y / group.length
+                        }, { frameStart: 0, frameLength: 0, transitionFrom: 0, transitionTo: 0 })
+                        const avgFrameStart = sum.frameStart / subgroup.length
+                        const avgFrameLength = sum.frameLength / subgroup.length
+                        const avgTransitionFrom = sum.transitionFrom / subgroup.length
+                        const avgTransitionTo = sum.transitionTo / subgroup.length
 
-                        let dynamicsGradient: DynamicsGradient
-                        if (gradientType === 'crescendo') {
-                            dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': -1, 'transition.to': 0 }
-                        } else {
-                            dynamicsGradient = { type: 'dynamicsGradient', 'transition.from': 0, 'transition.to': -1 }
-                        }
-                        const defName = `def_${gradientType}_${label}`
-                        // Use representative ornament from the group
-                        const repOrn = group[0].ornament
+                        const defName = `def_${scope}_${label}_${subLabel}`
+                        const noteOffShift = subgroup[0].ornament["noteoff.shift"]
+                        const timeUnit = subgroup[0].ornament["time.unit"]
+
                         const def: OrnamentDef = {
                             type: 'ornamentDef',
                             name: defName,
-                            dynamicsGradient,
+                            dynamicsGradient: {
+                                type: 'dynamicsGradient',
+                                'transition.from': avgTransitionFrom,
+                                'transition.to': avgTransitionTo
+                            },
                             temporalSpread: {
                                 type: 'temporalSpread',
-                                'frame.start': avgX,
-                                'frameLength': avgY,
-                                'noteoff.shift': repOrn['noteoff.shift'] !== undefined ? repOrn['noteoff.shift'] : true,
-                                'time.unit': repOrn['time.unit']
+                                'frame.start': avgFrameStart,
+                                'frameLength': avgFrameLength,
+                                'noteoff.shift': noteOffShift,
+                                'time.unit': timeUnit
                             }
                         }
                         mpm.insertDefinition(def, scope)
-                        group.forEach(({ ornament }) => {
+                        subgroup.forEach(({ ornament }) => {
                             ornament["name.ref"] = defName
                         })
-
                     }
                 }
             }
@@ -131,16 +145,49 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 if (o["name.ref"]) {
                     delete o['noteoff.shift']
                     delete o['time.unit']
-                    delete o['gradient']
+                    delete o['transition.from']
+                    delete o['transition.to']
                     delete o["frame.start"]
                     delete o["frameLength"]
                 }
             })
-
-
         }
 
         // Hand it over to the next transformer
         return super.transform(msm, mpm)
+    }
+
+    private asDef(ornament: Ornament) {
+        // For noise points, create individual ornamentDefs
+        let dynamicsGradient: DynamicsGradient | undefined = undefined
+        if (ornament["transition.from"] !== undefined &&
+            ornament["transition.to"]) {
+            dynamicsGradient = {
+                type: 'dynamicsGradient',
+                'transition.from': ornament["transition.from"],
+                'transition.to': ornament["transition.to"]
+            }
+        }
+
+        if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
+            console.log('strange ornament', ornament)
+        }
+
+        const defName = `def_${v4()}`
+        const def: OrnamentDef = {
+            type: 'ornamentDef',
+            name: defName,
+            dynamicsGradient,
+            temporalSpread: {
+                type: 'temporalSpread',
+                'frame.start': ornament["frame.start"],
+                'frameLength': ornament.frameLength,
+                'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
+                'time.unit': ornament['time.unit']
+            }
+        }
+        ornament["name.ref"] = defName
+
+        return def
     }
 }
