@@ -4,7 +4,7 @@ import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer
 import { v4 } from "uuid"
 import { DefinedProperty } from "../../utils/utils"
 
-export interface InsertArticulationOptions extends ScopedTransformationOptions {
+export interface InsertRelativeVolumeOptions extends ScopedTransformationOptions {
     /**
      * Usually this transformation is applied only to a few selected notes.
      * When this parameter is not defined, all notes will be considered.
@@ -12,7 +12,7 @@ export interface InsertArticulationOptions extends ScopedTransformationOptions {
     noteIDs?: string[]
 }
 
-type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration' & 'relativeVelocity'>
+type ArticulatedNote = DefinedProperty<MsmNote, 'relativeVolume'>
 
 /**
  * Defines the articulation of a note through the attributes relativeDuration and
@@ -21,8 +21,8 @@ type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration' & 'relativeVeloci
  * 
  * @note This transformation can only be applied after both dynamics and tempo transformation.
  */
-export class InsertArticulation extends AbstractTransformer<InsertArticulationOptions> {
-    constructor(options?: InsertArticulationOptions) {
+export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolumeOptions> {
+    constructor(options?: InsertRelativeVolumeOptions) {
         super()
 
         // set the default options
@@ -31,15 +31,14 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         })
     }
 
-    public name() { return 'InsertArticulation' }
+    public name() { return 'InsertRelativeVolume' }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {
-        const relativeDuration = note.tickDuration ? (note.tickDuration / note.duration) : undefined
         const relativeVelocity = note.relativeVolume
 
         if (adjust) {
-            note.tickDuration = note.duration
-            note.relativeVolume = 0
+            note.relativeVolume = 1
+            note.absoluteVelocityChange = 0
         }
 
         return {
@@ -47,7 +46,6 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             'xml:id': `articulation_${v4()}`,
             date: note.date,
             noteid: '#' + note['xml:id'],
-            relativeDuration,
             relativeVelocity
         }
     }
@@ -72,8 +70,6 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
                     chordArticulations.push(this.noteToArticulation(note as ArticulatedNote))
                 }
 
-                console.log('chord articulations', chordArticulations)
-
                 // if the articulated chord is actually a single 
                 // note, there is no need to define a particular 
                 // noteid attribute.
@@ -85,7 +81,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             }
         }
 
-        mpm.insertInstructions(articulations, this.options.scope)
+        mpm.insertInstructions(articulations, this.options.scope, true)
 
         // hand it over to the next transformer
         return super.transform(msm, mpm)
