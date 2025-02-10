@@ -7,21 +7,27 @@ export class Pipeline {
     length: number
 
     constructor(head?: Transformer) {
-        this.head = head
-        let current = this.head
-        let counter = 0;
-        while (current) {
-            counter++
-            current = current.nextTransformer;
+        if (head) {
+            this.head = head
+            this.length = 1
         }
-        this.length = counter
+        else {
+            this.head = null
+            this.length = 0
+        }
     }
 
     push(transformer: Transformer) {
-        if (!this.head) this.head = transformer
+        if (!this.head) {
+            this.head = transformer
+            this.length = 1
+            return;
+        }
 
         let current = this.head;
-        while (current.nextTransformer) current = current.nextTransformer
+        while (current.nextTransformer) {
+            current = current.nextTransformer;
+        }
         current.setNext(transformer)
         this.length += 1
     }
