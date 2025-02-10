@@ -19,9 +19,10 @@ export interface ScopedTransformationOptions extends TransformationOptions {
  * It also declares a method for executing a transformation.
  */
 export interface Transformer {
-    setNext(transformer: Transformer): Transformer
+    setNext(transformer: Transformer | undefined): Transformer
     transform(msm: MSM, mpm: MPM): string
     setOptions(options: TransformationOptions): void
+    getOptions(): TransformationOptions
     insertMetadata(mpm: MPM): void
     name(): string
 }
@@ -33,7 +34,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     public nextTransformer?: Transformer
     public options?: OptionsType
 
-    public setNext(transformer: Transformer): Transformer {
+    public setNext(transformer: Transformer | undefined): Transformer {
         this.nextTransformer = transformer;
         return this;
     }
@@ -49,6 +50,10 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
     public setOptions(options: OptionsType) {
         this.options = options
+    }
+
+    public getOptions(): TransformationOptions {
+        return this.options || {}
     }
 
     public insertMetadata(mpm: MPM, overwrite = true) {
