@@ -12,7 +12,7 @@ export interface InsertRelativeVolumeOptions extends ScopedTransformationOptions
     noteIDs?: string[]
 }
 
-type ArticulatedNote = DefinedProperty<MsmNote, 'relativeVolume'>
+type ArticulatedNote = DefinedProperty<MsmNote, 'absoluteVelocityChange'>
 
 /**
  * Defines the articulation of a note through the attributes relativeDuration and
@@ -34,10 +34,9 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
     public name() { return 'InsertRelativeVolume' }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {
-        const relativeVelocity = note.relativeVolume
+        const relativeVelocity = (note.absoluteVelocityChange + note["midi.velocity"]) / note["midi.velocity"]
 
         if (adjust) {
-            note.relativeVolume = 1
             note.absoluteVelocityChange = 0
         }
 
@@ -56,7 +55,7 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
         if (this.options.noteIDs) {
             for (const id of this.options.noteIDs) {
                 const note = msm.getByID(id)
-                if (!note) continue
+                if (!note || !note.absoluteVelocityChange) continue
                 articulations.push(this.noteToArticulation(note as ArticulatedNote))
             }
         }
@@ -66,9 +65,11 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
             for (const [, chord] of chords) {
                 const chordArticulations: Articulation[] = []
                 for (const note of chord) {
-                    if (!note) continue
+                    if (!note || !note.absoluteVelocityChange) continue
                     chordArticulations.push(this.noteToArticulation(note as ArticulatedNote))
                 }
+
+                console.log('chord articulations=', chordArticulations)
 
                 // if the articulated chord is actually a single 
                 // note, there is no need to define a particular 

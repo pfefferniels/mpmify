@@ -13,7 +13,7 @@ type PhysicalAttributes = {
 type TemporaryAttributes = Partial<{
     tickDate: number
     tickDuration: number
-    relativeVolume: number
+    absoluteVelocityChange: number
 }>
 
 export type MsmPedal = {
@@ -80,6 +80,14 @@ export class MSM {
     public clone() {
         const clone = new MSM(this.allNotes, this.timeSignature)
         clone.pedals = this.pedals
+        return clone
+    }
+
+    public deepClone() {
+        const clone = new MSM()
+        clone.allNotes = this.allNotes.map(note => ({ ...note }))
+        clone.pedals = this.pedals.map(pedal => ({ ...pedal }))
+        clone.timeSignature = { ...this.timeSignature }
         return clone
     }
 
@@ -243,6 +251,7 @@ export class MSM {
         notes.sort((a, b) => a.date - b.date)
 
         return notes.reduce((prev, curr) => {
+            // console.log('curr=', curr)
             if (prev.has(curr.date)) {
                 prev.set(curr.date, [...prev.get(curr.date), curr])
             }
