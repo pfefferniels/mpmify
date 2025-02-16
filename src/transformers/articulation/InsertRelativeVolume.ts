@@ -27,9 +27,9 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             scope: 'global'
-        })
+        }
     }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {

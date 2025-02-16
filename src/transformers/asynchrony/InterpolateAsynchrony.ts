@@ -40,11 +40,11 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             part: 0,
             tolerance: 10,
             precision: 0
-        })
+        }
     }
 
     public transform(msm: MSM, mpm: MPM) {

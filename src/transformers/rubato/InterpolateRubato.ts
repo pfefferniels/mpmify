@@ -73,10 +73,10 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             part: 'global',
             frames: []
-        })
+        }
     }
 
     public transform(msm: MSM, mpm: MPM) {

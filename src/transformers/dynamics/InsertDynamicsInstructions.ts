@@ -1,4 +1,4 @@
-import { Dynamics, MPM, Part, Scope } from "mpm-ts"
+import { Dynamics, MPM, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
@@ -23,10 +23,10 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             part: 'global',
             markers: [0]
-        })
+        }
     }
 
     public transform(msm: MSM, mpm: MPM) {

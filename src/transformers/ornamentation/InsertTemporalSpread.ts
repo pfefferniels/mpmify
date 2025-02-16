@@ -69,14 +69,14 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             minimumArpeggioSize: 3,
             durationThreshold: 35,
             placement: new Map(),
             defaultPlacement: 'estimate',
             noteOffShiftTolerance: 500,
             part: 'global'
-        })
+        }
     }
 
     public transform(msm: MSM, mpm: MPM) {

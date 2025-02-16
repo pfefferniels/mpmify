@@ -46,11 +46,11 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             part: 'global',
             markers: 'denominator',
             silentOnsets: []
-        })
+        }
     }
 
     transform(msm: MSM, mpm: MPM) {

@@ -44,11 +44,11 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             part: 'global',
             gradients: new Map(),
             sortVelocities: false
-        })
+        }
     }
 
     public transform(msm: MSM, mpm: MPM) {

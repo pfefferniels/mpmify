@@ -13,9 +13,9 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             changeDuration: 0
-        })
+        }
     }
 
     public transform(msm: MSM, mpm: MPM) {

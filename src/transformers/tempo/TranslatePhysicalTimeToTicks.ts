@@ -33,9 +33,9 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             translatePhysicalModifiers: true
-        })
+        }
     }
 
     transform(msm: MSM, mpm: MPM) {

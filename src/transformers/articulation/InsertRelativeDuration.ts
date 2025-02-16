@@ -28,9 +28,9 @@ export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDu
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             scope: 'global'
-        })
+        }
     }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {

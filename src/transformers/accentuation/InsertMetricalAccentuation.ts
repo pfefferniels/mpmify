@@ -26,11 +26,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         super()
 
         // set the default options
-        this.setOptions(options || {
+        this.options = options || {
             scope: 'global',
             cells: [],
             loopTolerance: 0
-        })
+        }
     }
 
     private extractVelocities({ start, end, beatLength }: AccentuationCell, msm: MSM): Velocity[] {

@@ -45,14 +45,6 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
     abstract transform(msm: MSM, mpm: MPM);
 
-    setOptions(options: OptionsType) {
-        this.options = options
-    }
-
-    getOptions(): TransformationOptions {
-        return this.options
-    }
-
     insertMetadata(mpm: MPM, overwrite = true) {
         let appInfo = mpm.doc.metadata.find(el => el.type === 'appInfo') as AppInfo | undefined
         if (!appInfo) {
