@@ -17,6 +17,8 @@ export interface InsertDynamicsInstructionsOptions extends TransformationOptions
 }
 
 export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynamicsInstructionsOptions> {
+    name = 'InsertDynamicsInstructions'
+    
     constructor(options?: InsertDynamicsInstructionsOptions) {
         super()
 
@@ -26,8 +28,6 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
             markers: [0]
         })
     }
-
-    public name() { return 'InsertDynamicsInstructions' }
 
     public transform(msm: MSM, mpm: MPM): string {
         const markers = this.options.markers

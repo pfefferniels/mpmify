@@ -12,14 +12,14 @@ export interface StylizeOrnamentationOptions extends TransformationOptions {
 }
 
 export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentationOptions> {
+    name = 'StylizeOrnamentation'
+
     constructor(options?: StylizeOrnamentationOptions) {
         super()
         this.options = {
             tolerance: options?.tolerance || 10
         }
     }
-
-    public name() { return 'StylizeOrnamentation' }
 
     generateClusters(ornaments: Ornament[]) {
         const points = ornaments.map(o => {

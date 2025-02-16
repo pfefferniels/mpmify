@@ -1,7 +1,7 @@
-import { Tempo, MPM, Part, Scope } from "mpm-ts";
+import { Tempo, MPM } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { fix, toFixed } from "../../utils/utils";
+import { fix } from "../../utils/utils";
 
 interface CompressTempoOptions extends TransformationOptions {
     bpmPrecision: number
@@ -9,9 +9,7 @@ interface CompressTempoOptions extends TransformationOptions {
 }
 
 export class CompressTempo extends AbstractTransformer<CompressTempoOptions> {
-    name(): string {
-        return 'CompressTempo'
-    }
+    name = 'CompressTempo'
 
     constructor() {
         super()

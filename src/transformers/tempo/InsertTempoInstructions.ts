@@ -40,6 +40,8 @@ export interface InsertTempoInstructionsOptions extends TransformationOptions {
  * given beat length.
  */
 export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInstructionsOptions> {
+    name = 'InsertTempoInstructions'
+
     constructor(options?: InsertTempoInstructionsOptions) {
         super()
 
@@ -50,8 +52,6 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             silentOnsets: []
         })
     }
-
-    public name() { return 'InsertTempoInstructions' }
 
     transform(msm: MSM, mpm: MPM): string {
         if (!msm.timeSignature) {

@@ -67,6 +67,8 @@ export interface InterpolateRubatoOptions extends TransformationOptions {
  * Interpolates <rubato> elements.
  */
 export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOptions> {
+    name = 'InterpolateRubato'
+
     constructor(options?: InterpolateRubatoOptions) {
         super()
 
@@ -76,8 +78,6 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
             frames: []
         })
     }
-
-    public name() { return 'InterpolateRubato' }
 
     public transform(msm: MSM, mpm: MPM): string {
         const rubatos: Rubato[] = []

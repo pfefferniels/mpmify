@@ -9,9 +9,7 @@ interface CompressArticulationOptions extends TransformationOptions {
 }
 
 export class CompressArticulation extends AbstractTransformer<CompressArticulationOptions> {
-    name(): string {
-        return 'CompressArticulation'
-    }
+    name = 'CompressArticulation'
 
     constructor() {
         super()

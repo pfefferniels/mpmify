@@ -7,6 +7,8 @@ export interface InsertPedalOptions extends TransformationOptions {
 }
 
 export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
+    name = 'InsertPedal'
+    
     constructor(options?: InsertPedalOptions) {
         super()
 
@@ -15,8 +17,6 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             changeDuration: 0
         })
     }
-
-    public name() { return 'InsertPedal' }
 
     public transform(msm: MSM, mpm: MPM): string {
         const validPedals = msm.pedals.filter(pedal => pedal.tickDate !== undefined && pedal.tickDuration !== undefined)

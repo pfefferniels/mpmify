@@ -10,9 +10,7 @@ interface StylizeArticulationOptions extends TransformationOptions {
 }
 
 export class StylizeArticulation extends AbstractTransformer<StylizeArticulationOptions> {
-    name(): string {
-        return 'StylizeArticulation'
-    }
+    name = 'StylizeArticulation'
 
     constructor(options?: StylizeArticulationOptions) {
         super()

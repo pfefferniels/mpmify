@@ -22,6 +22,7 @@ type ArticulatedNote = DefinedProperty<MsmNote, 'absoluteVelocityChange'>
  * @note This transformation can only be applied after both dynamics and tempo transformation.
  */
 export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolumeOptions> {
+    name = 'InsertRelativeVolume'
     constructor(options?: InsertRelativeVolumeOptions) {
         super()
 
@@ -30,8 +31,6 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
             scope: 'global'
         })
     }
-
-    public name() { return 'InsertRelativeVolume' }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {
         const relativeVelocity = (note.absoluteVelocityChange + note["midi.velocity"]) / note["midi.velocity"]

@@ -20,6 +20,8 @@ type Velocity = {
 }
 
 export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetricalAccentuationOptions> {
+    name = 'InsertMetricalAccentuation'
+
     constructor(options?: InsertMetricalAccentuationOptions) {
         super()
 
@@ -30,8 +32,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             loopTolerance: 0
         })
     }
-
-    public name() { return 'InsertMetricalAccentuation' }
 
     private extractVelocities({ start, end, beatLength }: AccentuationCell, msm: MSM): Velocity[] {
         const ppq = 720

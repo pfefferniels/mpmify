@@ -22,6 +22,8 @@ type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration'>
  * @note This transformation can only be applied after both dynamics and tempo transformation.
  */
 export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDurationOptions> {
+    name = 'InsertRelativeDuration'
+
     constructor(options?: InsertRelativeDurationOptions) {
         super()
 
@@ -30,8 +32,6 @@ export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDu
             scope: 'global'
         })
     }
-
-    public name() { return 'InsertRelativeDuration' }
 
     private noteToArticulation(note: ArticulatedNote, adjust: boolean = true): Articulation {
         const relativeDuration = note.tickDuration ? (note.tickDuration / note.duration) : undefined

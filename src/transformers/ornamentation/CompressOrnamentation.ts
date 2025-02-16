@@ -8,9 +8,7 @@ interface CompressOrnamentationOptions extends TransformationOptions {
 }
 
 export class CompressOrnamentation extends AbstractTransformer<CompressOrnamentationOptions> {
-    name(): string {
-        return 'CompressOrnamentation'
-    }
+    name = 'CompressOrnamentation'
 
     constructor() {
         super()

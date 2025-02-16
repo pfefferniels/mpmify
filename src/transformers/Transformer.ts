@@ -24,7 +24,7 @@ export interface Transformer {
     setOptions(options: TransformationOptions): void
     getOptions(): TransformationOptions
     insertMetadata(mpm: MPM): void
-    name(): string
+    name: string
 }
 
 /**
@@ -33,6 +33,7 @@ export interface Transformer {
 export abstract class AbstractTransformer<OptionsType extends TransformationOptions> implements Transformer {
     public nextTransformer?: Transformer
     public options?: OptionsType
+
 
     public setNext(transformer: Transformer | undefined): Transformer {
         this.nextTransformer = transformer;
@@ -70,15 +71,15 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         }
 
         if (overwrite) {
-            appInfo.children = appInfo.children.filter(el => el.name !== this.name())
+            appInfo.children = appInfo.children.filter(el => el.name !== this.name)
         }
 
         appInfo.children.push({
             type: 'transformation',
-            name: this.name(),
+            name: this.name,
             cdata: JSON.stringify(this.options)
         })
     }
 
-    abstract name(): string
+    abstract name: string
 }

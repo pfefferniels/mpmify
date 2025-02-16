@@ -14,7 +14,7 @@ export interface InterpolateTimingImprecisionOptions extends TransformationOptio
  * imprecision.
  */
 export class InterpolateTimingImprecision extends AbstractTransformer<InterpolateTimingImprecisionOptions> {
-    public name() { return 'InterpolateTimingImprecision' }
+    name = 'InterpolateTimingImprecision'
 
     constructor() {
         super()

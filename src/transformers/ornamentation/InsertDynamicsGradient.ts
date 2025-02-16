@@ -38,6 +38,8 @@ export interface InsertDynamicsGradientOptions extends TransformationOptions {
  * order of MIDI onsets.
  */
 export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGradientOptions> {
+    name = 'InsertDynamicsGradient'
+
     constructor(options?: InsertDynamicsGradientOptions) {
         super()
 
@@ -48,8 +50,6 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             sortVelocities: false
         })
     }
-
-    public name() { return 'InsertDynamicsGradient' }
 
     public transform(msm: MSM, mpm: MPM): string {
         const chords = msm.asChords(this.options?.part)

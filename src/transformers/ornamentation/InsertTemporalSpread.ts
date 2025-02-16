@@ -63,6 +63,8 @@ export interface InsertTemporalSpreadOptions extends TransformationOptions {
  * onset.
  */
 export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpreadOptions> {
+    name = 'InsertTemporalSpread'
+
     constructor(options?: InsertTemporalSpreadOptions) {
         super()
 
@@ -76,8 +78,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             part: 'global'
         })
     }
-
-    public name() { return 'InsertTemporalSpread' }
 
     public transform(msm: MSM, mpm: MPM): string {
         const ornaments: Ornament[] = []
@@ -152,7 +152,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 // frame start is the distance between the first note's onset and the estimated onset
                 frameStart = (arpeggioNotes[0]['midi.onset'] - newOnset) * 1000
             }
-            
+
             ornaments.push({
                 'type': 'ornament',
                 'xml:id': 'ornament_' + v4(),

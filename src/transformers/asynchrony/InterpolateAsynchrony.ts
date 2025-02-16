@@ -34,6 +34,8 @@ export interface InterpolateAsynchronyOptions extends TransformationOptions {
  * of dynamics map should be partwise.
  */
 export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynchronyOptions> {
+    name = 'InterpolateAsynchrony'
+
     constructor(options?: InterpolateAsynchronyOptions) {
         super()
 
@@ -44,8 +46,6 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
             precision: 0
         })
     }
-
-    public name() { return 'InterpolateAsynchrony' }
 
     public transform(msm: MSM, mpm: MPM): string {
         // Calculate the difference to the other part 

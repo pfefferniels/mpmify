@@ -27,6 +27,8 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
  * Interpolates the global tempo and inserts it into the MPM
  */
 export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslatePhyiscalTimeToTicksOptions> {
+    name = 'TranslatePhyiscalTimeToTicks'
+
     constructor(options?: TranslatePhyiscalTimeToTicksOptions) {
         super()
 
@@ -36,8 +38,6 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         })
     }
 
-    public name() { return 'TranslatePhyiscalTimeToTicks' }
-
     transform(msm: MSM, mpm: MPM): string {
         this.addTickOnsets(msm, mpm)
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
@@ -46,7 +46,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         return super.transform(msm, mpm)
     }
 
-    private msToTicks(ms: number, tempos: Tempo[]) {
+    private msToTicks(ms: number, tempos: Tempo[], msm: MSM) {
         let currentMs = 0
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
@@ -64,11 +64,18 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 return approximateDate(ms - currentMs, tempoWithEndDate)
             }
 
-            currentMs += endMs
+            const note = msm.allNotes.find(n => n.date === endDate)
+            if (!note) {
+                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+                currentMs += endMs
+            }
+            else {
+                currentMs = note["midi.onset"] * 1000
+            }
         }
     }
 
-    private ticksToMs(ticks: number, tempos: Tempo[]) {
+    private ticksToMs(ticks: number, tempos: Tempo[], msm: MSM) {
         let currentMs = 0
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
@@ -84,8 +91,14 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 return currentMs + computeMillisecondsAt(ticks, tempoWithEndDate)
             }
 
-            const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
-            currentMs += endMs
+            const note = msm.allNotes.find(n => n.date === endDate)
+            if (!note) {
+                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+                currentMs += endMs
+            }
+            else {
+                currentMs = note["midi.onset"] * 1000
+            }
         }
     }
 
@@ -105,12 +118,12 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                     continue
                 }
 
-                const ornamentMs = this.ticksToMs(ornament.date, tempos)
+                const ornamentMs = this.ticksToMs(ornament.date, tempos, msm)
                 const frameStartMs = ornamentMs + ornament["frame.start"]
                 const frameEndMs = frameStartMs + ornament.frameLength
 
-                const frameStartTicks = this.msToTicks(frameStartMs, tempos)
-                const frameEndTicks = this.msToTicks(frameEndMs, tempos)
+                const frameStartTicks = this.msToTicks(frameStartMs, tempos, msm)
+                const frameEndTicks = this.msToTicks(frameEndMs, tempos, msm)
 
                 ornament["frame.start"] = frameStartTicks - ornament.date
                 ornament['frameLength'] = frameEndTicks - frameStartTicks
@@ -171,7 +184,13 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                         p.tickDate = approximateDate(onsetMs - currentMs, tempoWithEndDate)
                     })
 
-                currentMs += endMs
+                const note = msm.notesInPart(scope).find(n => n.date === endDate)
+                if (!note) {
+                    currentMs += endMs
+                }
+                else {
+                    currentMs = note["midi.onset"] * 1000
+                }
             }
         }
     }
@@ -236,7 +255,13 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                         }
                     })
 
-                currentFrameBeginMs += endMs
+                const note = msm.notesInPart(scope).find(n => n.date === endDate)
+                if (!note) {
+                    currentFrameBeginMs += endMs
+                }
+                else {
+                    currentFrameBeginMs = note["midi.onset"] * 1000
+                }
             }
         }
     }
