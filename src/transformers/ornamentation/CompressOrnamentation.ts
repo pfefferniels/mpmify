@@ -29,7 +29,5 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
                 fix(def.temporalSpread, 'frameLength', this.options.tickPrecision)
             }
         }
-
-        return super.transform(msm, mpm)
     }
 }

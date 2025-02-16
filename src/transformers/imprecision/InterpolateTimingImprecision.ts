@@ -20,7 +20,7 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
         super()
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         const timingImprecision = {
             'distribution.uniform': {
                 '@': {
@@ -32,8 +32,5 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
         }
 
         // mpm.insertInstructions(..., 'global')
-
-        // hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 }

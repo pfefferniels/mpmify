@@ -38,12 +38,10 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         })
     }
 
-    transform(msm: MSM, mpm: MPM): string {
+    transform(msm: MSM, mpm: MPM) {
         this.addTickOnsets(msm, mpm)
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
         this.addTickDurations(msm, mpm)
-
-        return super.transform(msm, mpm)
     }
 
     private msToTicks(ms: number, tempos: Tempo[], msm: MSM) {

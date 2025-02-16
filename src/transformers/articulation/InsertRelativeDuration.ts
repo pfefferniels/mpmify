@@ -49,7 +49,7 @@ export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDu
         }
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         const articulations: Articulation[] = []
 
         if (this.options.noteIDs) {
@@ -81,8 +81,5 @@ export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDu
         }
 
         mpm.insertInstructions(articulations, this.options.scope, true)
-
-        // hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 }

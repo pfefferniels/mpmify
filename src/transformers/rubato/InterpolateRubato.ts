@@ -79,7 +79,7 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
         })
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         const rubatos: Rubato[] = []
         for (const frame of this.options.frames) {
             const chords = [...msm.asChords(this.options.part).entries()]
@@ -159,9 +159,6 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
         mpm.insertInstructions(rubatos, this.options.part)
 
         this.removeRubatoDistortion(msm, mpm)
-
-        // hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 
     /**

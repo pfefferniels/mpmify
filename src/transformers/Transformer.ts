@@ -1,5 +1,6 @@
 import { AppInfo, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
+import { MPMRecording } from "./MPMRecording";
 
 /**
  * 
@@ -20,44 +21,52 @@ export interface ScopedTransformationOptions extends TransformationOptions {
  */
 export interface Transformer {
     setNext(transformer: Transformer | undefined): Transformer
-    transform(msm: MSM, mpm: MPM): string
     setOptions(options: TransformationOptions): void
     getOptions(): TransformationOptions
     insertMetadata(mpm: MPM): void
     name: string
+    created: string[]
+    run(msm: MSM, mpm: MPM): void
 }
 
 /**
  * The default chaining behavior.
  */
 export abstract class AbstractTransformer<OptionsType extends TransformationOptions> implements Transformer {
-    public nextTransformer?: Transformer
-    public options?: OptionsType
+    abstract name: string
+    nextTransformer?: Transformer
+    options?: OptionsType
+    created: string[] = []
 
-
-    public setNext(transformer: Transformer | undefined): Transformer {
+    setNext(transformer: Transformer | undefined): Transformer {
         this.nextTransformer = transformer;
         return this;
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
-        if (this.nextTransformer) {
-            this.nextTransformer.insertMetadata(mpm)
-            return this.nextTransformer.transform(msm, mpm)
-        }
+    // this method should not be overridden
+    run(msm: MSM, mpm: MPM) {
+        this.insertMetadata(mpm)
 
-        return 'done'
+        const mpmRecording = new MPMRecording(mpm)
+        this.transform(msm, mpmRecording)
+        this.created = mpmRecording.created
+
+        if (this.nextTransformer) {
+            this.nextTransformer.run(msm, mpm)
+        }
     }
 
-    public setOptions(options: OptionsType) {
+    abstract transform(msm: MSM, mpm: MPM);
+
+    setOptions(options: OptionsType) {
         this.options = options
     }
 
-    public getOptions(): TransformationOptions {
+    getOptions(): TransformationOptions {
         return this.options || {}
     }
 
-    public insertMetadata(mpm: MPM, overwrite = true) {
+    insertMetadata(mpm: MPM, overwrite = true) {
         let appInfo = mpm.doc.metadata.find(el => el.type === 'appInfo') as AppInfo | undefined
         if (!appInfo) {
             appInfo = {
@@ -80,6 +89,4 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
             cdata: JSON.stringify(this.options)
         })
     }
-
-    abstract name: string
 }

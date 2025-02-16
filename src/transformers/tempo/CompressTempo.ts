@@ -30,7 +30,5 @@ export class CompressTempo extends AbstractTransformer<CompressTempoOptions> {
                 fix(tempo, 'meanTempoAt', this.options.meanTempoAtPrecision)
             }
         }
-
-        return super.transform(msm, mpm)
     }
 }

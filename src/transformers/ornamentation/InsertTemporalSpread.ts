@@ -79,7 +79,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         })
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         const ornaments: Ornament[] = []
 
         const chords = msm.asChords(this.options?.part)
@@ -171,8 +171,5 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         }
 
         mpm.insertInstructions(ornaments, this.options.part)
-
-        // hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 }

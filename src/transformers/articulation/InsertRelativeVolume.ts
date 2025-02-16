@@ -48,7 +48,7 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
         }
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         const articulations: Articulation[] = []
 
         if (this.options.noteIDs) {
@@ -82,8 +82,5 @@ export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolu
         }
 
         mpm.insertInstructions(articulations, this.options.scope, true)
-
-        // hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 }

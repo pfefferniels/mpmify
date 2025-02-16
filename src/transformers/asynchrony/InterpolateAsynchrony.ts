@@ -47,7 +47,7 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
         })
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         // Calculate the difference to the other part 
         // for every tstamp
         const asynchronies: Asynchrony[] = []
@@ -108,7 +108,5 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
         console.log('after applying asynchrony', msm.allNotes.map(note => note['midi.onset']))
 
         mpm.insertInstructions(asynchronies, 0)
-
-        return super.transform(msm, mpm)
     }
 }

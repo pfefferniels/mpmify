@@ -41,7 +41,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         return dbscan(points, { epsilons: [0.1, 0.1] })
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         for (const [scope,] of mpm.doc.performance.parts) {
             const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
 
@@ -152,9 +152,6 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 }
             })
         }
-
-        // Hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 
     private asDef(ornament: Ornament) {

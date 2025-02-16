@@ -79,7 +79,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             })
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         this.options.cells.sort((a, b) => a.start - b.start)
 
         if (!mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', this.options.scope)
@@ -176,8 +176,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
 
         this.removeAccentuationDistortion(msm, mpm, this.options.scope)
-
-        return super.transform(msm, mpm)
     }
 
     removeAccentuationDistortion(msm: MSM, mpm: MPM, scope: Scope) {

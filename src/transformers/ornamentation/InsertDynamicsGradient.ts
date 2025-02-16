@@ -51,7 +51,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         })
     }
 
-    public transform(msm: MSM, mpm: MPM): string {
+    public transform(msm: MSM, mpm: MPM) {
         const chords = msm.asChords(this.options?.part)
         for (let [date, arpeggioNotes] of chords) {
             if (this.options.sortVelocities) {
@@ -98,9 +98,6 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
                 note['midi.velocity'] = standard
             })
         }
-
-        // hand it over to the next transformer
-        return super.transform(msm, mpm)
     }
 
     private sortVelocities(chord: MsmNote[]) {

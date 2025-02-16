@@ -29,7 +29,5 @@ export class CompressArticulation extends AbstractTransformer<CompressArticulati
                 fix(def, 'relativeDuration', this.options.relativePrecision)
             }
         }
-
-        return super.transform(msm, mpm)
     }
 }

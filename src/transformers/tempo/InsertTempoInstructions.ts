@@ -53,10 +53,10 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         })
     }
 
-    transform(msm: MSM, mpm: MPM): string {
+    transform(msm: MSM, mpm: MPM) {
         if (!msm.timeSignature) {
             console.warn('A time signature must be given to interpolate a tempo map.')
-            return super.transform(msm, mpm);
+            return
         }
 
         // before starting to calculate the <tempo> instructions,
@@ -70,8 +70,6 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             const beatLength = this.options.markers
             this.insertInstructionsByBeatLength(msm, mpm, beatLength)
         }
-
-        return super.transform(msm, mpm)
     }
 
     insertInstructionsByMarkers(msm: MSM, mpm: MPM, markers: Marker[]) {
@@ -87,7 +85,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
 
         if (markers.length < 1) {
             console.log('At least one markers need to be specified')
-            return super.transform(msm, mpm)
+            return
         }
 
         // make sure the markers are sorted

@@ -138,7 +138,5 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                 }, 'articulation', scope)
             }
         }
-
-        return super.transform(msm, mpm)
     }
 }
