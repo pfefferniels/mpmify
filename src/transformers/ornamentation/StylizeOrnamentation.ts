@@ -1,8 +1,10 @@
 import { DynamicsGradient, MPM, Ornament, OrnamentDef } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
 import { v4 } from "uuid"
 import { dbscan } from "../../utils/dbscan"
+import { InsertDynamicsGradient } from "./InsertDynamicsGradient"
+import { InsertTemporalSpread } from "./InsertTemporalSpread"
 
 export interface StylizeOrnamentationOptions extends TransformationOptions {
     /**
@@ -13,6 +15,7 @@ export interface StylizeOrnamentationOptions extends TransformationOptions {
 
 export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentationOptions> {
     name = 'StylizeOrnamentation'
+    requires = [InsertDynamicsGradient, InsertTemporalSpread]
 
     constructor(options?: StylizeOrnamentationOptions) {
         super()

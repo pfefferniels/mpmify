@@ -19,11 +19,14 @@ export interface ScopedTransformationOptions extends TransformationOptions {
  * The Transformer interface declares a method for building the chain of transformations.
  * It also declares a method for executing a transformation.
  */
+type TransformerConstructor = new (...args: any[]) => Transformer;
+
 export interface Transformer {
     name: string
     options: TransformationOptions
     created: string[]
     run(msm: MSM, mpm: MPM): void
+    requires: Array<TransformerConstructor>
 }
 
 /**
@@ -33,7 +36,10 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     abstract name: string
     options: OptionsType
     created: string[] = []
-
+    
+    abstract requires: Array<TransformerConstructor>
+    shouldRunBefore: Array<TransformerConstructor>
+    
     // this method should not be overridden
     run(msm: MSM, mpm: MPM) {
         this.insertMetadata(mpm)
@@ -69,3 +75,4 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         })
     }
 }
+

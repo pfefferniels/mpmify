@@ -1,6 +1,6 @@
 import { MPM } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
 
 export interface InterpolateTimingImprecisionOptions extends TransformationOptions {
     predefinedImprecision: number
@@ -15,6 +15,7 @@ export interface InterpolateTimingImprecisionOptions extends TransformationOptio
  */
 export class InterpolateTimingImprecision extends AbstractTransformer<InterpolateTimingImprecisionOptions> {
     name = 'InterpolateTimingImprecision'
+    requires = []
 
     constructor() {
         super()

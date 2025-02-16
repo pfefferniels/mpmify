@@ -1,7 +1,7 @@
 import { MPM, Ornament, Scope } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
 import { v4 } from "uuid"
 
 export type DynamicsGradient = { from: number, to: number }
@@ -39,6 +39,7 @@ export interface InsertDynamicsGradientOptions extends TransformationOptions {
  */
 export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGradientOptions> {
     name = 'InsertDynamicsGradient'
+    requires = []
 
     constructor(options?: InsertDynamicsGradientOptions) {
         super()

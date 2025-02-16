@@ -1,7 +1,7 @@
 import { MPM, Ornament, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
 import { v4 } from "uuid"
 
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none'
@@ -64,6 +64,7 @@ export interface InsertTemporalSpreadOptions extends TransformationOptions {
  */
 export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpreadOptions> {
     name = 'InsertTemporalSpread'
+    requires = []
 
     constructor(options?: InsertTemporalSpreadOptions) {
         super()

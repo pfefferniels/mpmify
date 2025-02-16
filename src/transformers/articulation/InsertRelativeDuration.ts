@@ -3,6 +3,7 @@ import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { DefinedProperty } from "../../utils/utils"
+import { TranslatePhyiscalTimeToTicks } from "../tempo"
 
 export interface InsertRelativeDurationOptions extends ScopedTransformationOptions {
     /**
@@ -23,6 +24,7 @@ type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration'>
  */
 export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDurationOptions> {
     name = 'InsertRelativeDuration'
+    requires = [TranslatePhyiscalTimeToTicks]
 
     constructor(options?: InsertRelativeDurationOptions) {
         super()

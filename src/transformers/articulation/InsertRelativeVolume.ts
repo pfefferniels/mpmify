@@ -3,6 +3,8 @@ import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { DefinedProperty } from "../../utils/utils"
+import { InsertTempoInstructions } from "../tempo"
+import { InsertDynamicsInstructions } from "../dynamics"
 
 export interface InsertRelativeVolumeOptions extends ScopedTransformationOptions {
     /**
@@ -23,6 +25,8 @@ type ArticulatedNote = DefinedProperty<MsmNote, 'absoluteVelocityChange'>
  */
 export class InsertRelativeVolume extends AbstractTransformer<InsertRelativeVolumeOptions> {
     name = 'InsertRelativeVolume'
+    requires = [InsertDynamicsInstructions]
+    
     constructor(options?: InsertRelativeVolumeOptions) {
         super()
 

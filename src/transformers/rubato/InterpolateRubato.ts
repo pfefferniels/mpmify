@@ -3,6 +3,7 @@ import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { clamp, DefinedProperty } from "../../utils/utils"
+import { TranslatePhyiscalTimeToTicks } from "../tempo"
 
 const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
     return notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
@@ -68,6 +69,7 @@ export interface InterpolateRubatoOptions extends TransformationOptions {
  */
 export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOptions> {
     name = 'InterpolateRubato'
+    requires = [TranslatePhyiscalTimeToTicks]
 
     constructor(options?: InterpolateRubatoOptions) {
         super()

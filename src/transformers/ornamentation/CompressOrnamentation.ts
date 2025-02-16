@@ -1,7 +1,8 @@
 import { OrnamentDef, MPM } from "mpm-ts";
 import { MSM } from "../../msm";
-import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer";
 import { fix, toFixed } from "../../utils/utils";
+import { StylizeOrnamentation } from "./StylizeOrnamentation";
 
 interface CompressOrnamentationOptions extends TransformationOptions {
     tickPrecision: number
@@ -9,6 +10,7 @@ interface CompressOrnamentationOptions extends TransformationOptions {
 
 export class CompressOrnamentation extends AbstractTransformer<CompressOrnamentationOptions> {
     name = 'CompressOrnamentation'
+    requires = [StylizeOrnamentation]
 
     constructor() {
         super()

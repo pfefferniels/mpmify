@@ -18,6 +18,7 @@ export interface InsertDynamicsInstructionsOptions extends TransformationOptions
 
 export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynamicsInstructionsOptions> {
     name = 'InsertDynamicsInstructions'
+    requires = []
 
     constructor(options?: InsertDynamicsInstructionsOptions) {
         super()

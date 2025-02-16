@@ -3,6 +3,8 @@ import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { dbscan } from "../../utils/dbscan";
+import { InsertRelativeDuration } from "./InsertRelativeDuration";
+import { InsertRelativeVolume } from "./InsertRelativeVolume";
 
 interface StylizeArticulationOptions extends TransformationOptions {
     volumeTolerance: number
@@ -11,6 +13,7 @@ interface StylizeArticulationOptions extends TransformationOptions {
 
 export class StylizeArticulation extends AbstractTransformer<StylizeArticulationOptions> {
     name = 'StylizeArticulation'
+    requires = [InsertRelativeDuration, InsertRelativeVolume]
 
     constructor(options?: StylizeArticulationOptions) {
         super()

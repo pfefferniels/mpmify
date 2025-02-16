@@ -1,7 +1,8 @@
-import { Articulation, ArticulationDef, MPM, Part, Scope } from "mpm-ts";
+import { ArticulationDef, MPM } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { fix, toFixed } from "../../utils/utils";
+import { fix } from "../../utils/utils";
+import { StylizeArticulation } from "./StylizeArticulation";
 
 interface CompressArticulationOptions extends TransformationOptions {
     volumePrecision: number 
@@ -10,6 +11,7 @@ interface CompressArticulationOptions extends TransformationOptions {
 
 export class CompressArticulation extends AbstractTransformer<CompressArticulationOptions> {
     name = 'CompressArticulation'
+    requires = [StylizeArticulation]
 
     constructor() {
         super()

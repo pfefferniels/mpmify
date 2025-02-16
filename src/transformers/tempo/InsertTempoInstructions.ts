@@ -41,6 +41,7 @@ export interface InsertTempoInstructionsOptions extends TransformationOptions {
  */
 export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInstructionsOptions> {
     name = 'InsertTempoInstructions'
+    requires = []    
 
     constructor(options?: InsertTempoInstructionsOptions) {
         super()

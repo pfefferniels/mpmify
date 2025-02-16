@@ -35,6 +35,7 @@ export interface InterpolateAsynchronyOptions extends TransformationOptions {
  */
 export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynchronyOptions> {
     name = 'InterpolateAsynchrony'
+    requires = []
 
     constructor(options?: InterpolateAsynchronyOptions) {
         super()

@@ -1,7 +1,8 @@
 import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM, Scope } from "mpm-ts";
 import { MSM } from "../../msm";
-import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
+import { AbstractTransformer, ScopedTransformationOptions, Transformer } from "../Transformer";
 import { v4 } from "uuid";
+import { InsertTempoInstructions } from "../tempo";
 
 export type AccentuationCell = {
     start: number
@@ -21,6 +22,7 @@ type Velocity = {
 
 export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetricalAccentuationOptions> {
     name = 'InsertMetricalAccentuation'
+    requires = [InsertTempoInstructions]
 
     constructor(options?: InsertMetricalAccentuationOptions) {
         super()
