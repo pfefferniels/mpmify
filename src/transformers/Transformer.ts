@@ -20,11 +20,8 @@ export interface ScopedTransformationOptions extends TransformationOptions {
  * It also declares a method for executing a transformation.
  */
 export interface Transformer {
-    setNext(transformer: Transformer | undefined): Transformer
-    setOptions(options: TransformationOptions): void
-    getOptions(): TransformationOptions
-    insertMetadata(mpm: MPM): void
     name: string
+    options: TransformationOptions
     created: string[]
     run(msm: MSM, mpm: MPM): void
 }
@@ -34,14 +31,8 @@ export interface Transformer {
  */
 export abstract class AbstractTransformer<OptionsType extends TransformationOptions> implements Transformer {
     abstract name: string
-    nextTransformer?: Transformer
-    options?: OptionsType
+    options: OptionsType
     created: string[] = []
-
-    setNext(transformer: Transformer | undefined): Transformer {
-        this.nextTransformer = transformer;
-        return this;
-    }
 
     // this method should not be overridden
     run(msm: MSM, mpm: MPM) {
@@ -50,10 +41,6 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         const mpmRecording = new MPMRecording(mpm)
         this.transform(msm, mpmRecording)
         this.created = mpmRecording.created
-
-        if (this.nextTransformer) {
-            this.nextTransformer.run(msm, mpm)
-        }
     }
 
     abstract transform(msm: MSM, mpm: MPM);
@@ -63,7 +50,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     }
 
     getOptions(): TransformationOptions {
-        return this.options || {}
+        return this.options
     }
 
     insertMetadata(mpm: MPM, overwrite = true) {
