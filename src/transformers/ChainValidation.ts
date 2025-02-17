@@ -1,6 +1,6 @@
 import { Transformer } from "./Transformer"
 
-type ValidationMessage = {
+export type ValidationMessage = {
     index: number
     type: 'error' | 'warning'
     message: string
