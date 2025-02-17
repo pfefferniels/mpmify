@@ -1,6 +1,7 @@
 import { AppInfo, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
+import { v4 } from "uuid";
 
 /**
  * 
@@ -22,6 +23,7 @@ export interface ScopedTransformationOptions extends TransformationOptions {
 type TransformerConstructor = new (...args: any[]) => Transformer;
 
 export interface Transformer {
+    id: string
     name: string
     options: TransformationOptions
     created: string[]
@@ -33,6 +35,7 @@ export interface Transformer {
  * The default chaining behavior.
  */
 export abstract class AbstractTransformer<OptionsType extends TransformationOptions> implements Transformer {
+    id: string = v4()
     abstract name: string
     options: OptionsType
     created: string[] = []
