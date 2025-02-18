@@ -56,7 +56,7 @@ export type Frame = {
     length: number
 }
 
-export interface InterpolateRubatoOptions extends TransformationOptions {
+export interface InsertRubatoOptions extends TransformationOptions {
     frames: Frame[]
 
     /**
@@ -68,11 +68,11 @@ export interface InterpolateRubatoOptions extends TransformationOptions {
 /**
  * Interpolates <rubato> elements.
  */
-export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOptions> {
-    name = 'InterpolateRubato'
+export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
+    name = 'InsertRubato'
     requires = [TranslatePhyiscalTimeToTicks]
 
-    constructor(options?: InterpolateRubatoOptions) {
+    constructor(options?: InsertRubatoOptions) {
         super()
 
         // set the default options
