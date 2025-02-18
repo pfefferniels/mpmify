@@ -4,6 +4,7 @@ import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { clamp, DefinedProperty } from "../../utils/utils"
 import { TranslatePhyiscalTimeToTicks } from "../tempo"
+import { determineIntensity } from "../ornamentation"
 
 const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
     return notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
@@ -119,32 +120,13 @@ export class InterpolateRubato extends AbstractTransformer<InterpolateRubatoOpti
                 )
             if (earlyEnd === 1) earlyEnd = undefined
 
-            chords.splice(chords.length - 1, 1)
-            chords.splice(0, 1)
-
-            let intensity: number | undefined
-            if (chords.length > 0) {
-                const intensities = chords.map(([date, notes]) => {
+            const scaledDates = chords
+                .map(([, notes]) => {
                     const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
-
-                    // scale both vertical and horizontal to [0,1]
-                    const relativeDate = (date - frame.date) / frame.length
-                    const relativeDateShifted = (realDate - frame.date) / frame.length
-
-                    if (relativeDateShifted === 0 || relativeDate === 0) {
-                        return 1
-                    }
-
-                    console.log(relativeDate, relativeDateShifted, Math.log(relativeDateShifted), Math.log(relativeDate))
-
-                    return Math.log(relativeDateShifted) / Math.log(relativeDate)
+                    return (realDate - startDate) / (endDate - startDate)
                 })
-
-                // Then take its avarage.
-                // TODO: Should be replace be a better method.
-                intensity = intensities.reduce((p, c) => p + c, 0) / intensities.length
-            }
-            if (intensity === 1) intensity = undefined
+            
+            const intensity = determineIntensity(scaledDates)
 
             rubatos.push({
                 type: 'rubato',

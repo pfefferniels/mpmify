@@ -8,7 +8,7 @@ export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none'
 export type DatedArpeggioPlacement = Map<number, ArpeggioPlacement>
 
 // onsets is a sorted array normalized to [0, 1]
-const determineIntensity = (onsets: number[]): number => {
+export const determineIntensity = (onsets: number[]): number => {
     const n = onsets.length;
     // intensity only makes sense for more than 2 notes
     if (n <= 2) return 1;
