@@ -8,9 +8,20 @@ import { InsertTemporalSpread } from "./InsertTemporalSpread"
 
 export interface StylizeOrnamentationOptions extends TransformationOptions {
     /**
-     * given in ticks; used as epsilon tolerance for both frame.start and frameLength
+     * given in ticks; used as epsilon for both frame.start and frameLength
+     * of the temporalSpread
      */
-    tolerance: number
+    tickTolerance: number
+
+    /**
+     * Used as epsilon for transition.from and transition.to of the dynamicsGradients
+     */
+    gradientTolerance: number
+
+    /**
+     * Used as epsilon for intensity of the temporalSpread
+     */
+    intensityTolerance: number
 }
 
 export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentationOptions> {
@@ -20,7 +31,9 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     constructor(options?: StylizeOrnamentationOptions) {
         super()
         this.options = {
-            tolerance: options?.tolerance || 10
+            tickTolerance: options?.tickTolerance || 10,
+            intensityTolerance: 0.3,
+            gradientTolerance: 0.1
         }
     }
 
@@ -28,10 +41,17 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         const points = ornaments.map(o => {
             return [
                 o["frame.start"] as number,
-                o.frameLength as number
+                o.frameLength as number,
+                (o.intensity || 1) as number
             ]
         })
-        return dbscan(points, { epsilons: [this.options.tolerance, this.options.tolerance] })
+        return dbscan(points, {
+            epsilons: [
+                this.options.tickTolerance,
+                this.options.tickTolerance,
+                this.options.intensityTolerance
+            ]
+        })
     }
 
     generateSubClusters(ornaments: Ornament[]) {
@@ -41,7 +61,12 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 (o["transition.to"] || 0) as number
             ]
         })
-        return dbscan(points, { epsilons: [0.1, 0.1] })
+        return dbscan(points, {
+            epsilons: [
+                this.options.gradientTolerance,
+                this.options.gradientTolerance
+            ]
+        })
     }
 
     public transform(msm: MSM, mpm: MPM) {
@@ -60,9 +85,9 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             const clustersByLabel = clusters.reduce((acc, cur, i) => {
                 const label = cur.label.toString()
                 if (!acc[label]) acc[label] = []
-                acc[label].push({ ornament: filteredOrnaments[i], point: cur.value as [number, number] })
+                acc[label].push({ ornament: filteredOrnaments[i], point: cur.value as [number, number, number] })
                 return acc
-            }, {} as { [label: string]: { ornament: Ornament, point: [number, number] }[] })
+            }, {} as { [label: string]: { ornament: Ornament, point: [number, number, number] }[] })
 
             // Process each cluster
             for (const label in clustersByLabel) {
@@ -82,10 +107,10 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                     if (!acc[label]) acc[label] = []
                     acc[label].push({
                         ornament: group[i].ornament,
-                        point: [...group[i].point, ...cur.value] as [number, number, number, number]
+                        point: [...group[i].point, ...cur.value] as [number, number, number, number, number]
                     })
                     return acc
-                }, {} as { [label: string]: { ornament: Ornament, point: [number, number, number, number] }[] })
+                }, {} as { [label: string]: { ornament: Ornament, point: [number, number, number, number, number] }[] })
 
                 for (const subLabel in subClustersByLabel) {
                     const subgroup = subClustersByLabel[subLabel]
@@ -96,17 +121,19 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                             mpm.insertDefinition(def, scope)
                         })
                     } else {
-                        const sum = subgroup.reduce((acc, cur) => {
+                        const sums = subgroup.reduce((acc, cur) => {
                             acc.frameStart += cur.point[0]
                             acc.frameLength += cur.point[1]
-                            acc.transitionFrom += cur.point[2]
-                            acc.transitionTo += cur.point[3]
+                            acc.intensity += cur.point[2]
+                            acc.transitionFrom += cur.point[3]
+                            acc.transitionTo += cur.point[4]
                             return acc
-                        }, { frameStart: 0, frameLength: 0, transitionFrom: 0, transitionTo: 0 })
-                        const avgFrameStart = sum.frameStart / subgroup.length
-                        const avgFrameLength = sum.frameLength / subgroup.length
-                        const avgTransitionFrom = sum.transitionFrom / subgroup.length
-                        const avgTransitionTo = sum.transitionTo / subgroup.length
+                        }, { frameStart: 0, frameLength: 0, intensity: 0, transitionFrom: 0, transitionTo: 0 })
+                        const avgFrameStart = sums.frameStart / subgroup.length
+                        const avgFrameLength = sums.frameLength / subgroup.length
+                        const avgIntensity = sums.intensity / subgroup.length
+                        const avgTransitionFrom = sums.transitionFrom / subgroup.length
+                        const avgTransitionTo = sums.transitionTo / subgroup.length
 
                         const defName = `def_${scope}_${label}_${subLabel}`
                         const noteOffShift = subgroup[0].ornament["noteoff.shift"]
@@ -125,7 +152,8 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                                 'frame.start': avgFrameStart,
                                 'frameLength': avgFrameLength,
                                 'noteoff.shift': noteOffShift,
-                                'time.unit': timeUnit
+                                'time.unit': timeUnit,
+                                intensity: avgIntensity
                             }
                         }
                         mpm.insertDefinition(def, scope)
@@ -183,7 +211,8 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 'frame.start': ornament["frame.start"],
                 'frameLength': ornament.frameLength,
                 'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
-                'time.unit': ornament['time.unit']
+                'time.unit': ornament['time.unit'],
+                intensity: ornament.intensity
             }
         }
         ornament["name.ref"] = defName
