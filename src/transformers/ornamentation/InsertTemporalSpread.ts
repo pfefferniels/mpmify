@@ -7,6 +7,47 @@ import { v4 } from "uuid"
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none'
 export type DatedArpeggioPlacement = Map<number, ArpeggioPlacement>
 
+// onsets is a sorted array normalized to [0, 1]
+const determineIntensity = (onsets: number[]): number => {
+    const n = onsets.length;
+    // intensity only makes sense for more than 2 notes
+    if (n <= 2) return 1;
+
+    // The error function we want to minimize.
+    const error = (intensity: number): number => {
+        let sum = 0;
+        for (let i = 0; i < n; i++) {
+            const expected = Math.pow(i / (n - 1), intensity);
+            const diff = onsets[i] - expected;
+            sum += diff * diff;
+        }
+        return sum;
+    };
+
+    // Search bounds. TODO: make these configurable.
+    let lower = 0.1,
+        upper = 5.0;
+    const tol = 1e-6;
+    const goldenRatio = (Math.sqrt(5) + 1) / 2;
+
+    let c = upper - (upper - lower) / goldenRatio;
+    let d = lower + (upper - lower) / goldenRatio;
+
+    // Continue refining the bounds until convergence.
+    while (upper - lower > tol) {
+        if (error(c) < error(d)) {
+            upper = d;
+        } else {
+            lower = c;
+        }
+        c = upper - (upper - lower) / goldenRatio;
+        d = lower + (upper - lower) / goldenRatio;
+    }
+
+    return (lower + upper) / 2;
+};
+
+
 /**
  * A little helper function to determine how an array is sorted.
  * 
@@ -48,7 +89,7 @@ export interface InsertTemporalSpreadOptions extends TransformationOptions {
     /**
      * Fallback placement if no placement is provided for a date.
      */
-    defaultPlacement: ArpeggioPlacement 
+    defaultPlacement: ArpeggioPlacement
 
     /**
      * The part on which the transformer is to be applied to.
@@ -133,7 +174,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             let frameStart: number, newOnset: number
 
             const placement = this.options.placement.get(date) || this.options.defaultPlacement
-            
+
             if (placement === 'none') {
                 // leave everything as it is
                 continue
@@ -154,6 +195,13 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 frameStart = (arpeggioNotes[0]['midi.onset'] - newOnset) * 1000
             }
 
+            // determine the ornament's intensity
+            const normalizedOnsets = sortedByOnset
+                .map(note => note['midi.onset'])
+                .map(onset => (onset - firstNote['midi.onset']) / duration)
+
+            const intensity = determineIntensity(normalizedOnsets)
+
             ornaments.push({
                 'type': 'ornament',
                 'xml:id': 'ornament_' + v4(),
@@ -164,6 +212,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 'frame.start': frameStart,
                 'frameLength': frameLength,
                 'time.unit': 'milliseconds',
+                'intensity': intensity === 1 ? undefined : intensity
             })
 
             arpeggioNotes.forEach(note => {
