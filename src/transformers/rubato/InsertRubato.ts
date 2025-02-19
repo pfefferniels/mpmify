@@ -141,8 +141,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         }
 
         mpm.insertInstructions(rubatos, this.options.part)
-
-        this.removeRubatoDistortion(msm, mpm)
+        this.removeRubatoDistortionFrom(rubatos, msm, mpm)
     }
 
     /**
@@ -153,7 +152,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
      * @param msm 
      * @param mpm 
      */
-    removeRubatoDistortion(msm: MSM, mpm: MPM) {
+    removeRubatoDistortionFrom(selectedRubatos: Rubato[], msm: MSM, mpm: MPM) {
         const affectedNotes =
             this.options?.part === 'global' ?
                 msm.allNotes :
@@ -162,8 +161,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         for (const note of affectedNotes) {
             if (!note.tickDuration) continue
 
-            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', this.options?.part !== undefined ? this.options.part : 'global')[0]
-            if (!onsetRubato) continue
+            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', this.options?.part !== undefined ? this.options.part : 'global')[0];
+            if (!onsetRubato || !selectedRubatos.includes(onsetRubato)) continue
 
             const onsetInTicks = onsetRubato
                 ? calculateRubatoOnDate(note.date, onsetRubato)
@@ -181,7 +180,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
             const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', this.options?.part !== undefined ? this.options.part : 'global')
             const effectiveRubato = rubatos[0]
-            if (!effectiveRubato) continue
+            if (!effectiveRubato || !selectedRubatos.includes(effectiveRubato)) continue
 
             const rubatoStart = offset - ((offset - effectiveRubato.date) % effectiveRubato.frameLength)
             const remainder = offset - rubatoStart
