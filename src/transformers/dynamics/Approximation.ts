@@ -147,14 +147,16 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
             volume: points[0].velocity,
         }
     }
-    else if (points.length === 2) {
+
+    const equal = points[0].velocity === points[points.length - 1].velocity;
+    if (points.length === 2 || equal) {
         return {
             type: 'dynamics',
             "xml:id": `dynamics_${v4()}`,
             date: points[0].date,
             endDate: points[points.length - 1].date,
             volume: points[0].velocity,
-            "transition.to": points[points.length - 1].velocity,
+            "transition.to": equal ? undefined : points[points.length - 1].velocity
         }
     }
 
