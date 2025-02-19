@@ -1,6 +1,6 @@
 import { MPM, Rubato, Scope } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
-import { AbstractTransformer, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { clamp, DefinedProperty } from "../../utils/utils"
 import { TranslatePhyiscalTimeToTicks } from "../tempo"
@@ -56,13 +56,8 @@ export type Frame = {
     length: number
 }
 
-export interface InsertRubatoOptions extends TransformationOptions {
+export interface InsertRubatoOptions extends ScopedTransformationOptions {
     frames: Frame[]
-
-    /**
-     * The part on which the transformer is to be applied to.
-     */
-    part: Scope
 }
 
 /**
@@ -77,7 +72,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
         // set the default options
         this.options = options || {
-            part: 'global',
+            scope: 'global',
             frames: []
         }
     }
@@ -85,7 +80,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     protected transform(msm: MSM, mpm: MPM) {
         const rubatos: Rubato[] = []
         for (const frame of this.options.frames) {
-            const chords = [...msm.asChords(this.options.part).entries()]
+            const chords = [...msm.asChords(this.options.scope).entries()]
                 .filter(([date, _]) => date >= frame.date && date <= frame.date + frame.length)
 
             console.log('dealing with frame', frame, 'and adjusting', chords)
@@ -140,7 +135,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             })
         }
 
-        mpm.insertInstructions(rubatos, this.options.part)
+        mpm.insertInstructions(rubatos, this.options.scope)
         this.removeRubatoDistortionFrom(rubatos, msm, mpm)
     }
 
@@ -154,14 +149,14 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
      */
     removeRubatoDistortionFrom(selectedRubatos: Rubato[], msm: MSM, mpm: MPM) {
         const affectedNotes =
-            this.options?.part === 'global' ?
+            this.options.scope === 'global' ?
                 msm.allNotes :
-                msm.allNotes.filter(n => n.part - 1 === this.options?.part)
+                msm.allNotes.filter(n => n.part - 1 === this.options.scope)
 
         for (const note of affectedNotes) {
             if (!note.tickDuration) continue
 
-            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', this.options?.part !== undefined ? this.options.part : 'global')[0];
+            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato',this.options.scope)[0];
             if (!onsetRubato || !selectedRubatos.includes(onsetRubato)) continue
 
             const onsetInTicks = onsetRubato
@@ -178,7 +173,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
             const offset = note.date + note.tickDuration
 
-            const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', this.options?.part !== undefined ? this.options.part : 'global')
+            const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', this.options.scope)
             const effectiveRubato = rubatos[0]
             if (!effectiveRubato || !selectedRubatos.includes(effectiveRubato)) continue
 
