@@ -40,7 +40,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         }
     }
 
-    transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         this.addTickOnsets(msm, mpm)
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
         this.addTickDurations(msm, mpm)

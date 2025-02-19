@@ -54,7 +54,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         }
     }
 
-    transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         if (!msm.timeSignature) {
             console.warn('A time signature must be given to interpolate a tempo map.')
             return

@@ -48,7 +48,7 @@ export class InterpolateAsynchrony extends AbstractTransformer<InterpolateAsynch
         }
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         // Calculate the difference to the other part 
         // for every tstamp
         const asynchronies: Asynchrony[] = []

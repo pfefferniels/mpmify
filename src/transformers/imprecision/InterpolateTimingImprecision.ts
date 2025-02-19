@@ -21,7 +21,7 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
         super()
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const timingImprecision = {
             'distribution.uniform': {
                 '@': {

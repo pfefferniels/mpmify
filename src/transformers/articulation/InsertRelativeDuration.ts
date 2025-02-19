@@ -51,7 +51,7 @@ export class InsertRelativeDuration extends AbstractTransformer<InsertRelativeDu
         }
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const articulations: Articulation[] = []
 
         if (this.options.noteIDs) {

@@ -69,7 +69,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         })
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         for (const [scope,] of mpm.doc.performance.parts) {
             const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
 

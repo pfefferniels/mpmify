@@ -81,7 +81,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             })
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         this.options.cells.sort((a, b) => a.start - b.start)
 
         if (!mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', this.options.scope)

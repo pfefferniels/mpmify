@@ -20,7 +20,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         }
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const validPedals = msm.pedals.filter(pedal => pedal.tickDate !== undefined && pedal.tickDuration !== undefined)
 
         mpm.removeInstructions('movement', 'global')

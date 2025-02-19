@@ -22,7 +22,7 @@ export class CompressTempo extends AbstractTransformer<CompressTempoOptions> {
         }
     }
 
-    transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const parts = mpm.doc.performance.parts.keys()
         for (const part of parts) {
             const tempos = mpm.getInstructions<Tempo>('tempo', part)

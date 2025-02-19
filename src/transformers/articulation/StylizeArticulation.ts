@@ -64,7 +64,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         )
     }
 
-    transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         for (const [scope,] of mpm.doc.performance.parts) {
             // Find clusters
             const articulations = mpm.getInstructions<Articulation>('articulation', scope)

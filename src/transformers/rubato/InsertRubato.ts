@@ -14,7 +14,7 @@ const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
  * This function calculates the effect of the rubato
  * on the MSM notes
  */
-const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
+export const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
     // compute the position of the map element within the rubato frame
     const localDate = (date - rubato.date) % rubato.frameLength;
     const lateStart = Math.max(Math.min(rubato.lateStart || 0, 0.9), 0)
@@ -82,7 +82,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         }
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const rubatos: Rubato[] = []
         for (const frame of this.options.frames) {
             const chords = [...msm.asChords(this.options.part).entries()]

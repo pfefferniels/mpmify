@@ -30,7 +30,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         }
     }
 
-    public transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const markers = this.options.markers
         this.options.markers.sort((a, b) => a - b)
         const points = this.asPoints(msm, this.options.part)
@@ -49,8 +49,6 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
 
         mpm.insertInstructions(dynamics, this.options?.part)
         this.setRelativeVolume(msm, mpm)
-
-        this.created = dynamics.map(d => d["xml:id"])
     }
 
     private asPoints(msm: MSM, part: Scope): DynamicsPoints[] {

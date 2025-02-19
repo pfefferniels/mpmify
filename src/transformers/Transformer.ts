@@ -44,7 +44,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     shouldRunBefore: Array<TransformerConstructor>
     
     // this method should not be overridden
-    run(msm: MSM, mpm: MPM) {
+    public run(msm: MSM, mpm: MPM) {
         this.insertMetadata(mpm)
 
         const mpmRecording = new MPMRecording(mpm)
@@ -52,9 +52,9 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         this.created = mpmRecording.created
     }
 
-    abstract transform(msm: MSM, mpm: MPM);
+    protected abstract transform(msm: MSM, mpm: MPM);
 
-    insertMetadata(mpm: MPM, overwrite = true) {
+    private insertMetadata(mpm: MPM, overwrite = true) {
         let appInfo = mpm.doc.metadata.find(el => el.type === 'appInfo') as AppInfo | undefined
         if (!appInfo) {
             appInfo = {

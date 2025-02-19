@@ -20,7 +20,7 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
         }
     }
 
-    transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: MPM) {
         const parts = mpm.doc.performance.parts.keys()
         for (const part of parts) {
             const defs = mpm.getDefinitions<OrnamentDef>('ornamentDef', part)

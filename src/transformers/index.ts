@@ -4,7 +4,7 @@ export * from "./dynamics"
 export * from "./ornamentation"
 export * from "./tempo"
 export * from "./imprecision/InterpolateTimingImprecision"
-export * from "./rubato/InterpolateRubato"
+export * from "./rubato/InsertRubato"
 export { TransformationOptions } from "./Transformer"
 export * from './tempo/tempoCalculations'
 export * from './pedal/InsertPedalInstructions'
