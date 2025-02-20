@@ -5,11 +5,24 @@ import { MSM } from "../../msm"
 import { v4 } from "uuid"
 
 export interface CombineAdjacentRubatoOptions extends ScopedTransformationOptions {    // adjacentRubatos: Rubato[]
+    /**
+     * This parameter is used to determine if the @intensity attributes
+     * of two adjacent rubato instructions are mergeable.
+     */
     intensityTolerance: number
+
+    /**
+     * This parameter is used to determine if the attributes @lateStart
+     * and @earlyEnd of two adjacent rubato instructions are mergeable.
+     */
+    compressionTolerance: number
 }
 
 /**
- * Interpolates <rubato> elements.
+ * Merges adjacent rubato instructions if they have the similiar intensity
+ * and compression by adding the @loop parameter to the first rubato instruction
+ * of a series and setting @intensity, @lateStart and @earlyEnd to the average
+ * of the series.
  */
 export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentRubatoOptions> {
     name = 'CombineAdjacentRubatos'
@@ -22,6 +35,7 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
         // set the default options
         this.options = options || {
             intensityTolerance: 0.2,
+            compressionTolerance: 0.1,
             scope: 'global',
         }
     }
@@ -35,10 +49,17 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
             for (let date = ref.date + ref.frameLength; date < msm.lastDate(); date += ref.frameLength) {
                 const current = rubatos.find(r => r.date === date)
 
-                if (current && (ref.intensity < 1 && current.intensity < 1 || ref.intensity > 1 && current.intensity > 1) && Math.abs(current.intensity - ref.intensity) < this.options.intensityTolerance) {
+                if (current &&
+                    (ref.intensity < 1 && current.intensity < 1 || ref.intensity > 1 && current.intensity > 1)
+                    && Math.abs(current.intensity - ref.intensity) < this.options.intensityTolerance
+                    && Math.abs((current.lateStart || 0) - (ref.lateStart || 0)) < this.options.compressionTolerance
+                    && Math.abs((current.earlyEnd || 1) - (ref.earlyEnd || 1)) < this.options.compressionTolerance
+                ) {
                     const count = (date - ref.date) / ref.frameLength
                     ref.loop = true
                     ref.intensity = (ref.intensity * count + current.intensity) / (count + 1)
+                    ref.lateStart = ((ref.lateStart || 0) * count + (current.lateStart || 0)) / (count + 1)
+                    ref.earlyEnd = ((ref.earlyEnd || 1) * count + (current.earlyEnd || 1)) / (count + 1)
                     mpm.removeInstruction(current)
                     rubatos.splice(rubatos.indexOf(current), 1)
                 } else {
