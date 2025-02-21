@@ -2,7 +2,7 @@ import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM, Scope }
 import { MSM } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions, Transformer } from "../Transformer";
 import { v4 } from "uuid";
-import { InsertTempoInstructions } from "../tempo";
+import { InsertDynamicsInstructions } from "../dynamics";
 
 export type AccentuationCell = {
     start: number
@@ -22,7 +22,7 @@ type Velocity = {
 
 export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetricalAccentuationOptions> {
     name = 'InsertMetricalAccentuation'
-    requires = [InsertTempoInstructions]
+    requires = [InsertDynamicsInstructions]
 
     constructor(options?: InsertMetricalAccentuationOptions) {
         super()
@@ -63,22 +63,24 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
     private calculateAccentuations(velocities: Velocity[]): Accentuation[] {
         const scale = this.calculateScale(velocities)
-        console.log('scale=', scale)
         if (scale === 0) return []
 
         return velocities
             .map((v, i, arr) => {
                 const next = arr[i + 1]
+                if (next === undefined) return null
+
                 const scaled = v.avgVelocityChange / scale
                 return ({
-                    type: 'accentuation',
+                    type: 'accentuation' as 'accentuation',
                     'xml:id': 'accentuation_' + v4(),
                     beat: v.beat,
                     value: scaled,
-                    'transition.from': next ? scaled : undefined,
-                    'transition.to': next ? next.avgVelocityChange / scale : undefined
+                    'transition.from': scaled,
+                    'transition.to': next.avgVelocityChange / scale
                 })
             })
+            .filter(a => a !== null)
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -89,7 +91,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             mpm.insertDefinition({
                 type: 'accentuationPatternDef',
                 name: 'neutral',
-                length: 1,
+                length: 0.25,
                 children: [{
                     type: 'accentuation',
                     beat: 1,
@@ -101,7 +103,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
 
         this.options.cells.forEach((cell, i) => {
-            const nextCell = this.options.cells[i + 1]
+            const nextCell = this.options.cells.at(i + 1)
 
             const velocities = this.extractVelocities(cell, msm)
             const scale = this.calculateScale(velocities)
@@ -112,41 +114,39 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             const currentCell = { ...cell }
             while (currentCell.end < (nextCell?.start || msm.end)) {
                 const cellLength = currentCell.end - currentCell.start
-                currentCell.start += cellLength + cell.beatLength * 4 * 720
-                currentCell.end += cellLength + cell.beatLength * 4 * 720
+                currentCell.start += cellLength
+                currentCell.end += cellLength
 
                 const currentVelocities = this.extractVelocities(currentCell, msm)
                 const currentScale = this.calculateScale(currentVelocities)
-                const currentAccentations = this.calculateAccentuations(currentVelocities)
+                const currentAccentuations = this.calculateAccentuations(currentVelocities)
 
-                const hasSameBeatStructure = currentAccentations.every(((a) => {
+                const hasSameBeatStructure = currentAccentuations.every(((a) => {
                     // not finding any corresponding accentuation
                     // does not contradict to continue looping
                     const corresp = accentuations.find(other => other.beat === a.beat)
                     if (!corresp) return true
 
-                    console.log('comparing', Math.round(a.value), Math.round(corresp.value))
                     return Math.round(a.value) === Math.round(corresp.value)
                 }))
 
                 const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.loopTolerance
 
                 if (!hasSameBeatStructure || !scaleWithinRange) {
-                    console.log('breaking at', currentCell, hasSameBeatStructure, scaleWithinRange)
                     break;
                 }
             }
 
-            const loop = currentCell.start !== cell.end
             const accentuationPatternDef: AccentuationPatternDef = {
                 type: 'accentuationPatternDef',
                 name: v4(),
-                length: ((cell.end - cell.start) / 4 / 720 + cell.beatLength) * msm.timeSignature.denominator,
+                length: ((cell.end - cell.start) / 4 / 720) * msm.timeSignature.denominator,
                 children: accentuations,
             }
 
             mpm.insertDefinition(accentuationPatternDef, this.options.scope)
 
+            const loop = currentCell.start > cell.end
             mpm.insertInstruction({
                 type: 'accentuationPattern',
                 'name.ref': accentuationPatternDef.name,
@@ -187,8 +187,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             .getInstructions<AccentuationPattern>('accentuationPattern', scope)
             .slice()
             .reverse()
-
-        console.log('removeAccentuationDistortion: Loaded accentuation patterns', allAccentuations);
 
         for (const [date, chord] of msm.asChords(scope)) {
             const pattern = allAccentuations.find(pattern => pattern.date <= date)
