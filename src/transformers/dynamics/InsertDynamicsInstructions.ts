@@ -1,18 +1,12 @@
 import { Dynamics, MPM, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
 import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
 export type DynamicsWithEndDate = Dynamics & WithEndDate
 
-export interface InsertDynamicsInstructionsOptions extends TransformationOptions {
-    /**
-     * Defines if the dynamics will be interpolated globally as opposed
-     * to referring to parts. Default is 'global'.
-     */
-    part: Scope
-
+export interface InsertDynamicsInstructionsOptions extends ScopedTransformationOptions {
     markers: number[]
 }
 
@@ -25,7 +19,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
 
         // set the default options
         this.options = options || {
-            part: 'global',
+            scope: 'global',
             markers: [0]
         }
     }
@@ -33,7 +27,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     protected transform(msm: MSM, mpm: MPM) {
         const markers = this.options.markers
         this.options.markers.sort((a, b) => a - b)
-        const points = this.asPoints(msm, this.options.part)
+        const points = this.asPoints(msm, this.options.scope)
 
         const dynamics: Dynamics[] = []
         for (let i = 0; i < this.options.markers.length; i++) {
@@ -47,7 +41,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
             }
         }
 
-        mpm.insertInstructions(dynamics, this.options?.part)
+        mpm.insertInstructions(dynamics, this.options?.scope)
         this.setRelativeVolume(msm, mpm)
     }
 
@@ -70,7 +64,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     }
 
     private setRelativeVolume(msm: MSM, mpm: MPM) {
-        const instructions = mpm.getInstructions<Dynamics>('dynamics', this.options.part)
+        const instructions = mpm.getInstructions<Dynamics>('dynamics', this.options.scope)
         const instructionsWithEndDate = []
         for (let i=0; i<instructions.length - 1; i++) {
             instructionsWithEndDate.push({
@@ -82,7 +76,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
             })
         }
 
-        const chords = msm.asChords(this.options.part)
+        const chords = msm.asChords(this.options.scope)
 
         for (const [date, notes] of chords) {
             const corresp = instructionsWithEndDate.find(i => date >= i.date && date < i.endDate)
