@@ -109,6 +109,8 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             const scale = this.calculateScale(velocities)
             const accentuations = this.calculateAccentuations(velocities)
 
+            if (accentuations.length === 0 || scale === 0) return
+
             // try to loop until we cannot fit the data into the 
             // pattern anymore or we reach the next cell
             const currentCell = { ...cell }
@@ -119,6 +121,8 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
                 const currentVelocities = this.extractVelocities(currentCell, msm)
                 const currentScale = this.calculateScale(currentVelocities)
+                if (currentScale === 0) break
+
                 const currentAccentuations = this.calculateAccentuations(currentVelocities)
 
                 const hasSameBeatStructure = currentAccentuations.every(((a) => {
@@ -129,6 +133,8 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
                     return Math.round(a.value) === Math.round(corresp.value)
                 }))
+
+                console.log(accentuations, 'vs', currentAccentuations)
 
                 const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.loopTolerance
 
