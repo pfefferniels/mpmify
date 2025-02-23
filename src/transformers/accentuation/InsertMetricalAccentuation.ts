@@ -209,10 +209,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 continue
             }
 
-            const timeSignatureDate = 0;
-            const beat = 1 + ((date - timeSignatureDate) % tickLength) / ppq;
+            // TODO
+            const timeSignatureDate = 0
+            const beat = 1 + ((date - pattern.date - timeSignatureDate) % tickLength) / ppq;
 
-            const accentuation = def.children.find(a => a.beat === beat)
+            const accentuation = def.children.slice().reverse().find(a => a.beat <= beat)
             if (!accentuation) {
                 continue
             }
