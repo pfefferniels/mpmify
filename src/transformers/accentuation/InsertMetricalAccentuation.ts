@@ -134,8 +134,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                     return Math.round(a.value) === Math.round(corresp.value)
                 }))
 
-                console.log(accentuations, 'vs', currentAccentuations)
-
                 const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.loopTolerance
 
                 if (!hasSameBeatStructure || !scaleWithinRange) {
@@ -153,14 +151,15 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             mpm.insertDefinition(accentuationPatternDef, this.options.scope)
 
             const loop = currentCell.start > cell.end
-            mpm.insertInstruction({
+            const newPattern: AccentuationPattern = {
                 type: 'accentuationPattern',
                 'name.ref': accentuationPatternDef.name,
                 "xml:id": v4(),
                 date: cell.start,
                 scale,
-                loop,
-            }, this.options.scope)
+                loop: loop || undefined,
+            }
+            mpm.insertInstruction(newPattern, this.options.scope)
 
             if (loop) {
                 mpm.insertInstruction({
@@ -169,9 +168,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                     date: currentCell.start,
                     "xml:id": v4(),
                     scale: 0,
-                    loop: false
+                    loop: undefined
                 }, this.options.scope)
             }
+
+            this.removeAccentuationDistortion(newPattern, msm, mpm, this.options.scope)
         })
 
         if (mpm.getStyles('accentuationPattern', this.options.scope).length === 0) {
@@ -182,21 +183,16 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 'xml:id': v4(),
             }, 'accentuationPattern', this.options.scope)
         }
-
-        this.removeAccentuationDistortion(msm, mpm, this.options.scope)
     }
 
-    removeAccentuationDistortion(msm: MSM, mpm: MPM, scope: Scope) {
+    removeAccentuationDistortion(pattern: AccentuationPattern, msm: MSM, mpm: MPM, scope: Scope) {
         const ppq = 720
 
-        const allAccentuations = mpm
-            .getInstructions<AccentuationPattern>('accentuationPattern', scope)
-            .slice()
-            .reverse()
-
         for (const [date, chord] of msm.asChords(scope)) {
-            const pattern = allAccentuations.find(pattern => pattern.date <= date)
-            if (!pattern) continue
+            if (date < pattern.date) continue
+
+            const between = mpm.getInstructions<AccentuationPattern>('accentuationPattern', scope).find(p => p.date > pattern.date && p.date <= date)
+            if (between) continue
 
             const def = mpm.getDefinition('accentuationPatternDef', pattern["name.ref"]) as AccentuationPatternDef | null
             if (!def) {
@@ -205,7 +201,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
             const tickLength = (def.length * 4 * ppq) / msm.timeSignature.denominator
 
-            if (date > pattern.date + tickLength && !pattern.loop) {
+            if (date >= pattern.date + tickLength && !pattern.loop) {
                 continue
             }
 
