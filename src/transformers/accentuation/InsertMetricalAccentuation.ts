@@ -106,7 +106,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             const nextCell = this.options.cells.at(i + 1)
 
             const velocities = this.extractVelocities(cell, msm)
-            const scale = this.calculateScale(velocities)
+            let scale = this.calculateScale(velocities)
             const accentuations = this.calculateAccentuations(velocities)
 
             if (accentuations.length === 0 || scale === 0) return
@@ -114,6 +114,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             // try to loop until we cannot fit the data into the 
             // pattern anymore or we reach the next cell
             const currentCell = { ...cell }
+            let iterations = 0;
             while (currentCell.end < (nextCell?.start || msm.end)) {
                 const cellLength = currentCell.end - currentCell.start
                 currentCell.start += cellLength
@@ -139,6 +140,9 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 if (!hasSameBeatStructure || !scaleWithinRange) {
                     break;
                 }
+                
+                scale = (scale * iterations + currentScale) / (iterations + 1)
+                iterations++;
             }
 
             const accentuationPatternDef: AccentuationPatternDef = {
