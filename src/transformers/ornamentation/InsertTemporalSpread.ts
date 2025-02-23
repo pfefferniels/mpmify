@@ -1,7 +1,7 @@
-import { MPM, Ornament, Scope } from "mpm-ts"
+import { MPM, Ornament } from "mpm-ts"
 import { MSM } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
+import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none'
@@ -63,7 +63,7 @@ const determineSortDirection = (arr: number[]) => {
         Math.sign(val - arr[i]) === direction) ? direction : 0;
 }
 
-export interface InsertTemporalSpreadOptions extends TransformationOptions {
+export interface InsertTemporalSpreadOptions extends ScopedTransformationOptions {
     /**
      * the minimum number of notes an arpeggio is expected to have (inclusive)
      */
@@ -90,11 +90,6 @@ export interface InsertTemporalSpreadOptions extends TransformationOptions {
      * Fallback placement if no placement is provided for a date.
      */
     defaultPlacement: ArpeggioPlacement
-
-    /**
-     * The part on which the transformer is to be applied to.
-     */
-    part: Scope
 }
 
 /**
@@ -117,14 +112,16 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             placement: new Map(),
             defaultPlacement: 'estimate',
             noteOffShiftTolerance: 500,
-            part: 'global'
+            scope: 'global'
         }
     }
 
     protected transform(msm: MSM, mpm: MPM) {
         const ornaments: Ornament[] = []
 
-        const chords = msm.asChords(this.options?.part)
+        console.log('options=', this.options)
+
+        const chords = msm.asChords(this.options.scope)
         for (let [date, arpeggioNotes] of chords) {
             // only consider notes with a defined onset time
             arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
@@ -220,6 +217,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             })
         }
 
-        mpm.insertInstructions(ornaments, this.options.part)
+        mpm.insertInstructions(ornaments, this.options.scope)
     }
 }
