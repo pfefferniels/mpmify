@@ -79,3 +79,4 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     }
 }
 
+export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
