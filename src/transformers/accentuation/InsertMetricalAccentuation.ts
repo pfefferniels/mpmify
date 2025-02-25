@@ -13,6 +13,7 @@ export type AccentuationCell = {
 interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
     cells: AccentuationCell[]
     loopTolerance: number
+    neutralEnd: boolean
 }
 
 type Velocity = {
@@ -31,7 +32,8 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         this.options = options || {
             scope: 'global',
             cells: [],
-            loopTolerance: 0
+            loopTolerance: 0,
+            neutralEnd: false
         }
     }
 
@@ -70,6 +72,10 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 const next = arr[i + 1]
                 if (next === undefined) return null
 
+                const transitionTo = ((i === arr.length - 2) && this.options.neutralEnd)
+                    ? 0
+                    : next.avgVelocityChange / scale
+                    
                 const scaled = v.avgVelocityChange / scale
                 return ({
                     type: 'accentuation' as 'accentuation',
@@ -77,7 +83,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                     beat: v.beat,
                     value: scaled,
                     'transition.from': scaled,
-                    'transition.to': next.avgVelocityChange / scale
+                    'transition.to': transitionTo
                 })
             })
             .filter(a => a !== null)
@@ -140,7 +146,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 if (!hasSameBeatStructure || !scaleWithinRange) {
                     break;
                 }
-                
+
                 scale = (scale * iterations + currentScale) / (iterations + 1)
                 iterations++;
             }
