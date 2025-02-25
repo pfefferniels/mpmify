@@ -92,6 +92,9 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         // make sure the markers are sorted
         markers.sort((a, b) => a.date - b.date)
 
+        // remove all tempo instructions that should be overwritten by the new markers
+        this.removeAffectedTempoInstructions(mpm, this.options.part, markers)
+
         // remove duplicate markers at the same time
         // prefer longer beat length over the shorter
         for (let i = 0; i < markers.length - 1; i++) {
@@ -223,6 +226,20 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             .filter(tempo => !isNaN(tempo.bpm))
 
         mpm.insertInstructions(tempos, this.options?.part || 'global')
+    }
+
+    removeAffectedTempoInstructions(mpm: MPM, scope: Scope, markers: Marker[]) {
+        const sorted = markers.slice().sort((a, b) => a.date - b.date)
+        const tempos = mpm.getInstructions<Tempo>('tempo', scope)
+        for (const tempo of tempos) {
+            if (sorted.some((marker, index) =>
+                index < sorted.length - 1 &&
+                tempo.date >= marker.date &&
+                tempo.date < sorted[index + 1].date
+            )) {
+                mpm.removeInstruction(tempo)
+            }
+        }
     }
 }
 
