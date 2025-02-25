@@ -12,7 +12,7 @@ export type AccentuationCell = {
 
 interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
     cells: AccentuationCell[]
-    loopTolerance: number
+    scaleTolerance: number
     neutralEnd: boolean
 }
 
@@ -32,7 +32,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         this.options = options || {
             scope: 'global',
             cells: [],
-            loopTolerance: 0,
+            scaleTolerance: 0,
             neutralEnd: false
         }
     }
@@ -141,7 +141,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                     return Math.round(a.value) === Math.round(corresp.value)
                 }))
 
-                const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.loopTolerance
+                const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.scaleTolerance
 
                 if (!hasSameBeatStructure || !scaleWithinRange) {
                     break;
