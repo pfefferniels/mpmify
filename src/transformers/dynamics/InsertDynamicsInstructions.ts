@@ -8,6 +8,7 @@ export type DynamicsWithEndDate = Dynamics & WithEndDate
 
 export interface InsertDynamicsInstructionsOptions extends ScopedTransformationOptions {
     markers: number[]
+    phantomVelocities: Map<number, number>
 }
 
 export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynamicsInstructionsOptions> {
@@ -20,7 +21,8 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // set the default options
         this.options = options || {
             scope: 'global',
-            markers: [0]
+            markers: [],
+            phantomVelocities: new Map()
         }
     }
 
@@ -53,10 +55,12 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
                 .filter(n => n["midi.velocity"] !== undefined)
             const velocity = notesWithVolume
                 .reduce((sum, curr) => sum + curr["midi.velocity"], 0) / notesWithVolume.length
+            
+            const phantomVelocity = this.options.phantomVelocities.get(date)
 
             points.push({
                 date,
-                velocity
+                velocity: phantomVelocity || velocity
             })
         }
 
