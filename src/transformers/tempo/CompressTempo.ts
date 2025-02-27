@@ -2,7 +2,7 @@ import { Tempo, MPM } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { fix } from "../../utils/utils";
-import { InsertTempoInstructions } from "./InsertTempoInstructions";
+import { ApproximateBezierTempo } from "./ApproximateBezierTempo";
 
 interface CompressTempoOptions extends TransformationOptions {
     bpmPrecision: number
@@ -11,7 +11,7 @@ interface CompressTempoOptions extends TransformationOptions {
 
 export class CompressTempo extends AbstractTransformer<CompressTempoOptions> {
     name = 'CompressTempo'
-    requires = [InsertTempoInstructions]
+    requires = [ApproximateBezierTempo]
 
     constructor() {
         super()

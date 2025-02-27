@@ -1,9 +1,7 @@
 import { v4 } from "uuid";
 import { MPM, Scope, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
-import { BeatLengthBasis, calculateBeatLength, filterByBeatLength } from "../BeatLengthBasis";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { approximateFromPoints } from "./SimplifyTempo";
 import { TempoWithEndDate } from "./tempoCalculations";
 
 export type Marker = {
@@ -18,14 +16,14 @@ export type SilentOnset = {
     onset: number
 }
 
-export interface InsertTempoInstructionsOptions extends TransformationOptions {
+export type Point = [number, number];
+
+export interface AbstractTempoTransformerOptions extends TransformationOptions {
     /**
      * Defines where new tempo instructions should be
-     * set. Alternatively, a beat length can be passed
-     * @default 'denominator'
+     * set.
      */
-    markers: Marker[] | BeatLengthBasis
-
+    markers: Marker[]
     silentOnsets: SilentOnset[]
 
     /**
@@ -39,17 +37,16 @@ export interface InsertTempoInstructionsOptions extends TransformationOptions {
  * Inserts tempo instructions into the given part based on the
  * given beat length.
  */
-export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInstructionsOptions> {
-    name = 'InsertTempoInstructions'
-    requires = []    
+export abstract class AbstractTempoTransformer extends AbstractTransformer<AbstractTempoTransformerOptions> {
+    requires = []
 
-    constructor(options?: InsertTempoInstructionsOptions) {
+    constructor(options?: AbstractTempoTransformerOptions) {
         super()
 
         // set the default options
         this.options = options || {
             part: 'global',
-            markers: 'denominator',
+            markers: [],
             silentOnsets: []
         }
     }
@@ -64,13 +61,8 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         // make sure to delete the arbitrary silence before the first note onset
         msm.shiftToFirstOnset()
 
-        if (typeof this.options.markers === 'object') {
-            this.insertInstructionsByMarkers(msm, mpm, this.options.markers)
-        }
-        else {
-            const beatLength = this.options.markers
-            this.insertInstructionsByBeatLength(msm, mpm, beatLength)
-        }
+        this.insertInstructionsByMarkers(msm, mpm, this.options.markers)
+        this.addTickOnsets(msm)
     }
 
     insertInstructionsByMarkers(msm: MSM, mpm: MPM, markers: Marker[]) {
@@ -103,7 +95,7 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
             }
         }
 
-        const tempos: TempoWithEndDate[] = markers
+        const markersWithPoints = markers
             .map((marker, i): Marker & { points: [number, number][] } => {
                 let nextDate
                 const nextMarker = markers[i + 1]
@@ -124,31 +116,40 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
                     // when the frames are overlapping, take the first onset
                     // of the next frame as the last data point
                     if (date + beatLength > nextDate) {
-                        points.push([nextDate, (onsetAtDate(nextDate) - firstOnset) * 1000])
+                        points.push([nextDate, (onsetAtDate(nextDate)/* - firstOnset*/) * 1000])
                         break
                     }
 
                     const correspondingOnset = onsetAtDate(date)
                     if (correspondingOnset !== undefined) {
-                        points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
+                        points.push([date, (onsetAtDate(date)/* - firstOnset*/) * 1000])
                     }
                 }
 
                 return { ...marker, points }
             })
-            .reduce((acc, marker) => {
-                if (marker.continuous) {
-                    acc[acc.length - 1].serieses.push(marker.points)
+
+        let prevTransitionTo = undefined
+        const tempos: TempoWithEndDate[] = []
+        for (const marker of markersWithPoints) {
+            const startBPM = marker.continuous ? prevTransitionTo : undefined
+            try {
+                const curve = this.approximateCurve(
+                    marker.points,
+                    marker.beatLength / 720 / 4,
+                    startBPM
+                )
+                tempos.push(curve)
+                if (curve["transition.to"]) {
+                    prevTransitionTo = curve["transition.to"]
                 }
-                else {
-                    acc.push({ ...marker, serieses: [marker.points] })
-                }
-                return acc
-            }, [] as (Marker & { serieses: [number, number][][] })[])
-            .map(marker => approximateFromPoints(marker.serieses, marker.beatLength / 720 / 4))
-            .flat()
-        
-        mpm.removeInstructions('tempo', this.options.part)
+            }
+            catch (e) {
+                console.error('Failed to approximate curve:', e)
+                continue;
+            }
+        }
+
         mpm.insertInstructions(tempos, this.options?.part, true)
 
         // insert another tempo instruction at the very end
@@ -165,68 +166,18 @@ export class InsertTempoInstructions extends AbstractTransformer<InsertTempoInst
         }
     }
 
-    insertInstructionsByBeatLength(msm: MSM, mpm: MPM, beatLength: BeatLengthBasis) {
-        const chords = Object.entries(msm.asChords(this.options.part))
-        const tempos = chords
-            .filter(filterByBeatLength(beatLength, msm.timeSignature))
-            .filter(([_, chord]) => {
-                if (chord.length === 0) {
-                    console.warn('Empty chord found. This is not supposed to happen.')
-                }
+    /**
+     * Approximates a tempo curve from given data points.
+     * 
+     * @param data The points to approximate the tempo curve from, given as [score time, physical time].
+     * @param targetBeatLength The target beat length for the tempo curve.
+     * @param startBPM An optional parameter that can be passed when the curve
+     * segment to be approximated is intended to continue from the previous curve segment.
+     * @returns The approximated tempo curve.
+     */
+    protected abstract approximateCurve(points: Point[], beatLength: number, startBPM?: number): TempoWithEndDate
 
-                return chord.length !== 0
-            })
-            .map(([date, chord]) => {
-                const firstNote = chord[0]
-                if (chord.some(note => note["midi.onset"] !== firstNote["midi.onset"])) {
-                    console.log(`Not all notes in the chord at ${date}
-                    occur at the same physical time. Make sure that a global physical
-                    ornamentation map and/or asynchrony map are calculated before
-                    applying this transformer.`)
-                }
-                return firstNote
-            })
-            .map((currentNote, i, selectedNotes) => {
-                const currentOnset = currentNote["midi.onset"]
-                const nextNote = selectedNotes[i + 1]
-
-                let ratio = 1
-                let nextOnset, beatLength
-                if (nextNote) {
-                    nextOnset = nextNote['midi.onset']
-                    if (beatLength === 'everything') {
-                        beatLength = currentNote['duration'] / 720 / 4
-                    }
-                    else {
-                        const givenBeatLength = calculateBeatLength(beatLength, msm.timeSignature)
-
-                        if (nextNote.date !== currentNote.date + givenBeatLength) {
-                            const newBeatLength = nextNote.date - currentNote.date
-                            ratio = givenBeatLength / newBeatLength
-                        }
-
-                        beatLength = givenBeatLength / 720 / 4
-                    }
-                }
-                else {
-                    nextOnset = currentOnset + currentNote['midi.duration']
-                    beatLength = currentNote['duration'] / 720 / 4
-                }
-
-                const bpm = nextOnset !== undefined ? 60 / (ratio * (nextOnset - currentOnset)) : 60
-
-                return {
-                    type: 'tempo',
-                    date: currentNote.date,
-                    'xml:id': `tempo_${v4()}`,
-                    beatLength,
-                    bpm
-                } as Tempo
-            })
-            .filter(tempo => !isNaN(tempo.bpm))
-
-        mpm.insertInstructions(tempos, this.options?.part || 'global')
-    }
+    protected abstract addTickOnsets(msm: MSM): void
 
     removeAffectedTempoInstructions(mpm: MPM, scope: Scope, markers: Marker[]) {
         const sorted = markers.slice().sort((a, b) => a.date - b.date)

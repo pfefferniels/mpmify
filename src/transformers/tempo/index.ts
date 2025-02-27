@@ -1,3 +1,5 @@
-export * from "./InsertTempoInstructions"
+export * from "./ApproximateBezierTempo"
+export * from "./ApproximateLogarithmicTempo"
+export * from "./AbstractTempoTransformer"
 export * from "./TranslatePhysicalTimeToTicks"
 export * from "./CompressTempo"
