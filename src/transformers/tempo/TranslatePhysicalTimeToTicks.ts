@@ -2,7 +2,6 @@ import { MPM, Ornament, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt } from "./tempoCalculations";
-import { AbstractTempoTransformer } from "./AbstractTempoTransformer";
 import { ApproximateBezierTempo } from "./ApproximateBezierTempo";
 
 interface TempoWithEndDate extends Tempo {

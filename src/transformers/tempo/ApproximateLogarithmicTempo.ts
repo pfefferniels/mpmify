@@ -1,25 +1,28 @@
-import { AbstractTempoTransformer, Point } from "./AbstractTempoTransformer";
+import { Point } from "./ConfigurableTempoTransformer";
 import { v4 } from "uuid";
 import { clamp } from "../../utils/utils";
 import { TempoWithEndDate, computeMillisecondsAt } from "./tempoCalculations";
 import { MSM } from "../../msm";
+import { ConfigurableTempoTransformer, TempoSegmentWithPoints } from "./ConfigurableTempoTransformer";
 
 /**
  * Inserts tempo instructions into the given part based on the
  * given beat length.
  */
-export class ApproximateLogarithmicTempo extends AbstractTempoTransformer {
+export class ApproximateLogarithmicTempo extends ConfigurableTempoTransformer {
     name = 'ApproximateLogarithmicTempo'
 
-    protected approximateCurve(points: [number, number][], targetBeatLength: number, startBPM?: number): TempoWithEndDate {
-        if (points.length < 2) {
+    protected approximateTempo(segment: TempoSegmentWithPoints): TempoWithEndDate {
+        if (segment.points.length < 2) {
             throw new Error('At least two points are required to approximate a tempo curve.');
         }
 
-        return simulatedAnnealing(
-            points,
-            guessInitialTempo(points, targetBeatLength, startBPM),
-            startBPM !== undefined
+        return approximateTempo(
+            segment.points,
+            segment.startBPM,
+            segment.endBPM,
+            segment.meanTempoAt,
+            segment.beatLength
         )
     }
 
@@ -27,13 +30,13 @@ export class ApproximateLogarithmicTempo extends AbstractTempoTransformer {
     }
 }
 
-const guessInitialTempo = (data: [number, number][], targetBeatLength: number, startBPM_?: number): TempoWithEndDate => {
+const guessInitialTempo = (data: [number, number][], targetBeatLength: number): TempoWithEndDate => {
     if (data.length < 2) {
         throw new Error('At least two points are required to approximate a tempo curve.');
     }
 
     const targetBeatLengthTicks = targetBeatLength * 4 * 720
-    const startBpm = startBPM_ || (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / targetBeatLengthTicks)))
+    const startBpm = (60000 / ((data[1][1] - data[0][1]) / ((data[1][0] - data[0][0]) / targetBeatLengthTicks)))
 
     const distanceMs = data[data.length - 1][1] - data[0][1]
     const distanceTicks = data[data.length - 1][0] - data[0][0]
@@ -64,24 +67,36 @@ const guessInitialTempo = (data: [number, number][], targetBeatLength: number, s
     }
 }
 
-
-
-const simulatedAnnealing = (
+export const approximateTempo = (
     series: Point[],
-    initialTempo: TempoWithEndDate,
-    fixStart: boolean,
+    startBPM: number | undefined,
+    endBPM: number | undefined,
+    meanTempoAt: number | undefined,
+    beatLength: number,
     initialTemperature: number = 500,
     coolingRate: number = 0.995,
     maxIterations: number = 1000,
     maxError: number = 10.0
 ): TempoWithEndDate => {
+    const initialTempo = guessInitialTempo(series, beatLength)
+
+    if (startBPM) initialTempo.bpm = startBPM
+    if (endBPM) initialTempo["transition.to"] = endBPM
+    if (meanTempoAt) initialTempo.meanTempoAt = meanTempoAt
+    console.log('initial guess', initialTempo)
+
     let currentTempo = { ...initialTempo };
     let bestTempo = { ...initialTempo };
     let bestError = computeTotalError(currentTempo, series);
     let temperature = initialTemperature;
 
     for (let iteration = 0; iteration < maxIterations && temperature > 0.001; iteration++) {
-        const neighboringTempo = generateNeighboringTempo(currentTempo, fixStart);
+        const neighboringTempo = generateNeighboringTempo(
+            currentTempo,
+            startBPM,
+            endBPM,
+            meanTempoAt
+        );
 
         const currentError = computeTotalError(currentTempo, series);
         const neighborError = computeTotalError(neighboringTempo, series);
@@ -106,24 +121,25 @@ const simulatedAnnealing = (
     return bestTempo;
 };
 
-const generateNeighboringTempo = (tempo: TempoWithEndDate, fixStart: boolean): TempoWithEndDate => {
+const generateNeighboringTempo = (
+    tempo: TempoWithEndDate,
+    startBPM?: number,
+    endBPM?: number,
+    meanTempoAt?: number
+): TempoWithEndDate => {
     const variation = 0.2;
     const randomVariation = Math.random() * variation
 
     const isAcc = tempo.bpm < tempo["transition.to"]!
 
-    // If the start point is fixed, do not apply 
-    // any variation to it
-    let newBPM = fixStart
-        ? tempo.bpm
-        : (tempo.bpm + (isAcc ? -randomVariation : randomVariation))
-    const newTransitionTo = tempo["transition.to"]! + (isAcc ? randomVariation : -randomVariation)
+    let newBPM = startBPM || (tempo.bpm + (isAcc ? -randomVariation : randomVariation))
+    const newTransitionTo = endBPM || (tempo["transition.to"]! + (isAcc ? randomVariation : -randomVariation))
 
-    if (isAcc && newTransitionTo < newBPM || !isAcc && newTransitionTo > newBPM) {
+    if (!startBPM && (isAcc && newTransitionTo < newBPM) || (!isAcc && newTransitionTo > newBPM)) {
         newBPM = (tempo.bpm + (isAcc ? -randomVariation : randomVariation))
     }
 
-    let newMeanTempoAt = clamp(
+    let newMeanTempoAt = meanTempoAt || clamp(
         0.01,
         tempo.meanTempoAt + (Math.random() - 0.5) * 0.1,
         0.99
@@ -163,3 +179,4 @@ const computeTotalError = (tempo: TempoWithEndDate, points: Point[]) => {
 
     return totalError / points.length;
 }
+

@@ -1,8 +1,8 @@
 import { v4 } from "uuid"
-import { AbstractTempoTransformer, Point } from "./AbstractTempoTransformer"
 import { TempoWithEndDate } from "./tempoCalculations"
 import { MSM } from "../../msm"
 import { MPM } from "mpm-ts"
+import { ConfigurableTempoTransformer, Point, TempoSegmentWithPoints } from "./ConfigurableTempoTransformer"
 
 export type BezierCurve = {
     P0: [number, number],
@@ -259,7 +259,7 @@ export const approximateFromData = (data: [number, number][], beatLength: number
     return { curve, tempo }
 }
 
-export class ApproximateBezierTempo extends AbstractTempoTransformer {
+export class ApproximateBezierTempo extends ConfigurableTempoTransformer {
     name = 'ApproximateBezierTempo'
 
     curves: BezierCurve[] = []
@@ -269,12 +269,12 @@ export class ApproximateBezierTempo extends AbstractTempoTransformer {
         super.transform(msm, mpm)
     }
 
-    protected approximateCurve(points: [number, number][], targetBeatLength: number, startBPM?: number): TempoWithEndDate {
-        if (points.length < 2) {
+    protected approximateTempo(segment: TempoSegmentWithPoints): TempoWithEndDate {
+        if (segment.points.length < 2) {
             throw new Error('At least two points are required to approximate a tempo curve.');
         }
 
-        const result = approximateFromData(points, targetBeatLength)
+        const result = approximateFromData(segment.points, segment.beatLength)
         this.curves.push(result.curve)
 
         return result.tempo
