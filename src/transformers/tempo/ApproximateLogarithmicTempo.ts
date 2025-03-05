@@ -166,7 +166,7 @@ const generateNeighboringTempo = (
  * @param points Array representing the actual milliseconds as tuples [score time, physical time]
  * @returns The average squared error for the given tempo and points.
  */
-const computeTotalError = (tempo: TempoWithEndDate, points: Point[]) => {
+export const computeTotalError = (tempo: TempoWithEndDate, points: Point[]) => {
     let totalError = 0;
 
     for (const point of points) {

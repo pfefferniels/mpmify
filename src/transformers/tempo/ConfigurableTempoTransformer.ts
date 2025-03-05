@@ -1,6 +1,6 @@
 import { v4 } from "uuid";
 import { MPM, Scope, Tempo } from "mpm-ts";
-import { MSM } from "../../msm";
+import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { TempoWithEndDate } from "./tempoCalculations";
 
@@ -74,16 +74,6 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
     }
 
     insertInstructionsBySegments(msm: MSM, mpm: MPM, segments: TempoSegment[]) {
-        const onsetAtDate = (date: number) => {
-            const silent = this.options.silentOnsets.find(s => s.date === date)
-            if (silent) {
-                return silent.onset
-            }
-
-            const currentNotes = msm.notesAtDate(date, this.options.part)
-            if (currentNotes.length) return currentNotes[0]["midi.onset"]
-        }
-
         if (segments.length < 1) {
             console.log('At least one markers need to be specified')
             return
@@ -93,19 +83,11 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
         this.removeAffectedTempoInstructions(mpm, this.options.part, segments)
 
         const tempos = segments
-            .map((segment): TempoSegmentWithPoints => {
-                const firstOnset = onsetAtDate(segment.startDate)
-                const points: [number, number][] = []
-                const beatLength = segment.measureBeatLength || segment.beatLength
+            .map(segment => {
+                const notes = msm.notesInPart(this.options.part)
+                const silentOnsets = this.options.silentOnsets
 
-                for (let date = segment.startDate; date <= segment.endDate; date += beatLength) {
-                    const correspondingOnset = onsetAtDate(date)
-                    if (correspondingOnset !== undefined) {
-                        points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
-                    }
-                }
-
-                return { ...segment, points }
+                return pointsWithinSegment(segment, notes, silentOnsets)
             })
             .map(segment => {
                 if (segment.points.length < 2) {
@@ -116,7 +98,7 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
             })
             .filter((segment): segment is TempoWithEndDate => segment !== null)
 
-        mpm.insertInstructions(tempos, this.options?.part, true)
+        mpm.insertInstructions(tempos.sort((a, b) => a.date - b.date), this.options?.part, true)
 
         // insert another tempo instruction at the very end
         if (tempos.length > 0) {
@@ -147,4 +129,35 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
             }
         }
     }
+}
+
+
+export const pointsWithinSegment = (
+    segment: TempoSegment,
+    notes: MsmNote[],
+    silentOnsets: SilentOnset[]
+): TempoSegmentWithPoints => {
+    const onsetAtDate = (date: number) => {
+        const silent = silentOnsets.find(s => s.date === date)
+        if (silent) {
+            return silent.onset
+        }
+
+        const currentNotes = notes.filter(n => n.date === date)
+        if (currentNotes.length) return currentNotes[0]["midi.onset"]
+    }
+
+    const firstOnset = onsetAtDate(segment.startDate)
+    const points: [number, number][] = []
+    const beatLength = (segment.measureBeatLength || segment.beatLength) * 4 * 720
+
+    for (let date = segment.startDate; date <= segment.endDate; date += beatLength) {
+        const correspondingOnset = onsetAtDate(date)
+        if (correspondingOnset !== undefined) {
+            console.log('onset at date', date, correspondingOnset)
+            points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
+        }
+    }
+
+    return { ...segment, points }
 }
