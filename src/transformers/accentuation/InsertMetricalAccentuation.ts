@@ -5,9 +5,11 @@ import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
 
 export type AccentuationCell = {
+    name?: string
     start: number
     end: number
     beatLength: number
+    neutralEnd?: boolean
 }
 
 interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
@@ -63,7 +65,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         return Math.max(...velocities.map(v => Math.abs(v.avgVelocityChange)))
     }
 
-    private calculateAccentuations(velocities: Velocity[]): Accentuation[] {
+    private calculateAccentuations(velocities: Velocity[], neutralEnd?: boolean): Accentuation[] {
         const scale = this.calculateScale(velocities)
         if (scale === 0) return []
 
@@ -72,7 +74,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 const next = arr[i + 1]
                 if (next === undefined) return null
 
-                const transitionTo = ((i === arr.length - 2) && this.options.neutralEnd)
+                const transitionTo = ((i === arr.length - 2) && neutralEnd)
                     ? 0
                     : next.avgVelocityChange / scale
                     
@@ -113,7 +115,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
             const velocities = this.extractVelocities(cell, msm)
             let scale = this.calculateScale(velocities)
-            const accentuations = this.calculateAccentuations(velocities)
+            const accentuations = this.calculateAccentuations(velocities, cell.neutralEnd)
 
             if (accentuations.length === 0 || scale === 0) return
 
@@ -130,7 +132,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 const currentScale = this.calculateScale(currentVelocities)
                 if (currentScale === 0) break
 
-                const currentAccentuations = this.calculateAccentuations(currentVelocities)
+                const currentAccentuations = this.calculateAccentuations(currentVelocities, cell.neutralEnd)
 
                 const hasSameBeatStructure = currentAccentuations.every(((a) => {
                     // not finding any corresponding accentuation
@@ -153,7 +155,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
             const accentuationPatternDef: AccentuationPatternDef = {
                 type: 'accentuationPatternDef',
-                name: v4(),
+                name: cell.name || v4(),
                 length: ((cell.end - cell.start) / 4 / 720) * msm.timeSignature.denominator,
                 children: accentuations,
             }

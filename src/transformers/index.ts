@@ -1,4 +1,5 @@
 export * from "./asynchrony/InterpolateAsynchrony"
+export * from './accentuation'
 export * from "./articulation"
 export * from "./dynamics"
 export * from "./ornamentation"
@@ -9,6 +10,5 @@ export * from "./rubato/CombineAdjacentRubatos"
 export { TransformationOptions } from "./Transformer"
 export * from './tempo/tempoCalculations'
 export * from './pedal/InsertPedalInstructions'
-export * from './accentuation/InsertMetricalAccentuation'
 export * from './ChainValidation'
 
