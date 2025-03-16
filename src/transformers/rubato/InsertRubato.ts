@@ -1,7 +1,6 @@
-import { MPM, Rubato, Scope } from "mpm-ts"
+import { MPM, Rubato } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
-import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
-import { v4 } from "uuid"
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp, DefinedProperty } from "../../utils/utils"
 import { TranslatePhyiscalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
@@ -125,7 +124,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
             rubatos.push({
                 type: 'rubato',
-                'xml:id': `rubato_${v4()}`,
+                'xml:id': generateId('rubato', frame.date, mpm),
                 date: frame.date,
                 frameLength: frame.length,
                 intensity,

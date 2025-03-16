@@ -1,7 +1,7 @@
 import { v4 } from "uuid";
 import { MPM, Scope, Tempo } from "mpm-ts";
 import { MSM, MsmNote } from "../../msm";
-import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { AbstractTransformer, generateId, TransformationOptions } from "../Transformer";
 import { TempoWithEndDate } from "./tempoCalculations";
 
 export type Point = [number, number];
@@ -97,6 +97,13 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
                 return this.approximateTempo(segment)
             })
             .filter((segment): segment is TempoWithEndDate => segment !== null)
+            .sort((a, b) => a.date - b.date)
+            .map(t => {
+                return {
+                    ...t, 
+                    'xml:id': generateId('tempo', t.date, mpm)
+                }
+            })
 
         mpm.insertInstructions(tempos.sort((a, b) => a.date - b.date), this.options?.part, true)
 

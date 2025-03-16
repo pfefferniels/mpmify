@@ -1,8 +1,7 @@
 import { MPM, Rubato } from "mpm-ts"
-import { AbstractTransformer, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
 import { InsertRubato } from "./InsertRubato"
 import { MSM } from "../../msm"
-import { v4 } from "uuid"
 
 export interface CombineAdjacentRubatoOptions extends ScopedTransformationOptions {    // adjacentRubatos: Rubato[]
     /**
@@ -70,7 +69,7 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
                             type: 'rubato',
                             date,
                             frameLength: ref.frameLength,
-                            'xml:id': `rubato_${v4()}`,
+                            'xml:id': generateId('rubato', date, mpm),
                         }, this.options.scope)
                     }
 

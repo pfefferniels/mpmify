@@ -1,8 +1,7 @@
 import { MPM, Ornament, Scope } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
-import { v4 } from "uuid"
+import { AbstractTransformer, generateId, TransformationOptions, Transformer } from "../Transformer"
 
 export type DynamicsGradient = { from: number, to: number }
 export type DatedDynamicsGradient = Map<number, DynamicsGradient>
@@ -86,7 +85,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
             const ornament: Ornament = {
                 'type': 'ornament',
-                'xml:id': 'ornament_' + v4(),
+                'xml:id': generateId('ornament', date, mpm),
                 date,
                 'name.ref': 'neutralArpeggio',
                 'transition.from': gradient.from,

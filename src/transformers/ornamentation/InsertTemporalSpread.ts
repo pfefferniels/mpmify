@@ -1,8 +1,7 @@
 import { MPM, Ornament } from "mpm-ts"
-import { MSM } from "../../msm"
+import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
-import { v4 } from "uuid"
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none'
 export type DatedArpeggioPlacement = Map<number, ArpeggioPlacement>
@@ -142,29 +141,63 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             const duration = sortedByOnset[sortedByOnset.length - 1]["midi.onset"] - sortedByOnset[0]["midi.onset"]
             if (duration * 1000 <= (this.options?.durationThreshold || 0)) continue
 
-            // helper function to check wether a value is in the shift tolerance
-            const shiftTolerance = this.options?.noteOffShiftTolerance || 0
-            const inToleranceRange = (x: number, target: number) => x >= (target - (shiftTolerance / 1000) / 2) && x <= (target + (shiftTolerance / 1000) / 2)
-
             // by default, no offset shifting is applied
             let noteOffShift: boolean | 'monophonic' = false
             const firstNote = sortedByOnset[0]
+            const lastNote = sortedByOnset[sortedByOnset.length - 1]
 
-            // if every onset is in the tolerance range of the previous offset, 
-            // set noteoff.shift to monophonic. This should be tested first, 
-            // since it might be a special case of arpeggiation with regular note off shifting.
-            if (sortedByOnset.every((note, i, notes) => {
-                if (i === 0) return true
-                const lastOffset = notes[i - 1]['midi.onset'] + notes[i - 1]['midi.duration']
-                return inToleranceRange(note['midi.onset'], lastOffset)
-            })) {
-                noteOffShift = 'monophonic'
+            const offsetOf = (note: MsmNote) => {
+                return note['midi.onset'] + note['midi.duration']
             }
-            // if every note has the same duration (including tolerance) like the first note, 
-            // set noteoff.shift to true
-            else if (sortedByOnset.every(note => inToleranceRange(note['midi.duration'], firstNote['midi.duration']))) {
+
+            const sortedByOffset = sortedByOnset.slice().sort((a, b) => offsetOf(a) - offsetOf(b))
+            const sameOrder = sortedByOnset.every((note, i) => note === sortedByOffset[i])
+
+            const offsetScaleTolerance = 0.8
+            const minOffsetDistance = duration * offsetScaleTolerance
+            if (offsetOf(lastNote) - offsetOf(firstNote) > minOffsetDistance && sameOrder) {
                 noteOffShift = true
             }
+
+            const monophonicTolerance = 20 / 1000 // in ms
+            let isMonophonic = true
+            for (let i = 1; i < sortedByOnset.length; i++) {
+                const prev = sortedByOnset[i - 1]
+                const curr = sortedByOnset[i]
+
+                if (Math.abs(offsetOf(prev) - curr["midi.onset"]) > monophonicTolerance) {
+                    isMonophonic = false;
+                    break;
+                }
+            }
+
+            if (isMonophonic) {
+                noteOffShift = 'monophonic'
+            }
+
+            /*
+            if (noteOffShift === 'monophonic') {
+                for (let i = 0; i < sortedByOnset.length - 1; i++) {
+                    const curr = sortedByOnset[i]
+                    const next = sortedByOnset[i + 1]
+
+                    curr["midi.duration"] = next["midi.onset"] - curr["midi.onset"]
+                }
+            }
+            else if (noteOffShift) {
+                const meanDuration = sortedByOnset.map(n => n["midi.duration"]).reduce((a, b) => a + b, 0) / sortedByOnset.length
+                sortedByOnset.forEach(note => {
+                    note["midi.duration"] = meanDuration
+                })
+            }
+            else {
+                const newOffset = firstNote['midi.onset'] + firstNote['midi.duration']
+                for (let i = 1; i < sortedByOnset.length; i++) {
+                    const note = sortedByOnset[i]
+                    note['midi.duration'] = newOffset - note['midi.onset']
+                }
+            }
+                */
 
             // define the frame start based on the given option
             const frameLength = duration * 1000
@@ -201,7 +234,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
 
             ornaments.push({
                 'type': 'ornament',
-                'xml:id': 'ornament_' + v4(),
+                'xml:id': generateId('ornament', date, mpm),
                 date,
                 'name.ref': 'neutralArpeggio',
                 'noteoff.shift': noteOffShift,

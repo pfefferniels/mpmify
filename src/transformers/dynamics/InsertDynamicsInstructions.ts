@@ -1,6 +1,6 @@
 import { Dynamics, MPM, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
 import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
@@ -39,6 +39,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
             const relevantPoints = points.filter(p => p.date >= startDate && (endDate ? p.date <= endDate : true))
             const instruction = approximateDynamics(relevantPoints)
             if (instruction) {
+                instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
                 dynamics.push(instruction)
             }
         }
