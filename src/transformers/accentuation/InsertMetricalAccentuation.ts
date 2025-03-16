@@ -1,6 +1,6 @@
 import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM, Scope } from "mpm-ts";
 import { MSM } from "../../msm";
-import { AbstractTransformer, ScopedTransformationOptions, Transformer } from "../Transformer";
+import { AbstractTransformer, generateId, ScopedTransformationOptions, Transformer } from "../Transformer";
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
 
@@ -15,7 +15,6 @@ export type AccentuationCell = {
 interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
     cells: AccentuationCell[]
     scaleTolerance: number
-    neutralEnd: boolean
 }
 
 type Velocity = {
@@ -35,7 +34,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             scope: 'global',
             cells: [],
             scaleTolerance: 0,
-            neutralEnd: false
         }
     }
 
@@ -166,7 +164,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             const newPattern: AccentuationPattern = {
                 type: 'accentuationPattern',
                 'name.ref': accentuationPatternDef.name,
-                "xml:id": v4(),
+                "xml:id": generateId('accentuationPattern', cell.start, mpm),
                 date: cell.start,
                 scale,
                 loop: loop || undefined,
@@ -178,7 +176,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                     type: 'accentuationPattern',
                     'name.ref': 'neutral',
                     date: currentCell.start,
-                    "xml:id": v4(),
+                    "xml:id": generateId('accentuationPattern', currentCell.start, mpm),
                     scale: 0,
                     loop: undefined
                 }, this.options.scope)
@@ -186,6 +184,8 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
             this.removeAccentuationDistortion(newPattern, msm, mpm, this.options.scope)
         })
+
+        console.log('getting styles', this.options.scope)
 
         if (mpm.getStyles('accentuationPattern', this.options.scope).length === 0) {
             mpm.insertStyle({
