@@ -29,14 +29,16 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             const tickDate = pedal.tickDate
             const tickDuration = pedal.tickDuration
 
-            mpm.insertInstruction({
-                'xml:id': `${pedal['xml:id']}_start`,
-                type: 'movement',
-                date: tickDate - this.options.changeDuration / 2, 
-                position: 0,
-                "transition.to": 1,
-                controller: pedal.type
-            }, 'global')
+            if (this.options.changeDuration) {
+                mpm.insertInstruction({
+                    'xml:id': `${pedal['xml:id']}_start`,
+                    type: 'movement',
+                    date: tickDate - this.options.changeDuration / 2,
+                    position: 0,
+                    "transition.to": 1,
+                    controller: pedal.type
+                }, 'global')
+            }
 
             mpm.insertInstruction({
                 'xml:id': `${pedal['xml:id']}_moveDown`,
@@ -46,14 +48,16 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
                 controller: pedal.type
             }, 'global')
 
-            mpm.insertInstruction({
-                'xml:id': `${pedal['xml:id']}_moveUp`,
-                type: 'movement',
-                date: tickDate + tickDuration - this.options.changeDuration / 2,
-                position: 1,
-                "transition.to": 0,
-                controller: pedal.type
-            }, 'global')
+            if (this.options.changeDuration) {
+                mpm.insertInstruction({
+                    'xml:id': `${pedal['xml:id']}_moveUp`,
+                    type: 'movement',
+                    date: tickDate + tickDuration - this.options.changeDuration / 2,
+                    position: 1,
+                    "transition.to": 0,
+                    controller: pedal.type
+                }, 'global')
+            }
 
             mpm.insertInstruction({
                 'xml:id': `${pedal['xml:id']}_end`,
