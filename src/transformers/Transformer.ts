@@ -1,4 +1,4 @@
-import { AppInfo, MPM, Scope } from "mpm-ts";
+import { AppInfo, InstructionType, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
@@ -80,3 +80,10 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 }
 
 export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
+
+export const generateId = (type: InstructionType, date: number, mpm: MPM) => {
+    const instructions = mpm.getInstructions(type)
+    const n = instructions.filter(i => i.date === date).length
+    if (n === 0) return `${type}_${date}`
+    return `${type}_${date}_${n}`
+}
