@@ -45,11 +45,11 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     
     // this method should not be overridden
     public run(msm: MSM, mpm: MPM) {
-        this.insertMetadata(mpm)
-
         const mpmRecording = new MPMRecording(mpm)
         this.transform(msm, mpmRecording)
         this.created = mpmRecording.created
+
+        this.insertMetadata(mpm)
     }
 
     protected abstract transform(msm: MSM, mpm: MPM);
@@ -73,8 +73,18 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
         appInfo.children.push({
             type: 'transformation',
+            'xml:id': this.id,
             name: this.name,
-            cdata: JSON.stringify(this.options)
+            cdata: JSON.stringify(this.options),
+        })
+
+        this.created.forEach(id => {
+            const instruction = mpm.getInstructions().find(i => i['xml:id'] === id)
+            if (!instruction) {
+                return
+            }
+
+            instruction.corresp = this.id
         })
     }
 }
