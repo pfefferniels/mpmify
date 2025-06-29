@@ -14,6 +14,7 @@ type TemporaryAttributes = Partial<{
     tickDate: number
     tickDuration: number
     absoluteVelocityChange: number
+    source: string
 }>
 
 export type MsmPedal = {

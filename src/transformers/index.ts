@@ -11,4 +11,4 @@ export { TransformationOptions } from "./Transformer"
 export * from './tempo/tempoCalculations'
 export * from './pedal/InsertPedalInstructions'
 export * from './ChainValidation'
-
+export * from './choice/MakeChoice'
