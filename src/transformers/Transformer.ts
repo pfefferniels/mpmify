@@ -25,6 +25,7 @@ type TransformerConstructor = new (...args: any[]) => Transformer;
 export interface Transformer {
     id: string
     name: string
+    note?: string
     options: TransformationOptions
     created: string[]
     run(msm: MSM, mpm: MPM): void
@@ -39,10 +40,11 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     abstract name: string
     options: OptionsType
     created: string[] = []
-    
+    note?: string
+
     abstract requires: Array<TransformerConstructor>
     shouldRunBefore: Array<TransformerConstructor>
-    
+
     // this method should not be overridden
     public run(msm: MSM, mpm: MPM) {
         const mpmRecording = new MPMRecording(mpm)
@@ -68,7 +70,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         }
 
         if (overwrite) {
-            appInfo.children = appInfo.children.filter(el => el.name !== this.name)
+            appInfo.children = appInfo.children.filter(el => el["xml:id"] !== this.id)
         }
 
         appInfo.children.push({
@@ -76,6 +78,10 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
             'xml:id': this.id,
             name: this.name,
             cdata: JSON.stringify(this.options),
+            children: this.note ? [{
+                type: 'note',
+                text: this.note
+            }] : []
         })
 
         this.created.forEach(id => {
