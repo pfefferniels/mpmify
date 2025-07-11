@@ -32,11 +32,11 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         const points = this.asPoints(msm, this.options.scope)
 
         const dynamics: Dynamics[] = []
-        for (let i = 0; i < this.options.markers.length; i++) {
+        for (let i = 0; i < this.options.markers.length - 1; i++) {
             const startDate = markers[i]
             const endDate = markers[i + 1]
 
-            const relevantPoints = points.filter(p => p.date >= startDate && (endDate ? p.date <= endDate : true))
+            const relevantPoints = points.filter(p => p.date >= startDate && p.date <= endDate)
             const instruction = approximateDynamics(relevantPoints)
             if (instruction) {
                 instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
