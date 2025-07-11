@@ -1,5 +1,3 @@
-export * from './InsertRelativeDuration'
-export * from './InsertRelativeVolume'
-export * from './StylizeArticulation'
-export * from './CompressArticulation'
+export * from './InsertArticulation'
+export * from './MakeDefaultArticulation'
 
