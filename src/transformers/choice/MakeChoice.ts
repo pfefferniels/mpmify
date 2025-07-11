@@ -1,7 +1,6 @@
 import { MPM } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, ScopedTransformationOptions, TransformationOptions, Transformer } from "../Transformer"
-import { TranslatePhyiscalTimeToTicks } from "../tempo"
+import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
 interface Choice {
     prefer: string 
