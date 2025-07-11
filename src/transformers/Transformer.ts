@@ -2,6 +2,7 @@ import { InstructionType, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
+import { Argumentation } from "../Work";
 
 /**
  * 
@@ -40,7 +41,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     abstract name: string
     options: OptionsType
     created: string[] = []
-    note?: string
+    argumentation?: Argumentation
 
     abstract requires: Array<TransformerConstructor>
     shouldRunBefore: Array<TransformerConstructor>
@@ -63,7 +64,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
                 return
             }
 
-            instruction.corresp = this.id
+            instruction.corresp = this.argumentation?.id || this.id
         })
     }
 }
