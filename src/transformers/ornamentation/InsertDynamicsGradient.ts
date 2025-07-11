@@ -6,18 +6,28 @@ import { AbstractTransformer, generateId, TransformationOptions, Transformer } f
 export type DynamicsGradient = { from: number, to: number }
 export type DatedDynamicsGradient = Map<number, DynamicsGradient>
 
+type SingleGradient = {
+    date: number
+    gradient: DynamicsGradient
+}
+
+type DefaultGradients = {
+    crescendo: DynamicsGradient
+    decrescendo: DynamicsGradient
+}
+
+const isSingleGradient = (gradient: SingleGradient | DefaultGradients): gradient is SingleGradient => {
+    return (gradient as SingleGradient).date !== undefined && (gradient as SingleGradient).gradient !== undefined;
+}
+
+
 export interface InsertDynamicsGradientOptions extends TransformationOptions {
     /**
      * The part on which the transformer is to be applied to.
      */
     part: Scope
 
-    /**
-     * Allows to define a custom dynamics gradient for each chord.
-     * If no gradient is defined, the transformer will use [-1, 0] 
-     * as default for crescendo and [0, -1] for decrescendo.
-     */
-    gradients: DatedDynamicsGradient
+    gradient: SingleGradient | DefaultGradients
 
     /**
      * Whether to sort the velocities of the notes in the chord.
@@ -46,57 +56,80 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         // set the default options
         this.options = options || {
             part: 'global',
-            gradients: new Map(),
+            gradient: {
+                crescendo: { from: -1, to: 0 },
+                decrescendo: { from: 0, to: -1 }
+            },
             sortVelocities: false
         }
     }
 
+    private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient: DynamicsGradient) => {
+        let arpeggioNotes = msm.asChords(this.options.part).get(date)
+
+        if (this.options.sortVelocities) {
+            this.sortVelocities(arpeggioNotes)
+        }
+
+        // only consider notes with a defined onset time
+        arpeggioNotes = arpeggioNotes
+            .filter(note => isDefined(note['midi.onset']))
+            .sort((a, b) => a['midi.onset'] - b['midi.onset'])
+
+        // The dynamics gradient is the transition
+        // between first and last arpeggio note
+        const firstVel = arpeggioNotes[0]["midi.velocity"]
+        const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
+
+        const dynamicDiff = lastVel - firstVel
+        if (dynamicDiff === 0) return
+
+        const diffVel = lastVel - firstVel
+        const diffGradient = gradient.to - gradient.from
+        const scale = diffVel / diffGradient
+        const standard = firstVel - gradient.from * scale
+
+        if (scale === 0) return
+
+        const ornament: Ornament = {
+            'type': 'ornament',
+            'xml:id': generateId('ornament', date, mpm),
+            date,
+            'name.ref': 'neutralArpeggio',
+            'transition.from': gradient.from,
+            'transition.to': gradient.to,
+            scale
+        }
+        mpm.insertInstruction(ornament, this.options.part)
+
+        arpeggioNotes.forEach(note => {
+            note['midi.velocity'] = standard
+        })
+    }
+
     protected transform(msm: MSM, mpm: MPM) {
-        const chords = msm.asChords(this.options?.part)
-        for (let [date, arpeggioNotes] of chords) {
-            if (this.options.sortVelocities) {
-                this.sortVelocities(arpeggioNotes)
+        if (isSingleGradient(this.options.gradient)) {
+            this.applyGradient(msm, mpm, this.options.gradient.date, this.options.gradient.gradient)
+        }
+        else {
+            const chords = msm.asChords(this.options?.part)
+            for (let [date, arpeggioNotes] of chords) {
+                // only consider notes with a defined onset time
+                arpeggioNotes = arpeggioNotes
+                    .filter(note => isDefined(note['midi.onset']))
+                    .sort((a, b) => a['midi.onset'] - b['midi.onset'])
+
+                const firstVel = arpeggioNotes[0]["midi.velocity"]
+                const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
+                const dynamicsDiff = lastVel - firstVel
+
+                if (dynamicsDiff > 0) {
+                    this.applyGradient(msm, mpm, date, this.options.gradient.crescendo)
+                }
+                else if (dynamicsDiff < 0) {
+                    this.applyGradient(msm, mpm, date, this.options.gradient.decrescendo)
+                }
             }
-
-            // only consider notes with a defined onset time
-            arpeggioNotes = arpeggioNotes
-                .filter(note => isDefined(note['midi.onset']))
-                .sort((a, b) => a['midi.onset'] - b['midi.onset'])
-
-            // The dynamics gradient is the transition
-            // between first and last arpeggio note
-            const firstVel = arpeggioNotes[0]["midi.velocity"]
-            const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
-
-            let gradient: DynamicsGradient = this.options.gradients.get(date)
-            if (!gradient) {
-                const dynamicDiff = lastVel - firstVel
-                if (dynamicDiff === 0) continue
-                else if (dynamicDiff > 0) gradient = { from: -1, to: 0 }
-                else if (dynamicDiff < 0) gradient = { from: 0, to: -1 }
-            }
-
-            const diffVel = lastVel - firstVel
-            const diffGradient = gradient.to - gradient.from
-            const scale = diffVel / diffGradient
-            const standard = firstVel - gradient.from * scale
-
-            if (scale === 0) continue
-
-            const ornament: Ornament = {
-                'type': 'ornament',
-                'xml:id': generateId('ornament', date, mpm),
-                date,
-                'name.ref': 'neutralArpeggio',
-                'transition.from': gradient.from,
-                'transition.to': gradient.to,
-                scale
-            }
-            mpm.insertInstruction(ornament, this.options.part)
-
-            arpeggioNotes.forEach(note => {
-                note['midi.velocity'] = standard
-            })
         }
     }
 
