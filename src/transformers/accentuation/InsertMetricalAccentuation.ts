@@ -4,16 +4,12 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions, Transform
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
 
-export interface AccentuationCell {
-    name?: string
+interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
+    name: string
     start: number
     end: number
     beatLength: number
     neutralEnd?: boolean
-}
-
-interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
-    cells: AccentuationCell[]
     scaleTolerance: number
 }
 
@@ -32,12 +28,16 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         // set the default options
         this.options = options || {
             scope: 'global',
-            cells: [],
+            name: 'my-accentuation',
+            start: 0,
+            end: 0,
+            beatLength: 0.25,
+            neutralEnd: false,
             scaleTolerance: 0,
         }
     }
 
-    private extractVelocities({ start, end, beatLength }: AccentuationCell, msm: MSM): Velocity[] {
+    private extractVelocities({ start, end, beatLength }: InsertMetricalAccentuationOptions, msm: MSM): Velocity[] {
         const ppq = 720
         const velocities = []
         const frameLength = end - start
@@ -75,7 +75,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 const transitionTo = ((i === arr.length - 2) && neutralEnd)
                     ? 0
                     : next.avgVelocityChange / scale
-                    
+
                 const scaled = v.avgVelocityChange / scale
                 return ({
                     type: 'accentuation' as 'accentuation',
@@ -90,8 +90,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        this.options.cells.sort((a, b) => a.start - b.start)
-
         if (!mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', this.options.scope)
             .find(def => def.name === 'neutral')) {
             mpm.insertDefinition({
@@ -108,82 +106,88 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             }, this.options.scope)
         }
 
-        this.options.cells.forEach((cell, i) => {
-            const nextCell = this.options.cells.at(i + 1)
+        const cell = {
+            start: this.options.start,
+            end: this.options.end,
+            name: this.options.name,
+            neutralEnd: this.options.neutralEnd
+        }
 
-            const velocities = this.extractVelocities(cell, msm)
-            let scale = this.calculateScale(velocities)
-            const accentuations = this.calculateAccentuations(velocities, cell.neutralEnd)
+        const nextCell = mpm.getInstructions<AccentuationPattern>('accentuationPattern', this.options.scope)
+            .find(c => c.date > this.options.start);
 
-            if (accentuations.length === 0 || scale === 0) return
+        const velocities = this.extractVelocities(this.options, msm)
+        let scale = this.calculateScale(velocities)
+        const accentuations = this.calculateAccentuations(velocities, this.options.neutralEnd)
 
-            // try to loop until we cannot fit the data into the 
-            // pattern anymore or we reach the next cell
-            const currentCell = { ...cell }
-            let iterations = 0;
-            while (currentCell.end < (nextCell?.start || msm.end)) {
-                const cellLength = currentCell.end - currentCell.start
-                currentCell.start += cellLength
-                currentCell.end += cellLength
+        if (accentuations.length === 0 || scale === 0) return
 
-                const currentVelocities = this.extractVelocities(currentCell, msm)
-                const currentScale = this.calculateScale(currentVelocities)
-                if (currentScale === 0) break
+        // try to loop until we cannot fit the data into the 
+        // pattern anymore or we reach the next cell
+        const currentCell = { ...cell }
+        let iterations = 0;
+        while (currentCell.end < (nextCell?.date || msm.end)) {
+            const cellLength = currentCell.end - currentCell.start
+            currentCell.start += cellLength
+            currentCell.end += cellLength
 
-                const currentAccentuations = this.calculateAccentuations(currentVelocities, cell.neutralEnd)
+            const currentVelocities = this.extractVelocities(this.options, msm)
+            const currentScale = this.calculateScale(currentVelocities)
+            if (currentScale === 0) break
 
-                const hasSameBeatStructure = currentAccentuations.every(((a) => {
-                    // not finding any corresponding accentuation
-                    // does not contradict to continue looping
-                    const corresp = accentuations.find(other => other.beat === a.beat)
-                    if (!corresp) return true
+            const currentAccentuations = this.calculateAccentuations(currentVelocities, this.options.neutralEnd)
 
-                    return Math.round(a.value) === Math.round(corresp.value)
-                }))
+            const hasSameBeatStructure = currentAccentuations.every(((a) => {
+                // not finding any corresponding accentuation
+                // does not contradict to continue looping
+                const corresp = accentuations.find(other => other.beat === a.beat)
+                if (!corresp) return true
 
-                const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.scaleTolerance
+                return Math.round(a.value) === Math.round(corresp.value)
+            }))
 
-                if (!hasSameBeatStructure || !scaleWithinRange) {
-                    break;
-                }
+            const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.scaleTolerance
 
-                scale = (scale * iterations + currentScale) / (iterations + 1)
-                iterations++;
+            if (!hasSameBeatStructure || !scaleWithinRange) {
+                break;
             }
 
-            const accentuationPatternDef: AccentuationPatternDef = {
-                type: 'accentuationPatternDef',
-                name: cell.name || v4(),
-                length: ((cell.end - cell.start) / 4 / 720) * msm.timeSignature.denominator,
-                children: accentuations,
-            }
+            scale = (scale * iterations + currentScale) / (iterations + 1)
+            iterations++;
+        }
 
-            mpm.insertDefinition(accentuationPatternDef, this.options.scope)
+        const accentuationPatternDef: AccentuationPatternDef = {
+            type: 'accentuationPatternDef',
+            name: this.options.name,
+            length: ((cell.end - cell.start) / 4 / 720) * msm.timeSignature.denominator,
+            children: accentuations,
+        }
 
-            const loop = currentCell.start > cell.end
-            const newPattern: AccentuationPattern = {
+        mpm.insertDefinition(accentuationPatternDef, this.options.scope)
+
+        const loop = currentCell.start > cell.end
+        const newPattern: AccentuationPattern = {
+            type: 'accentuationPattern',
+            'name.ref': accentuationPatternDef.name,
+            "xml:id": generateId('accentuationPattern', cell.start, mpm),
+            date: cell.start,
+            scale,
+            loop: loop || undefined,
+        }
+        mpm.insertInstruction(newPattern, this.options.scope)
+
+        if (loop) {
+            mpm.insertInstruction({
                 type: 'accentuationPattern',
-                'name.ref': accentuationPatternDef.name,
-                "xml:id": generateId('accentuationPattern', cell.start, mpm),
-                date: cell.start,
-                scale,
-                loop: loop || undefined,
-            }
-            mpm.insertInstruction(newPattern, this.options.scope)
+                'name.ref': 'neutral',
+                date: currentCell.start,
+                "xml:id": generateId('accentuationPattern', currentCell.start, mpm),
+                scale: 0,
+                loop: undefined
+            }, this.options.scope)
+        }
 
-            if (loop) {
-                mpm.insertInstruction({
-                    type: 'accentuationPattern',
-                    'name.ref': 'neutral',
-                    date: currentCell.start,
-                    "xml:id": generateId('accentuationPattern', currentCell.start, mpm),
-                    scale: 0,
-                    loop: undefined
-                }, this.options.scope)
-            }
-
-            this.removeAccentuationDistortion(newPattern, msm, mpm, this.options.scope)
-        })
+        this.removeAccentuationDistortion(newPattern, msm, mpm, this.options.scope)
 
         console.log('getting styles', this.options.scope)
 
