@@ -50,13 +50,9 @@ const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
     return lowerBound - rubato.date;
 };
 
-export type Frame = {
+export interface InsertRubatoOptions extends ScopedTransformationOptions {
     date: number
     length: number
-}
-
-export interface InsertRubatoOptions extends ScopedTransformationOptions {
-    frames: Frame[]
 }
 
 /**
@@ -72,70 +68,69 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         // set the default options
         this.options = options || {
             scope: 'global',
-            frames: []
+            date: 0,
+            length: 720
         }
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        const rubatos: Rubato[] = []
-        for (const frame of this.options.frames) {
-            const chords = [...msm.asChords(this.options.scope).entries()]
-                .filter(([date, _]) => date >= frame.date && date <= frame.date + frame.length)
+        const frame = { date: this.options.date, length: this.options.length }
+        const chords = [...msm.asChords(this.options.scope).entries()]
+            .filter(([date, _]) => date >= frame.date && date <= frame.date + frame.length)
 
-            console.log('dealing with frame', frame, 'and adjusting', chords)
-            if (chords.length < 2) continue
+        console.log('dealing with frame', frame, 'and adjusting', chords)
+        if (chords.length < 2) return
 
-            // The rubato transformation can only be placed
-            // after a tempo interpolation. Make sure that 
-            // all notes have a tick date and a tick duration.
-            if (chords.some(([_, notes]) =>
-                notes.some(note => note.tickDate === undefined || note.tickDuration === undefined))
-            ) {
-                console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
-                continue
-            }
-
-            const startDate = avarageTickDate(chords[0][1] as DefinedProperty<MsmNote, 'tickDate'>[])
-            let lateStart =
-                clamp(
-                    0,
-                    (startDate - frame.date) / frame.length,
-                    0.9
-                )
-            if (lateStart === 0) lateStart = undefined
-
-            let earlyEnd: number | undefined
-            const endDate = avarageTickDate(chords[chords.length - 1][1] as DefinedProperty<MsmNote, 'tickDate'>[])
-            earlyEnd =
-                clamp(
-                    0.1,
-                    (endDate - frame.date) / frame.length,
-                    1
-                )
-            if (earlyEnd === 1) earlyEnd = undefined
-
-            const scaledDates = chords
-                .map(([, notes]) => {
-                    const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
-                    return (realDate - startDate) / (endDate - startDate)
-                })
-            
-            const intensity = determineIntensity(scaledDates)
-
-            rubatos.push({
-                type: 'rubato',
-                'xml:id': generateId('rubato', frame.date, mpm),
-                date: frame.date,
-                frameLength: frame.length,
-                intensity,
-                loop: false,
-                lateStart,
-                earlyEnd
-            })
+        // The rubato transformation can only be placed
+        // after a tempo interpolation. Make sure that 
+        // all notes have a tick date and a tick duration.
+        if (chords.some(([_, notes]) =>
+            notes.some(note => note.tickDate === undefined || note.tickDuration === undefined))
+        ) {
+            console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
+            return
         }
 
-        mpm.insertInstructions(rubatos, this.options.scope)
-        this.removeRubatoDistortionFrom(rubatos, msm, mpm)
+        const startDate = avarageTickDate(chords[0][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+        let lateStart =
+            clamp(
+                0,
+                (startDate - frame.date) / frame.length,
+                0.9
+            )
+        if (lateStart === 0) lateStart = undefined
+
+        let earlyEnd: number | undefined
+        const endDate = avarageTickDate(chords[chords.length - 1][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+        earlyEnd =
+            clamp(
+                0.1,
+                (endDate - frame.date) / frame.length,
+                1
+            )
+        if (earlyEnd === 1) earlyEnd = undefined
+
+        const scaledDates = chords
+            .map(([, notes]) => {
+                const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
+                return (realDate - startDate) / (endDate - startDate)
+            })
+
+        const intensity = determineIntensity(scaledDates)
+
+        const rubato: Rubato = {
+            type: 'rubato',
+            'xml:id': generateId('rubato', frame.date, mpm),
+            date: frame.date,
+            frameLength: frame.length,
+            intensity,
+            loop: false,
+            lateStart,
+            earlyEnd
+        }
+
+        mpm.insertInstruction(rubato, this.options.scope)
+        this.removeRubatoDistortionFrom([rubato], msm, mpm)
     }
 
     /**
@@ -155,7 +150,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         for (const note of affectedNotes) {
             if (!note.tickDuration) continue
 
-            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato',this.options.scope)[0];
+            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', this.options.scope)[0];
             if (!onsetRubato || !selectedRubatos.includes(onsetRubato)) continue
 
             const onsetInTicks = onsetRubato
