@@ -32,7 +32,7 @@ export interface ConfigurableTempoTransformerOptions extends TransformationOptio
      * Defines where new tempo instructions should be
      * set.
      */
-    segments: TempoSegment[]
+    segment: TempoSegment
     silentOnsets: SilentOnset[]
 
     /**
@@ -55,7 +55,11 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
         // set the default options
         this.options = options || {
             part: 'global',
-            segments: [],
+            segment: {
+                startDate: 0,
+                endDate: 0,
+                beatLength: 720
+            },
             silentOnsets: []
         }
     }
@@ -70,68 +74,44 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
         // make sure to delete the arbitrary silence before the first note onset
         msm.shiftToFirstOnset()
 
-        this.insertInstructionsBySegments(msm, mpm, this.options.segments)
+        this.insertInstructionBySegment(msm, mpm, this.options.segment)
     }
 
-    insertInstructionsBySegments(msm: MSM, mpm: MPM, segments: TempoSegment[]) {
-        if (segments.length < 1) {
-            console.log('At least one markers need to be specified')
-            return
-        }
-
+    insertInstructionBySegment(msm: MSM, mpm: MPM, segment: TempoSegment) {
         // remove all tempo instructions that should be overwritten by the new markers
-        this.removeAffectedTempoInstructions(mpm, this.options.part, segments)
+        this.removeAffectedTempoInstructions(mpm, this.options.part, segment)
 
-        const tempos = segments
-            .map(segment => {
-                const notes = msm.notesInPart(this.options.part)
-                const silentOnsets = this.options.silentOnsets
 
-                return pointsWithinSegment(segment, notes, silentOnsets)
-            })
-            .map(segment => {
-                if (segment.points.length < 2) {
-                    return null
-                }
+        const notes = msm.notesInPart(this.options.part)
+        const silentOnsets = this.options.silentOnsets
 
-                return this.approximateTempo(segment)
-            })
-            .filter((segment): segment is TempoWithEndDate => segment !== null)
-            .sort((a, b) => a.date - b.date)
-            .map(t => {
-                return {
-                    ...t, 
-                    'xml:id': generateId('tempo', t.date, mpm)
-                }
-            })
-
-        mpm.insertInstructions(tempos.sort((a, b) => a.date - b.date), this.options?.part, true)
-
-        // insert another tempo instruction at the very end
-        if (tempos.length > 0) {
-            const lastTempo = tempos[tempos.length - 1]
-
-            mpm.insertInstruction({
-                type: 'tempo',
-                date: lastTempo.endDate,
-                bpm: lastTempo["transition.to"] || lastTempo.bpm,
-                beatLength: lastTempo.beatLength,
-                "xml:id": `tempo_${v4()}`
-            }, this.options?.part)
+        const segmentWithPoints = pointsWithinSegment(segment, notes, silentOnsets)
+        if (segmentWithPoints.points.length < 2) {
+            return null
         }
+
+        const tempo = this.approximateTempo(segmentWithPoints)
+        tempo['xml:id'] = generateId('tempo', tempo.date, mpm)
+
+        mpm.insertInstruction(tempo, this.options?.part, true)
+
+        // insert a tempo instruction at the very end
+
+        mpm.insertInstruction({
+            type: 'tempo',
+            date: tempo.endDate,
+            bpm: tempo["transition.to"] || tempo.bpm,
+            beatLength: tempo.beatLength,
+            "xml:id": `tempo_${v4()}`
+        }, this.options?.part)
     }
 
     protected abstract approximateTempo(segment: TempoSegmentWithPoints): TempoWithEndDate
 
-    removeAffectedTempoInstructions(mpm: MPM, scope: Scope, markers: TempoSegment[]) {
-        const sorted = markers.slice().sort((a, b) => a.startDate - b.startDate)
+    removeAffectedTempoInstructions(mpm: MPM, scope: Scope, segment: TempoSegment) {
         const tempos = mpm.getInstructions<Tempo>('tempo', scope)
         for (const tempo of tempos) {
-            if (sorted.some((marker, index) =>
-                index < sorted.length - 1 &&
-                tempo.date >= marker.startDate &&
-                tempo.date < marker.endDate
-            )) {
+            if (tempo.date >= segment.startDate && tempo.date < segment.endDate) {
                 mpm.removeInstruction(tempo)
             }
         }
