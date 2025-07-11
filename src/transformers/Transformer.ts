@@ -64,7 +64,13 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
                 return
             }
 
-            instruction.corresp = this.argumentation?.id || this.id
+            const newCorresp = this.argumentation?.id || this.id
+            if (!instruction.corresp) {
+                instruction.corresp = newCorresp
+            }
+            else if (!instruction.corresp.split(' ').includes) {
+                instruction.corresp += ' ' + newCorresp
+            }
         })
     }
 }
