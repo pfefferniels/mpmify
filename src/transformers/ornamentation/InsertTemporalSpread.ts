@@ -64,11 +64,6 @@ const determineSortDirection = (arr: number[]) => {
 
 export interface InsertTemporalSpreadOptions extends ScopedTransformationOptions {
     /**
-     * the minimum number of notes an arpeggio is expected to have (inclusive)
-     */
-    minimumArpeggioSize: number
-
-    /**
      * The minimum amount of time in milliseconds an ornamentation should spread over
      */
     durationThreshold: number
@@ -106,7 +101,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
 
         // set the default options
         this.options = options || {
-            minimumArpeggioSize: 3,
             durationThreshold: 35,
             placement: new Map(),
             defaultPlacement: 'estimate',
@@ -118,15 +112,13 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
     protected transform(msm: MSM, mpm: MPM) {
         const ornaments: Ornament[] = []
 
-        console.log('options=', this.options)
-
         const chords = msm.asChords(this.options.scope)
         for (let [date, arpeggioNotes] of chords) {
             // only consider notes with a defined onset time
             arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
 
-            // make sure number of arpeggiated notes is greater or equal than minimum arpeggio size
-            if (arpeggioNotes.length < (this.options?.minimumArpeggioSize || 2)) continue
+            // Less than two notes cannot be arpeggiated
+            if (arpeggioNotes.length < 2) continue
 
             const sortedByOnset = arpeggioNotes.sort((a, b) => a['midi.onset'] - b['midi.onset'])
 
@@ -174,30 +166,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             if (isMonophonic) {
                 noteOffShift = 'monophonic'
             }
-
-            /*
-            if (noteOffShift === 'monophonic') {
-                for (let i = 0; i < sortedByOnset.length - 1; i++) {
-                    const curr = sortedByOnset[i]
-                    const next = sortedByOnset[i + 1]
-
-                    curr["midi.duration"] = next["midi.onset"] - curr["midi.onset"]
-                }
-            }
-            else if (noteOffShift) {
-                const meanDuration = sortedByOnset.map(n => n["midi.duration"]).reduce((a, b) => a + b, 0) / sortedByOnset.length
-                sortedByOnset.forEach(note => {
-                    note["midi.duration"] = meanDuration
-                })
-            }
-            else {
-                const newOffset = firstNote['midi.onset'] + firstNote['midi.duration']
-                for (let i = 1; i < sortedByOnset.length; i++) {
-                    const note = sortedByOnset[i]
-                    note['midi.duration'] = newOffset - note['midi.onset']
-                }
-            }
-                */
 
             // define the frame start based on the given option
             const frameLength = duration * 1000
