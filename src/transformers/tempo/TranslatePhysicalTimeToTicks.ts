@@ -2,7 +2,7 @@ import { MPM, Ornament, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt } from "./tempoCalculations";
-import { ApproximateBezierTempo } from "./ApproximateBezierTempo";
+import { ApproximateLogarithmicTempo } from "./ApproximateLogarithmicTempo";
 
 interface TempoWithEndDate extends Tempo {
     endDate: number
@@ -29,7 +29,7 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
  */
 export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslatePhyiscalTimeToTicksOptions> {
     name = 'TranslatePhyiscalTimeToTicks'
-    requires = [ApproximateBezierTempo]
+    requires = [ApproximateLogarithmicTempo]
 
     constructor(options?: TranslatePhyiscalTimeToTicksOptions) {
         super()
@@ -73,6 +73,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 currentMs = note["midi.onset"] * 1000
             }
         }
+        console.log('no tempo found for', ms, 'amongst', tempos)
     }
 
     private ticksToMs(ticks: number, tempos: Tempo[], msm: MSM) {
@@ -119,11 +120,15 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 }
 
                 const ornamentMs = this.ticksToMs(ornament.date, tempos, msm)
+                console.log('ornamentMs', ornamentMs)
+
                 const frameStartMs = ornamentMs + ornament["frame.start"]
                 const frameEndMs = frameStartMs + ornament.frameLength
 
                 const frameStartTicks = this.msToTicks(frameStartMs, tempos, msm)
                 const frameEndTicks = this.msToTicks(frameEndMs, tempos, msm)
+
+                console.log('ornament.date', ornament.date, 'frameStartTicks', frameStartTicks, 'frameEndTicks', frameEndTicks)
 
                 ornament["frame.start"] = frameStartTicks - ornament.date
                 ornament['frameLength'] = frameEndTicks - frameStartTicks
