@@ -62,29 +62,10 @@ const determineSortDirection = (arr: number[]) => {
         Math.sign(val - arr[i]) === direction) ? direction : 0;
 }
 
-export interface InsertTemporalSpreadOptions extends ScopedTransformationOptions {
-    /**
-     * The minimum amount of time in milliseconds an ornamentation should spread over
-     */
-    durationThreshold: number
-
-    /**
-     * The tolerance in milliseconds applied when calculating the noteoff.shift attribute.
-     */
-    noteOffShiftTolerance: number
-
-    /**
-     * Where to place the arpeggio in relation to the beat?
-     * Provides the placements for single dates. If a date
-     * is not provided, the default placement is used instead.
-     */
-    placement: DatedArpeggioPlacement
-
-    /**
-     * Fallback placement if no placement is provided for a date.
-     */
-    defaultPlacement: ArpeggioPlacement
-}
+export type InsertTemporalSpreadOptions =
+    & ScopedTransformationOptions
+    & { placement: ArpeggioPlacement, noteOffShiftTolerance: number }
+    & ({ date: number } | { durationThreshold: number });
 
 /**
  * Interpolates arpeggiated chords as ornaments, inserts them as physical
@@ -102,8 +83,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         // set the default options
         this.options = options || {
             durationThreshold: 35,
-            placement: new Map(),
-            defaultPlacement: 'estimate',
+            placement: 'estimate',
             noteOffShiftTolerance: 500,
             scope: 'global'
         }
@@ -114,6 +94,11 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
 
         const chords = msm.asChords(this.options.scope)
         for (let [date, arpeggioNotes] of chords) {
+            if ('date' in this.options && date !== this.options.date) {
+                // if a date is specified, only process that date
+                continue
+            }
+
             // only consider notes with a defined onset time
             arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
 
@@ -131,7 +116,9 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
 
             // the arpeggio's duration is the time distance between first and last onset
             const duration = sortedByOnset[sortedByOnset.length - 1]["midi.onset"] - sortedByOnset[0]["midi.onset"]
-            if (duration * 1000 <= (this.options?.durationThreshold || 0)) continue
+            if ('durationThreshold' in this.options) {
+                if (duration * 1000 <= (this.options?.durationThreshold || 0)) continue
+            }
 
             // by default, no offset shifting is applied
             let noteOffShift: boolean | 'monophonic' = false
@@ -171,7 +158,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             const frameLength = duration * 1000
             let frameStart: number, newOnset: number
 
-            const placement = this.options.placement.get(date) || this.options.defaultPlacement
+            const placement = this.options.placement
 
             if (placement === 'none') {
                 // leave everything as it is
