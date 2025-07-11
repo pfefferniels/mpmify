@@ -1,4 +1,4 @@
-import { AppInfo, InstructionType, MPM, Scope } from "mpm-ts";
+import { InstructionType, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
@@ -56,34 +56,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
     protected abstract transform(msm: MSM, mpm: MPM);
 
-    private insertMetadata(mpm: MPM, overwrite = true) {
-        let appInfo = mpm.doc.metadata.find(el => el.type === 'appInfo') as AppInfo | undefined
-        if (!appInfo) {
-            appInfo = {
-                type: 'appInfo',
-                name: 'mpmify',
-                url: 'https://github.com/pfefferniels/mpmify',
-                version: '0.1',
-                children: []
-            }
-            mpm.doc.metadata.push(appInfo)
-        }
-
-        if (overwrite) {
-            appInfo.children = appInfo.children.filter(el => el["xml:id"] !== this.id)
-        }
-
-        appInfo.children.push({
-            type: 'transformation',
-            'xml:id': this.id,
-            name: this.name,
-            cdata: JSON.stringify(this.options),
-            children: this.note ? [{
-                type: 'note',
-                text: this.note
-            }] : []
-        })
-
+    private insertMetadata(mpm: MPM) {
         this.created.forEach(id => {
             const instruction = mpm.getInstructions().find(i => i['xml:id'] === id)
             if (!instruction) {

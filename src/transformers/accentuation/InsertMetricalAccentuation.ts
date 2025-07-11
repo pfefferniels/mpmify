@@ -4,7 +4,7 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions, Transform
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
 
-export type AccentuationCell = {
+export interface AccentuationCell {
     name?: string
     start: number
     end: number

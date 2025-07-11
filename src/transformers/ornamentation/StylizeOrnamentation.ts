@@ -42,14 +42,16 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             return [
                 o["frame.start"] as number,
                 o.frameLength as number,
-                (o.intensity || 1) as number
+                (o.intensity || 1) as number,
+                (o["noteoff.shift"] === 'monophonic' ? -1 : (o['noteoff.shift']) || 0) as number
             ]
         })
         return dbscan(points, {
             epsilons: [
                 this.options.tickTolerance,
                 this.options.tickTolerance,
-                this.options.intensityTolerance
+                this.options.intensityTolerance,
+                0
             ]
         })
     }
