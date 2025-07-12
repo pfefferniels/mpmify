@@ -31,6 +31,7 @@ export interface Transformer {
     created: string[]
     run(msm: MSM, mpm: MPM): void
     requires: Array<TransformerConstructor>
+    argumentation: Argumentation
 }
 
 /**
@@ -41,7 +42,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     abstract name: string
     options: OptionsType
     created: string[] = []
-    argumentation?: Argumentation
+    argumentation: Argumentation;
 
     abstract requires: Array<TransformerConstructor>
     shouldRunBefore: Array<TransformerConstructor>

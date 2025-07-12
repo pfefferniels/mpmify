@@ -3,7 +3,6 @@ import { Transformer } from "./transformers/Transformer";
 export interface Argumentation {
     id: string;
     description: string;
-    calls: Transformer[];
     author?: string;
     encoder?: string;
 }
@@ -11,12 +10,11 @@ export interface Argumentation {
 export interface Work {
     name: string;
     expression: string;
-    creation: {
-        argumentations: Argumentation[];
-    }
 }
 
-export function exportWork(work: Work): string {
+export function exportWork(work: Work, transformers: Transformer[]): string {
+    const argumentations = Map.groupBy(transformers, t => t.argumentation)
+
     const jsonLd = {
         "@context": {
             "crm": "http://www.cidoc-crm.org/cidoc-crm/",
@@ -34,7 +32,10 @@ export function exportWork(work: Work): string {
             "description": "crm:P3_has_note",
         },
         "@type": "Reconstruction",
-        ...work
+        ...work, 
+        "creation": {
+            argumentations
+        }
     }
 
     return JSON.stringify(jsonLd, null, 2);
