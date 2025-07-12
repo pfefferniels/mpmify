@@ -17,10 +17,9 @@ export interface NoteChoice extends Choice {
 
 export type AnyChoice = RangeChoice | NoteChoice
 
-export interface MakeChoiceOptions extends ScopedTransformationOptions {
-    choices: AnyChoice[]
-    defaultChoice?: string
-}
+export type MakeChoiceOptions = ScopedTransformationOptions
+    & ((RangeChoice | NoteChoice) & { prefer: string }) // option 1: a single choice
+    | { prefer: string } // option 2: a default choice
 
 export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     name = 'MakeChoice'
@@ -31,33 +30,34 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
 
         // set the default options
         this.options = options || {
-            choices: [],
+            prefer: '',
             scope: 'global'
         }
     }
 
     protected transform(msm: MSM, _: MPM) {
         const eliminate = []
-        for (const note of msm.notesInPart(this.options.scope)) {
-            // check if the note falls into one of the 
-            // ranges 
-            const choice: AnyChoice | undefined = this.options.choices.find(c => {
-                if ('from' in c && 'to' in c) {
-                    return note.date >= c.from && note.date <= c.to;
-                } else if ('noteids' in c) {
-                    return c.noteids.includes(note['xml:id']);
-                }
-                return false;
-            });
+        
+        // (1) range mode
+        if ('from' in this.options && 'to' in this.options) {
+            eliminate.push(msm.allNotes.filter(note => {
+                const { from, to } = this.options as RangeChoice
+                return note.date >= from && note.date <= to &&
+                    note.source !== this.options.prefer
+            }))
+        }
 
-            if (choice) {
-                if (choice.prefer !== note.source) {
-                    eliminate.push(note)
-                }
-            }
-            else if (this.options.defaultChoice && this.options.defaultChoice !== note.source) {
-                eliminate.push(note)
-            }
+        // (2) note mode
+        else if ('noteids' in this.options) {
+            eliminate.push(msm.allNotes.filter(note => {
+                const { noteids } = this.options as NoteChoice
+                return noteids.includes(note['xml:id']) && note.source !== this.options.prefer
+            }))
+        }
+
+        // (3) default choice mode
+        else {
+            eliminate.push(msm.allNotes.filter(note => note.source !== this.options.prefer));
         }
 
         for (const note of eliminate) {
