@@ -15,6 +15,8 @@ export interface Work {
 export function exportWork(work: Work, transformers: Transformer[]): string {
     const argumentations = Map.groupBy(transformers, t => t.argumentation)
 
+    // TODO: convert the order into a single-linked list (P134 continued)
+
     const jsonLd = {
         "@context": {
             "crm": "http://www.cidoc-crm.org/cidoc-crm/",
@@ -32,11 +34,29 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
             "description": "crm:P3_has_note",
         },
         "@type": "Reconstruction",
-        ...work, 
+        ...work,
         "creation": {
             argumentations
         }
     }
 
-    return JSON.stringify(jsonLd, null, 2);
+    function replacer(_: string, value: any) {
+        if (value instanceof Map) {
+            return {
+                dataType: 'Map',
+                value: Array.from(value.entries()),
+            }
+        }
+        else if (value instanceof Set) {
+            return {
+                dataType: 'Set',
+                value: Array.from(value.values()),
+            }
+        }
+        else {
+            return value;
+        }
+    }
+
+    return JSON.stringify(jsonLd, replacer, 2);
 }
