@@ -1,3 +1,5 @@
+import { v4 } from "uuid";
+import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation } from "./transformers";
 import { Transformer } from "./transformers/Transformer";
 
 export interface Argumentation {
@@ -59,4 +61,88 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
     }
 
     return JSON.stringify(jsonLd, replacer, 2);
+}
+
+
+export function importWork(json: string): Transformer[] {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function reviver(_: string, value: any) {
+        if (typeof value === 'object' && value !== null) {
+            if (value.dataType === 'Map') {
+                return new Map(value.value);
+            }
+            else if (value.dataType === 'Set') {
+                return new Set(value.value);
+            }
+        }
+        return value;
+    }
+
+    const imported = JSON.parse(json, reviver);
+
+    const transformers =
+        imported.creation.argumentations
+            .map(a => a.calls)
+            .map(t => {
+                let transformer: Transformer | null = null;
+                if (t.name === 'InsertDynamicsInstructions') {
+                    transformer = new InsertDynamicsInstructions();
+                }
+                else if (t.name === 'InsertDynamicsGradient') {
+                    transformer = new InsertDynamicsGradient();
+                }
+                else if (t.name === 'InsertTemporalSpread') {
+                    transformer = new InsertTemporalSpread();
+                }
+                else if (t.name === 'InsertRubato') {
+                    transformer = new InsertRubato();
+                }
+                else if (t.name === 'ApproximateLogarithmicTempo') {
+                    transformer = new ApproximateLogarithmicTempo();
+                }
+                else if (t.name === 'InsertMetricalAccentuation') {
+                    transformer = new InsertMetricalAccentuation();
+                }
+                else if (t.name === 'InsertRelativeDuration') {
+                    transformer = new InsertRelativeDuration();
+                }
+                else if (t.name === 'InsertRelativeVolume') {
+                    transformer = new InsertRelativeVolume();
+                }
+                else if (t.name === 'InsertPedal') {
+                    transformer = new InsertPedal();
+                }
+                else if (t.name === 'CombineAdjacentRubatos') {
+                    transformer = new CombineAdjacentRubatos();
+                }
+                else if (t.name === 'StylizeOrnamentation') {
+                    transformer = new StylizeOrnamentation();
+                }
+                else if (t.name === 'StylizeArticulation') {
+                    transformer = new StylizeArticulation();
+                }
+                else if (t.name === 'TranslatePhyiscalTimeToTicks') {
+                    transformer = new TranslatePhyiscalTimeToTicks();
+                }
+                else if (t.name === 'MergeMetricalAccentuations') {
+                    transformer = new MergeMetricalAccentuations();
+                }
+                else if (t.name === 'InsertArticulation') {
+                    transformer = new InsertArticulation();
+                }
+                else {
+                    return null;
+                }
+
+                if (!transformer) {
+                    console.warn(`Unknown transformer name: ${t.name}`);
+                    return null;
+                }
+                transformer.id = t.id || v4();
+                transformer.options = t.options;
+                return transformer;
+            })
+            .filter(t => t !== null)
+
+    return transformers;
 }

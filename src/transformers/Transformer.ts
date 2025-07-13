@@ -26,7 +26,6 @@ type TransformerConstructor = new (...args: any[]) => Transformer;
 export interface Transformer {
     id: string
     name: string
-    note?: string
     options: TransformationOptions
     created: string[]
     run(msm: MSM, mpm: MPM): void
