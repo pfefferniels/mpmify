@@ -17,9 +17,7 @@ export type ArticulationUnit = {
     aspects: Set<ArticulationProperty>
 }
 
-export interface InsertArticulationOptions extends ScopedTransformationOptions {
-    units: ArticulationUnit[]
-}
+export type InsertArticulationOptions = ScopedTransformationOptions & ArticulationUnit
 
 type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration'>
 
@@ -39,7 +37,9 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
 
         // set the default options
         this.options = options || {
-            units: [],
+            noteIDs: [],
+            aspects: new Set(),
+            name: v4(),
             scope: 'global'
         }
     }
@@ -81,55 +81,54 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        for (const unit of this.options.units) {
-            const affectedNotes = unit.noteIDs
-                .map(id => msm.getByID(id))
-                .filter(n => !!n) as MsmNote[]
+        const { noteIDs, aspects, name } = this.options
+        const affectedNotes = noteIDs
+            .map(id => msm.getByID(id))
+            .filter(n => !!n) as MsmNote[]
 
-            let articulations: Articulation[] = affectedNotes
-                .map(note => this.noteToArticulation(unit.aspects, note as ArticulatedNote))
+        let articulations: Articulation[] = affectedNotes
+            .map(note => this.noteToArticulation(aspects, note as ArticulatedNote))
 
-            const avgs: Record<string, number> = {}
-            Array
-                .from(unit.aspects)
-                .map(aspect => {
-                    return [
-                        aspect,
-                        articulations
-                            .map(a => a[aspect])
-                            .filter(a => a !== undefined)
-                    ] as [ArticulationProperty, number[]]
-                })
-                .forEach(([aspect, values]) => {
-                    if (values.length === 0) return
-                    avgs[aspect] = values.reduce((acc, v) => acc + v, 0) / values.length
-                })
+        const avgs: Record<string, number> = {}
+        Array
+            .from(aspects)
+            .map(aspect => {
+                return [
+                    aspect,
+                    articulations
+                        .map(a => a[aspect])
+                        .filter(a => a !== undefined)
+                ] as [ArticulationProperty, number[]]
+            })
+            .forEach(([aspect, values]) => {
+                if (values.length === 0) return
+                avgs[aspect] = values.reduce((acc, v) => acc + v, 0) / values.length
+            })
 
-            const def: ArticulationDef = {
-                type: 'articulationDef',
-                name: unit.name,
-                ...avgs
+        const def: ArticulationDef = {
+            type: 'articulationDef',
+            name,
+            ...avgs
+        }
+
+        mpm.insertDefinition(def, this.options.scope)
+        this.undoEffectOf(def, affectedNotes)
+
+        articulations = articulations.reduce((acc, curr) => {
+            aspects.forEach(aspect => curr[aspect] = undefined)
+
+            const existing = acc.find(a => a.date === curr.date && a['name.ref'] === name)
+            if (existing) {
+                existing.noteid += ' ' + curr.noteid
+                return acc
             }
 
-            mpm.insertDefinition(def, this.options.scope)
-            this.undoEffectOf(def, affectedNotes)
+            curr['name.ref'] = name
+            return [...acc, curr]
+        }, [] as Articulation[])
 
-            articulations = articulations.reduce((acc, curr) => {
-                unit.aspects.forEach(aspect => curr[aspect] = undefined)
+        articulations.forEach(a => a['xml:id'] = generateId('articulation', a.date, mpm))
 
-                const existing = acc.find(a => a.date === curr.date && a['name.ref'] === unit.name)
-                if (existing) {
-                    existing.noteid += ' ' + curr.noteid
-                    return acc
-                }
-
-                curr['name.ref'] = unit.name
-                return [...acc, curr]
-            }, [] as Articulation[])
-
-            articulations.forEach(a => a['xml:id'] = generateId('articulation', a.date, mpm))
-
-            mpm.insertInstructions(articulations, this.options.scope)
-        }
+        mpm.insertInstructions(articulations, this.options.scope)
     }
 }
