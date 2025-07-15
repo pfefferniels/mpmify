@@ -36,28 +36,30 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     }
 
     protected transform(msm: MSM, _: MPM) {
-        const eliminate = []
+        let eliminate = []
         
         // (1) range mode
         if ('from' in this.options && 'to' in this.options) {
-            eliminate.push(msm.allNotes.filter(note => {
+            // within the range, eliminate everything which is
+            // in the preferred source
+            eliminate = msm.allNotes.filter(note => {
                 const { from, to } = this.options as RangeChoice
                 return note.date >= from && note.date <= to &&
                     note.source !== this.options.prefer
-            }))
+            })
         }
 
         // (2) note mode
         else if ('noteids' in this.options) {
-            eliminate.push(msm.allNotes.filter(note => {
+            eliminate = msm.allNotes.filter(note => {
                 const { noteids } = this.options as NoteChoice
                 return noteids.includes(note['xml:id']) && note.source !== this.options.prefer
-            }))
+            })
         }
 
         // (3) default choice mode
         else {
-            eliminate.push(msm.allNotes.filter(note => note.source !== this.options.prefer));
+            eliminate = msm.allNotes.filter(note => note.source !== this.options.prefer);
         }
 
         for (const note of eliminate) {
