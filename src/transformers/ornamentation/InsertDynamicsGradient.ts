@@ -1,7 +1,7 @@
 import { MPM, Ornament, Scope } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, generateId, TransformationOptions, Transformer } from "../Transformer"
+import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions, Transformer } from "../Transformer"
 
 export type DynamicsGradient = { from: number, to: number }
 export type DatedDynamicsGradient = Map<number, DynamicsGradient>
@@ -21,20 +21,16 @@ const isSingleGradient = (gradient: SingleGradient | DefaultGradients): gradient
 }
 
 
-export interface InsertDynamicsGradientOptions extends TransformationOptions {
-    /**
-     * The part on which the transformer is to be applied to.
-     */
-    part: Scope
+export type InsertDynamicsGradientOptions = ScopedTransformationOptions
+    & (SingleGradient | DefaultGradients)
+    & {
+        /**
+         * Whether to sort the velocities of the notes in the chord.
+         * @note This will also change the order of notes in the chord.
+         */
+        sortVelocities: boolean
+    }
 
-    gradient: SingleGradient | DefaultGradients
-
-    /**
-     * Whether to sort the velocities of the notes in the chord.
-     * @note This will also change the order of notes in the chord.
-     */
-    sortVelocities: boolean
-}
 
 /**
  * Interpolates arpeggiated chords as ornaments, inserts them as physical
@@ -55,17 +51,15 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
         // set the default options
         this.options = options || {
-            part: 'global',
-            gradient: {
-                crescendo: { from: -1, to: 0 },
-                decrescendo: { from: 0, to: -1 }
-            },
+            scope: 'global',
+            crescendo: { from: -1, to: 0 },
+            decrescendo: { from: 0, to: -1 },
             sortVelocities: false
         }
     }
 
     private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient: DynamicsGradient) => {
-        let arpeggioNotes = msm.asChords(this.options.part).get(date)
+        let arpeggioNotes = msm.asChords(this.options.scope).get(date)
 
         if (this.options.sortVelocities) {
             this.sortVelocities(arpeggioNotes)
@@ -100,7 +94,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             'transition.to': gradient.to,
             scale
         }
-        mpm.insertInstruction(ornament, this.options.part)
+        mpm.insertInstruction(ornament, this.options.scope)
 
         arpeggioNotes.forEach(note => {
             note['midi.velocity'] = standard
@@ -108,11 +102,11 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        if (isSingleGradient(this.options.gradient)) {
-            this.applyGradient(msm, mpm, this.options.gradient.date, this.options.gradient.gradient)
+        if (isSingleGradient(this.options)) {
+            this.applyGradient(msm, mpm, this.options.date, this.options.gradient)
         }
         else {
-            const chords = msm.asChords(this.options?.part)
+            const chords = msm.asChords(this.options?.scope)
             for (let [date, arpeggioNotes] of chords) {
                 // only consider notes with a defined onset time
                 arpeggioNotes = arpeggioNotes
@@ -124,10 +118,10 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
                 const dynamicsDiff = lastVel - firstVel
 
                 if (dynamicsDiff > 0) {
-                    this.applyGradient(msm, mpm, date, this.options.gradient.crescendo)
+                    this.applyGradient(msm, mpm, date, this.options.crescendo)
                 }
                 else if (dynamicsDiff < 0) {
-                    this.applyGradient(msm, mpm, date, this.options.gradient.decrescendo)
+                    this.applyGradient(msm, mpm, date, this.options.decrescendo)
                 }
             }
         }
