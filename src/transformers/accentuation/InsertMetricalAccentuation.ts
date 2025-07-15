@@ -4,7 +4,7 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions, Transform
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
 
-interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
+export interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
     name: string
     start: number
     end: number
