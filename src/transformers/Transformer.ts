@@ -44,7 +44,6 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     argumentation: Argumentation;
 
     abstract requires: Array<TransformerConstructor>
-    shouldRunBefore: Array<TransformerConstructor>
 
     // this method should not be overridden
     public run(msm: MSM, mpm: MPM) {
