@@ -5,13 +5,12 @@ import { InsertDynamicsInstructions } from "./dynamics";
 import { InsertTemporalSpread, InsertDynamicsGradient } from "./ornamentation";
 import { InsertRubato } from "./rubato/InsertRubato";
 import { ApproximateLogarithmicTempo, TranslatePhyiscalTimeToTicks } from "./tempo";
+import { Transformer } from "./Transformer";
 
 /**
- * Defines the standard order of transformer execution.
- * This order ensures that transformers run in the correct sequence
- * to properly build up the musical performance markup.
+ * The standard order of transformers.
  */
-export const TRANSFORMER_ORDER = [
+export const transformerOrder = [
     MakeChoice,
     InsertTemporalSpread,
     InsertDynamicsGradient,
@@ -23,37 +22,16 @@ export const TRANSFORMER_ORDER = [
     InsertArticulation
 ] as const;
 
-/**
- * Gets the execution order index for a given transformer class.
- * Returns -1 if the transformer is not in the standard order.
- */
-export function getTransformerOrderIndex(transformerClass: any): number {
-    return TRANSFORMER_ORDER.indexOf(transformerClass);
+export const getTransformerOrderIndex = (transformerClass: any): number => {
+    return transformerOrder.indexOf(transformerClass);
 }
 
 /**
- * Sorts an array of transformer instances according to the standard execution order.
- * Transformers not in the standard order will be placed at the end, maintaining their relative order.
+ * This function is meant to be passed to Array.sort()
  */
-export function orderTransformers(transformers: Transformer[]): Transformer[] {
-    return transformers.slice().sort((a, b) => {
-        const aIndex = getTransformerOrderIndex(a.constructor);
-        const bIndex = getTransformerOrderIndex(b.constructor);
+export const compareTransformers = (a: Transformer, b: Transformer) => {
+    const aIndex = getTransformerOrderIndex(a.constructor);
+    const bIndex = getTransformerOrderIndex(b.constructor);
 
-        // If both transformers are in the standard order, sort by order index
-        if (aIndex !== -1 && bIndex !== -1) {
-            return aIndex - bIndex;
-        }
-
-        // If only one is in the standard order, it comes first
-        if (aIndex !== -1 && bIndex === -1) {
-            return -1;
-        }
-        if (aIndex === -1 && bIndex !== -1) {
-            return 1;
-        }
-
-        // If neither is in the standard order, maintain their relative order
-        return 0;
-    });
+    return aIndex - bIndex;
 }
