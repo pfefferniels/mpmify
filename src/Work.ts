@@ -1,5 +1,5 @@
 import { v4 } from "uuid";
-import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation } from "./transformers";
+import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, TranslateToTicks, MergeMetricalAccentuations, InsertArticulation, InsertTempoInstructions, MakeChoice } from "./transformers";
 import { Transformer } from "./transformers/Transformer";
 
 export interface Argumentation {
@@ -103,12 +103,6 @@ export function importWork(json: string): Transformer[] {
                 else if (t.name === 'InsertMetricalAccentuation') {
                     transformer = new InsertMetricalAccentuation();
                 }
-                else if (t.name === 'InsertRelativeDuration') {
-                    transformer = new InsertRelativeDuration();
-                }
-                else if (t.name === 'InsertRelativeVolume') {
-                    transformer = new InsertRelativeVolume();
-                }
                 else if (t.name === 'InsertPedal') {
                     transformer = new InsertPedal();
                 }
@@ -118,17 +112,20 @@ export function importWork(json: string): Transformer[] {
                 else if (t.name === 'StylizeOrnamentation') {
                     transformer = new StylizeOrnamentation();
                 }
-                else if (t.name === 'StylizeArticulation') {
-                    transformer = new StylizeArticulation();
-                }
-                else if (t.name === 'TranslatePhyiscalTimeToTicks') {
-                    transformer = new TranslatePhyiscalTimeToTicks();
+                else if (t.name === 'TranslateToTicks') {
+                    transformer = new TranslateToTicks();
                 }
                 else if (t.name === 'MergeMetricalAccentuations') {
                     transformer = new MergeMetricalAccentuations();
                 }
                 else if (t.name === 'InsertArticulation') {
                     transformer = new InsertArticulation();
+                }
+                else if (t.name === 'MakeChoice') {
+                    transformer = new MakeChoice();
+                }
+                else if (t.name === 'InsertTempoInstructions') {
+                    transformer = new InsertTempoInstructions();
                 }
                 else {
                     return null;

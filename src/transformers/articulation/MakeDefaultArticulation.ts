@@ -2,7 +2,7 @@ import { Articulation, ArticulationDef, MPM } from "mpm-ts";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions, Transformer } from "../Transformer";
 import { v4 } from "uuid";
-import { TranslatePhyiscalTimeToTicks } from "../tempo";
+import { TranslateToTicks } from "../tempo";
 
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
 }
@@ -12,7 +12,7 @@ interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
  */
 export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArticulationOptions> {
     name = 'MakeDefaultArticulation'
-    requires = [TranslatePhyiscalTimeToTicks]
+    requires = [TranslateToTicks]
 
     constructor(options?: MakeDefaultArticulationOptions) {
         super()

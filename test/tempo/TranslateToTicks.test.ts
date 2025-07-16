@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Ornament, Tempo } from 'mpm-ts'
-import { TranslatePhyiscalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
+import { TranslateToTicks } from "../../src/transformers/tempo/TranslateToTicks"
 
 /**
  * Quickly generates a simple MSM note
@@ -60,7 +60,7 @@ test('It inserts the right tempo instructions using beat length = denominator', 
     mpm.insertInstructions([tempo], 'global')
 
     // Act
-    const translate = new TranslatePhyiscalTimeToTicks({
+    const translate = new TranslateToTicks({
         translatePhysicalModifiers: false
     })
     translate.transform(msmFixture, mpm)
@@ -141,7 +141,7 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     mpm.insertInstructions(physicalArpeggios, 'global')
 
     // Act
-    const translate = new TranslatePhyiscalTimeToTicks({
+    const translate = new TranslateToTicks({
         translatePhysicalModifiers: true
     })
 

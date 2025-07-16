@@ -8,7 +8,7 @@ interface TempoWithEndDate extends Tempo {
     endDate: number
 }
 
-export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptions {
+export interface TranslateToTicksOptions extends TransformationOptions {
     /**
      * Defines whether physical modifiers which are already present in the MPM
      * (e.g. because of a previous <ornamentation> or <asynchrony> interpolation)
@@ -27,11 +27,11 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
 /**
  * Interpolates the global tempo and inserts it into the MPM
  */
-export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslatePhyiscalTimeToTicksOptions> {
-    name = 'TranslatePhyiscalTimeToTicks'
+export class TranslateToTicks extends AbstractTransformer<TranslateToTicksOptions> {
+    name = 'TranslateToTicks'
     requires = [ApproximateLogarithmicTempo]
 
-    constructor(options?: TranslatePhyiscalTimeToTicksOptions) {
+    constructor(options?: TranslateToTicksOptions) {
         super()
 
         // set the default options

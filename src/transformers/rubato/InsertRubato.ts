@@ -2,7 +2,7 @@ import { MPM, Rubato } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp, DefinedProperty } from "../../utils/utils"
-import { TranslatePhyiscalTimeToTicks } from "../tempo"
+import { TranslateToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
 
 const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
@@ -60,7 +60,7 @@ export interface InsertRubatoOptions extends ScopedTransformationOptions {
  */
 export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     name = 'InsertRubato'
-    requires = [TranslatePhyiscalTimeToTicks]
+    requires = [TranslateToTicks]
 
     constructor(options?: InsertRubatoOptions) {
         super()
