@@ -10,5 +10,5 @@ export * from "./rubato/CombineAdjacentRubatos"
 export { TransformationOptions } from "./Transformer"
 export * from './tempo/tempoCalculations'
 export * from './pedal/InsertPedalInstructions'
-export * from './ChainValidation'
+export * from './Order'
 export * from './choice/MakeChoice'
