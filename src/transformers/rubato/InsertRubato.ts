@@ -76,7 +76,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     protected transform(msm: MSM, mpm: MPM) {
         const frame = { date: this.options.date, length: this.options.length }
         const chords = [...msm.asChords(this.options.scope).entries()]
-            .filter(([date, _]) => date >= frame.date && date <= frame.date + frame.length)
+            .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
 
         console.log('dealing with frame', frame, 'and adjusting', chords)
         if (chords.length < 2) return
@@ -100,21 +100,30 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             )
         if (lateStart === 0) lateStart = undefined
 
-        let earlyEnd: number | undefined
-        const endDate = avarageTickDate(chords[chords.length - 1][1] as DefinedProperty<MsmNote, 'tickDate'>[])
-        earlyEnd =
-            clamp(
-                0.1,
-                (endDate - frame.date) / frame.length,
-                1
-            )
-        if (earlyEnd === 1) earlyEnd = undefined
+        // let earlyEnd: number | undefined
+        // const endDate = avarageTickDate(chords[chords.length - 1][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+        // earlyEnd =
+        //     clamp(
+        //         0.1,
+        //         (endDate - frame.date) / frame.length,
+        //         1
+        //     )
+        // if (earlyEnd === 1) earlyEnd = undefined
+        const earlyEnd = undefined 
+        const endDate = this.options.date + this.options.length
 
         const scaledDates = chords
             .map(([, notes]) => {
                 const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
                 return (realDate - startDate) / (endDate - startDate)
             })
+        
+        if (!scaledDates.includes(0)) {
+            scaledDates.unshift(0)
+        }
+        if (!scaledDates.includes(1)) {
+            scaledDates.push(1)
+        }
 
         const intensity = determineIntensity(scaledDates)
 
