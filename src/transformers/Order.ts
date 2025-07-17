@@ -11,27 +11,23 @@ import { Transformer } from "./Transformer";
  * The standard order of transformers.
  */
 export const transformerOrder = [
-    MakeChoice,
-    InsertTemporalSpread,
-    InsertDynamicsGradient,
-    ApproximateLogarithmicTempo,
-    TranslatePhyiscalTimeToTicks,
-    InsertRubato,
-    InsertDynamicsInstructions,
-    InsertMetricalAccentuation,
-    InsertArticulation
+    new MakeChoice().name,
+    new InsertTemporalSpread().name,
+    new InsertDynamicsGradient().name,
+    new ApproximateLogarithmicTempo().name,
+    new TranslatePhyiscalTimeToTicks().name,
+    new InsertRubato().name,
+    new InsertDynamicsInstructions().name,
+    new InsertMetricalAccentuation().name,
+    new InsertArticulation().name
 ] as const;
-
-export const getTransformerOrderIndex = (transformerClass: any): number => {
-    return transformerOrder.indexOf(transformerClass);
-}
 
 /**
  * This function is meant to be passed to Array.sort()
  */
 export const compareTransformers = (a: Transformer, b: Transformer) => {
-    const aIndex = getTransformerOrderIndex(a.constructor);
-    const bIndex = getTransformerOrderIndex(b.constructor);
+    const aIndex = transformerOrder.indexOf(a.name);
+    const bIndex = transformerOrder.indexOf(b.name);
 
     return aIndex - bIndex;
 }
