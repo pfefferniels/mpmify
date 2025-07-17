@@ -79,7 +79,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
 
         console.log('dealing with frame', frame, 'and adjusting', chords)
-        if (chords.length < 2) return
+        if (chords.length === 0) return
 
         // The rubato transformation can only be placed
         // after a tempo interpolation. Make sure that 
@@ -91,7 +91,12 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             return
         }
 
-        const startDate = avarageTickDate(chords[0][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+        // if there are notes on the first date, we can use their 
+        // average tick date to determine a late start. Otherwise, 
+        // there is no late start.
+        const startDate = chords[0][0] === this.options.date
+            ? avarageTickDate(chords[0][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+            : this.options.date
         let lateStart =
             clamp(
                 0,
@@ -100,16 +105,6 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             )
         if (lateStart === 0) lateStart = undefined
 
-        // let earlyEnd: number | undefined
-        // const endDate = avarageTickDate(chords[chords.length - 1][1] as DefinedProperty<MsmNote, 'tickDate'>[])
-        // earlyEnd =
-        //     clamp(
-        //         0.1,
-        //         (endDate - frame.date) / frame.length,
-        //         1
-        //     )
-        // if (earlyEnd === 1) earlyEnd = undefined
-        const earlyEnd = undefined 
         const endDate = this.options.date + this.options.length
 
         const scaledDates = chords
@@ -117,7 +112,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
                 const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
                 return (realDate - startDate) / (endDate - startDate)
             })
-        
+
         if (!scaledDates.includes(0)) {
             scaledDates.unshift(0)
         }
@@ -135,7 +130,6 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             intensity,
             loop: false,
             lateStart,
-            earlyEnd
         }
 
         mpm.insertInstruction(rubato, this.options.scope)
