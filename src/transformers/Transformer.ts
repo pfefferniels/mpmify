@@ -25,11 +25,11 @@ type TransformerConstructor = new (...args: any[]) => Transformer;
 
 export interface Transformer {
     id: string
-    name: string
+    readonly name: string
     options: TransformationOptions
     created: string[]
     run(msm: MSM, mpm: MPM): void
-    requires: Array<TransformerConstructor>
+    readonly requires: Array<TransformerConstructor>
     argumentation: Argumentation
 }
 
@@ -38,12 +38,12 @@ export interface Transformer {
  */
 export abstract class AbstractTransformer<OptionsType extends TransformationOptions> implements Transformer {
     id: string = v4()
-    abstract name: string
+    abstract readonly name: string
     options: OptionsType
     created: string[] = []
     argumentation: Argumentation;
 
-    abstract requires: Array<TransformerConstructor>
+    abstract readonly requires: Array<TransformerConstructor>
 
     // this method should not be overridden
     public run(msm: MSM, mpm: MPM) {
