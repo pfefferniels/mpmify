@@ -38,7 +38,12 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
         "@type": "Reconstruction",
         ...work,
         "creation": {
-            argumentations
+            argumentations: Array.from(argumentations.entries()).map(([argumentation, calls]) => {
+                return {
+                    ...argumentation,
+                    calls: calls.map(({ argumentation, ...rest }) => rest)
+                }
+            })
         }
     }
 
