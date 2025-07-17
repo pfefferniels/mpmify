@@ -42,7 +42,10 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
         }
     }
 
-    function replacer(_: string, value: any) {
+    function replacer(key: string, value: any) {
+        // ignore 'requires', its just an internal property
+        if (key === 'requires') return undefined
+
         if (value instanceof Map) {
             return {
                 dataType: 'Map',
