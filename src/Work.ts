@@ -60,9 +60,12 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
         "@type": "Reconstruction",
         ...work,
         "creation": {
-            incorporates: new Set(transformers
-                .filter((t): t is MakeChoice => t.name === 'MakeChoice')
-                .map(t => t.options.prefer)),
+            incorporates:
+                Array.from(
+                    new Set(transformers
+                        .filter((t): t is MakeChoice => t.name === 'MakeChoice')
+                        .map(t => t.options.prefer))
+                ),
             argumentations: Array.from(argumentations.entries()).map(([argumentation, calls]) => {
                 return {
                     ...argumentation,
