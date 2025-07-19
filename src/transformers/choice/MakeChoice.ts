@@ -3,12 +3,12 @@ import { MSM } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
 interface Choice {
-    prefer: string 
+    prefer: string
 }
 
 export interface RangeChoice extends Choice {
-    from: number 
-    to: number 
+    from: number
+    to: number
 }
 
 export interface NoteChoice extends Choice {
@@ -36,34 +36,43 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     }
 
     protected transform(msm: MSM, _: MPM) {
-        let eliminate = []
-        
+        let affected = []
+
         // (1) range mode
         if ('from' in this.options && 'to' in this.options) {
             // within the range, eliminate everything which is
             // in the preferred source
-            eliminate = msm.allNotes.filter(note => {
+            affected = msm.allNotes.filter(note => {
+                if (!note.source) return false;
+
                 const { from, to } = this.options as RangeChoice
-                return note.date >= from && note.date <= to &&
-                    note.source !== this.options.prefer
+                return note.date >= from && note.date <= to
             })
         }
 
         // (2) note mode
         else if ('noteids' in this.options) {
-            eliminate = msm.allNotes.filter(note => {
+            affected = msm.allNotes.filter(note => {
+                if (!note.source) return false;
                 const { noteids } = this.options as NoteChoice
-                return noteids.includes(note['xml:id']) && note.source !== this.options.prefer
+                return noteids.includes(note['xml:id'])
             })
         }
 
         // (3) default choice mode
         else {
-            eliminate = msm.allNotes.filter(note => note.source !== this.options.prefer);
+            affected = msm.allNotes.filter(note => note.source)
         }
 
-        for (const note of eliminate) {
-            msm.allNotes.splice(msm.allNotes.indexOf(note), 1);
+        console.log('affected', affected)
+        for (const note of affected) {
+            if (note.source === this.options.prefer) {
+                console.log('keeping note', note)
+                note.source = undefined
+            } else {
+                console.log('eliminating note', note)
+                msm.allNotes.splice(msm.allNotes.indexOf(note), 1);
+            }
         }
     }
 }
