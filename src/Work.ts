@@ -11,7 +11,8 @@ export interface Argumentation {
 
 export interface Work {
     name: string;
-    expression: string;
+    mpm: string;
+    mei: string;
 }
 
 export type ArgumentationWithCalls = Argumentation & {
