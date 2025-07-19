@@ -1,5 +1,5 @@
 import { v4 } from "uuid";
-import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation } from "./transformers";
+import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice } from "./transformers";
 import { Transformer } from "./transformers/Transformer";
 
 export interface Argumentation {
@@ -12,6 +12,26 @@ export interface Argumentation {
 export interface Work {
     name: string;
     expression: string;
+}
+
+export type ArgumentationWithCalls = Argumentation & {
+    calls: Transformer[];
+}
+
+export const getArgumentationsWithCalls = (transformers: Transformer[]): ArgumentationWithCalls[] => {
+    const argumentations = new Map<string, ArgumentationWithCalls>();
+
+    for (const transformer of transformers) {
+        if (!argumentations.has(transformer.argumentation.id)) {
+            argumentations.set(transformer.argumentation.id, {
+                ...transformer.argumentation,
+                calls: []
+            });
+        }
+        argumentations.get(transformer.argumentation.id)!.calls.push(transformer);
+    }
+
+    return Array.from(argumentations.values());
 }
 
 export function exportWork(work: Work, transformers: Transformer[]): string {
@@ -34,10 +54,14 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
             "author": "crm:P14_carried_out_by",
             "encoder": "crm:P14_carried_out_by",
             "description": "crm:P3_has_note",
+            "incorporates": "crm:P15_was_influenced_by"
         },
         "@type": "Reconstruction",
         ...work,
         "creation": {
+            incorporates: new Set(transformers
+                .filter((t): t is MakeChoice => t.name === 'MakeChoice')
+                .map(t => t.options.prefer)),
             argumentations: Array.from(argumentations.entries()).map(([argumentation, calls]) => {
                 return {
                     ...argumentation,
@@ -87,13 +111,22 @@ export function importWork(json: string): Transformer[] {
     }
 
     const imported = JSON.parse(json, reviver);
+    console.log('imported work:', imported);
 
     const transformers =
         imported.creation.argumentations
-            .map(a => a.calls)
+            .map(a => a.calls.map(call => ({
+                ...call,
+                argumentation: a
+            })))
+            .flat()
             .map(t => {
+                console.log('dealing with t', t)
                 let transformer: Transformer | null = null;
-                if (t.name === 'InsertDynamicsInstructions') {
+                if (t.name === 'MakeChoice') {
+                    transformer = new MakeChoice();
+                }
+                else if (t.name === 'InsertDynamicsInstructions') {
                     transformer = new InsertDynamicsInstructions();
                 }
                 else if (t.name === 'InsertDynamicsGradient') {
@@ -148,6 +181,7 @@ export function importWork(json: string): Transformer[] {
                 }
                 transformer.id = t.id || v4();
                 transformer.options = t.options;
+                transformer.argumentation = t.argumentation
                 return transformer;
             })
             .filter(t => t !== null)
