@@ -1,14 +1,14 @@
 import { v4 } from "uuid";
 import { MPM, Scope, Tempo } from "mpm-ts";
 import { MSM, MsmNote } from "../../msm";
-import { AbstractTransformer, generateId, TransformationOptions } from "../Transformer";
+import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions } from "../Transformer";
 import { TempoWithEndDate } from "./tempoCalculations";
 
 export type Point = [number, number];
 
 export type TempoSegment = {
-    startDate: number
-    endDate: number
+    from: number
+    to: number
 
     beatLength: number
     measureBeatLength?: number
@@ -27,20 +27,12 @@ export type SilentOnset = {
     onset: number
 }
 
-export interface ConfigurableTempoTransformerOptions extends TransformationOptions {
-    /**
-     * Defines where new tempo instructions should be
-     * set.
-     */
-    segment: TempoSegment
-    silentOnsets: SilentOnset[]
-
-    /**
-     * Defines on which part to apply to transformer to.
-     * @default 'global'
-     */
-    part: Scope
-}
+export type ConfigurableTempoTransformerOptions =
+    ScopedTransformationOptions
+    & TempoSegment
+    & {
+        silentOnsets: SilentOnset[]
+    }
 
 /**
  * Inserts tempo instructions into the given part based on the
@@ -54,12 +46,10 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
 
         // set the default options
         this.options = options || {
-            part: 'global',
-            segment: {
-                startDate: 0,
-                endDate: 0,
-                beatLength: 720
-            },
+            scope: 'global',
+            from: 0,
+            to: 0,
+            beatLength: 720,
             silentOnsets: []
         }
     }
@@ -74,15 +64,14 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
         // make sure to delete the arbitrary silence before the first note onset
         msm.shiftToFirstOnset()
 
-        this.insertInstructionBySegment(msm, mpm, this.options.segment)
+        this.insertInstructionBySegment(msm, mpm, this.options)
     }
 
     insertInstructionBySegment(msm: MSM, mpm: MPM, segment: TempoSegment) {
         // remove all tempo instructions that should be overwritten by the new markers
-        this.removeAffectedTempoInstructions(mpm, this.options.part, segment)
+        this.removeAffectedTempoInstructions(mpm, this.options.scope, segment)
 
-
-        const notes = msm.notesInPart(this.options.part)
+        const notes = msm.notesInPart(this.options.scope)
         const silentOnsets = this.options.silentOnsets
 
         const segmentWithPoints = pointsWithinSegment(segment, notes, silentOnsets)
@@ -93,7 +82,7 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
         const tempo = this.approximateTempo(segmentWithPoints)
         tempo['xml:id'] = generateId('tempo', tempo.date, mpm)
 
-        mpm.insertInstruction(tempo, this.options?.part, true)
+        mpm.insertInstruction(tempo, this.options?.scope, true)
 
         // insert a tempo instruction at the very end
 
@@ -103,7 +92,7 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
             bpm: tempo["transition.to"] || tempo.bpm,
             beatLength: tempo.beatLength,
             "xml:id": `tempo_${v4()}`
-        }, this.options?.part)
+        }, this.options?.scope)
     }
 
     protected abstract approximateTempo(segment: TempoSegmentWithPoints): TempoWithEndDate
@@ -111,7 +100,7 @@ export abstract class ConfigurableTempoTransformer extends AbstractTransformer<C
     removeAffectedTempoInstructions(mpm: MPM, scope: Scope, segment: TempoSegment) {
         const tempos = mpm.getInstructions<Tempo>('tempo', scope)
         for (const tempo of tempos) {
-            if (tempo.date >= segment.startDate && tempo.date < segment.endDate) {
+            if (tempo.date >= segment.from && tempo.date < segment.to) {
                 mpm.removeInstruction(tempo)
             }
         }
@@ -134,14 +123,13 @@ export const pointsWithinSegment = (
         if (currentNotes.length) return currentNotes[0]["midi.onset"]
     }
 
-    const firstOnset = onsetAtDate(segment.startDate)
+    const firstOnset = onsetAtDate(segment.from)
     const points: [number, number][] = []
     const beatLength = (segment.measureBeatLength || segment.beatLength) * 4 * 720
 
-    for (let date = segment.startDate; date <= segment.endDate; date += beatLength) {
+    for (let date = segment.from; date <= segment.to; date += beatLength) {
         const correspondingOnset = onsetAtDate(date)
         if (correspondingOnset !== undefined) {
-            console.log('onset at date', date, correspondingOnset)
             points.push([date, (onsetAtDate(date) - firstOnset) * 1000])
         }
     }
