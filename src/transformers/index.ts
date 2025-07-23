@@ -1,4 +1,4 @@
-export * from "./asynchrony/InterpolateAsynchrony"
+export * from "./asynchrony/InsertAsynchrony"
 export * from './accentuation'
 export * from "./articulation"
 export * from "./dynamics"
