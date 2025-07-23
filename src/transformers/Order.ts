@@ -2,7 +2,8 @@ import { InsertMetricalAccentuation } from "./accentuation";
 import { InsertArticulation } from "./articulation";
 import { MakeChoice } from "./choice/MakeChoice";
 import { InsertDynamicsInstructions } from "./dynamics";
-import { InsertTemporalSpread, InsertDynamicsGradient } from "./ornamentation";
+import { Modify } from "./modification/Modify";
+import { InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
 import { InsertRubato } from "./rubato/InsertRubato";
 import { ApproximateLogarithmicTempo, TranslatePhyiscalTimeToTicks } from "./tempo";
 import { Transformer } from "./Transformer";
@@ -12,10 +13,12 @@ import { Transformer } from "./Transformer";
  */
 export const transformerOrder = [
     new MakeChoice().name,
+    new Modify().name,
     new InsertTemporalSpread().name,
     new InsertDynamicsGradient().name,
     new ApproximateLogarithmicTempo().name,
     new TranslatePhyiscalTimeToTicks().name,
+    new StylizeOrnamentation().name,
     new InsertRubato().name,
     new InsertDynamicsInstructions().name,
     new InsertMetricalAccentuation().name,

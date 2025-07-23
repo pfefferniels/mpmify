@@ -292,6 +292,12 @@ export class MSM {
             ? this.allNotes
             : this.allNotes.filter(n => n.part - 1 === part)
     }
+
+    public notesInRange(from: number, to: number, scope: Scope) {
+        return this.notesInPart(scope).filter(note => {
+            return note.date >= from && note.date <= to
+        })
+    }
 }
 
 export const parseMSM = (msm: string) => {

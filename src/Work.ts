@@ -1,5 +1,5 @@
 import { v4 } from "uuid";
-import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice } from "./transformers";
+import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify } from "./transformers";
 import { Transformer } from "./transformers/Transformer";
 
 export interface Argumentation {
@@ -16,7 +16,7 @@ export interface Work {
 }
 
 export type ArgumentationWithCalls = Argumentation & {
-    calls: Transformer[];
+    calls: Omit<Transformer, 'run' | 'requires' | 'argumentation'>[];
 }
 
 export const getArgumentationsWithCalls = (transformers: Transformer[]): ArgumentationWithCalls[] => {
@@ -29,7 +29,12 @@ export const getArgumentationsWithCalls = (transformers: Transformer[]): Argumen
                 calls: []
             });
         }
-        argumentations.get(transformer.argumentation.id)!.calls.push(transformer);
+        argumentations.get(transformer.argumentation.id)!.calls.push({
+            id: transformer.id,
+            name: transformer.name,
+            options: transformer.options,
+            created: transformer.created
+        });
     }
 
     return Array.from(argumentations.values());
@@ -115,7 +120,6 @@ export function importWork(json: string): Transformer[] {
     }
 
     const imported = JSON.parse(json, reviver);
-    console.log('imported work:', imported);
 
     const transformers =
         imported.creation.argumentations
@@ -125,10 +129,12 @@ export function importWork(json: string): Transformer[] {
             })))
             .flat()
             .map(t => {
-                console.log('dealing with t', t)
                 let transformer: Transformer | null = null;
                 if (t.name === 'MakeChoice') {
                     transformer = new MakeChoice();
+                }
+                else if (t.name === 'Modify') {
+                    transformer = new Modify(t.options);
                 }
                 else if (t.name === 'InsertDynamicsInstructions') {
                     transformer = new InsertDynamicsInstructions();
@@ -190,5 +196,5 @@ export function importWork(json: string): Transformer[] {
             })
             .filter(t => t !== null)
 
-    return transformers;
+    return transformers.sort(compareTransformers);
 }
