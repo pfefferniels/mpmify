@@ -4,6 +4,7 @@ import { MakeChoice } from "./choice/MakeChoice";
 import { InsertDynamicsInstructions } from "./dynamics";
 import { Modify } from "./modification/Modify";
 import { InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
+import { InsertPedal } from "./pedal/InsertPedalInstructions";
 import { InsertRubato } from "./rubato/InsertRubato";
 import { ApproximateLogarithmicTempo, TranslatePhyiscalTimeToTicks } from "./tempo";
 import { Transformer } from "./Transformer";
@@ -22,7 +23,8 @@ export const transformerOrder = [
     new InsertRubato().name,
     new InsertDynamicsInstructions().name,
     new InsertMetricalAccentuation().name,
-    new InsertArticulation().name
+    new InsertArticulation().name,
+    new InsertPedal().name
 ] as const;
 
 /**
