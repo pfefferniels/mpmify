@@ -7,7 +7,8 @@ import { WithEndDate } from "../tempo/tempoCalculations"
 export type DynamicsWithEndDate = Dynamics & WithEndDate
 
 export interface InsertDynamicsInstructionsOptions extends ScopedTransformationOptions {
-    markers: number[]
+    from: number
+    to: number,
     phantomVelocities: Map<number, number>
 }
 
@@ -21,30 +22,23 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // set the default options
         this.options = options || {
             scope: 'global',
-            markers: [],
+            from: 0,
+            to: 0,
             phantomVelocities: new Map()
         }
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        const markers = this.options.markers
-        this.options.markers.sort((a, b) => a - b)
         const points = this.asPoints(msm, this.options.scope)
+        const { from, to } = this.options
 
-        const dynamics: Dynamics[] = []
-        for (let i = 0; i < this.options.markers.length - 1; i++) {
-            const startDate = markers[i]
-            const endDate = markers[i + 1]
+        const relevantPoints = points.filter(p => p.date >= from && p.date <= to)
+        const instruction = approximateDynamics(relevantPoints)
+        if (!instruction) return
 
-            const relevantPoints = points.filter(p => p.date >= startDate && p.date <= endDate)
-            const instruction = approximateDynamics(relevantPoints)
-            if (instruction) {
-                instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
-                dynamics.push(instruction)
-            }
-        }
+        instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
 
-        mpm.insertInstructions(dynamics, this.options?.scope)
+        mpm.insertInstruction(instruction, this.options?.scope)
         this.setRelativeVolume(msm, mpm)
     }
 
@@ -56,7 +50,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
                 .filter(n => n["midi.velocity"] !== undefined)
             const velocity = notesWithVolume
                 .reduce((sum, curr) => sum + curr["midi.velocity"], 0) / notesWithVolume.length
-            
+
             const phantomVelocity = this.options.phantomVelocities.get(date)
 
             points.push({
@@ -71,7 +65,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     private setRelativeVolume(msm: MSM, mpm: MPM) {
         const instructions = mpm.getInstructions<Dynamics>('dynamics', this.options.scope)
         const instructionsWithEndDate = []
-        for (let i=0; i<instructions.length - 1; i++) {
+        for (let i = 0; i < instructions.length - 1; i++) {
             instructionsWithEndDate.push({
                 ...instructions[i],
                 endDate: instructions[i + 1].date,
@@ -85,13 +79,14 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
 
         for (const [date, notes] of chords) {
             const corresp = instructionsWithEndDate.find(i => date >= i.date && date < i.endDate)
-            if (!corresp) continue 
+            if (!corresp) continue
 
             for (const note of notes) {
-                if (!note["midi.velocity"]) continue 
+                if (!note["midi.velocity"]) continue
 
                 const should = volumeAtDate(corresp, note.date)
                 note.absoluteVelocityChange = note["midi.velocity"] - should
+                console.log('absoluteVelocityChange', note["xml:id"], note["midi.velocity"], should, note.absoluteVelocityChange);
             }
         }
     }
