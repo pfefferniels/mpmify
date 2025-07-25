@@ -6,8 +6,8 @@ import { InsertDynamicsInstructions } from "../dynamics";
 
 export interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
     name: string
-    start: number
-    end: number
+    from: number
+    to: number
     beatLength: number
     neutralEnd?: boolean
     scaleTolerance: number
@@ -29,15 +29,15 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         this.options = options || {
             scope: 'global',
             name: 'my-accentuation',
-            start: 0,
-            end: 0,
+            from: 0,
+            to: 0,
             beatLength: 0.25,
             neutralEnd: false,
             scaleTolerance: 0,
         }
     }
 
-    private extractVelocities({ start, end, beatLength }: InsertMetricalAccentuationOptions, msm: MSM): Velocity[] {
+    private extractVelocities({ from: start, to: end, beatLength }: InsertMetricalAccentuationOptions, msm: MSM): Velocity[] {
         const ppq = 720
         const velocities = []
         const frameLength = end - start
@@ -107,14 +107,14 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
 
         const cell = {
-            start: this.options.start,
-            end: this.options.end,
+            start: this.options.from,
+            end: this.options.to,
             name: this.options.name,
             neutralEnd: this.options.neutralEnd
         }
 
         const nextCell = mpm.getInstructions<AccentuationPattern>('accentuationPattern', this.options.scope)
-            .find(c => c.date > this.options.start);
+            .find(c => c.date > this.options.from);
 
         const velocities = this.extractVelocities(this.options, msm)
         let scale = this.calculateScale(velocities)
