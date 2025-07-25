@@ -1,25 +1,28 @@
 import { MPM } from "mpm-ts"
-import { MSM } from "../../msm"
+import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
-interface Choice {
-    prefer: string
-}
-
-export interface RangeChoice extends Choice {
+export interface RangeChoice {
     from: number
     to: number
 }
 
-export interface NoteChoice extends Choice {
+export interface NoteChoice {
     noteids: string[]
 }
 
 export type AnyChoice = RangeChoice | NoteChoice
 
+export type Preference = {
+    prefer: string
+} | {
+    velocity: string
+    timing: string
+}
+
 export type MakeChoiceOptions = ScopedTransformationOptions
-    & ((RangeChoice | NoteChoice) & { prefer: string }) // option 1: a single choice
-    | { prefer: string } // option 2: a default choice
+    & ((RangeChoice | NoteChoice) & Preference) // single choice
+    | Preference // default choice
 
 export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     name = 'MakeChoice'
@@ -36,7 +39,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     }
 
     protected transform(msm: MSM, _: MPM) {
-        let affected = []
+        let affected: MsmNote[] = []
 
         // (1) range mode
         if ('from' in this.options && 'to' in this.options) {
@@ -61,18 +64,30 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
 
         // (3) default choice mode
         else {
-            affected = msm.allNotes.filter(note => note.source)
+            affected = msm.allNotes
         }
 
-        console.log('affected', affected)
-        for (const note of affected) {
-            if (note.source === this.options.prefer) {
-                console.log('keeping note', note)
-                note.source = undefined
-            } else {
-                console.log('eliminating note', note)
+        const velocityPreference = 'prefer' in this.options ? this.options.prefer : this.options.velocity;
+        const timingPreference = 'prefer' in this.options ? this.options.prefer : this.options.timing;
+
+        const equivalents = Map.groupBy(affected, note => `${note.date}-${note.duration}-${note["midi.pitch"]}`)
+        for (const [_, notes] of equivalents) {
+            const prototype = notes.find(note => note.source === timingPreference)
+            if (!prototype) continue;
+
+            if (velocityPreference !== timingPreference) {
+                const velocitySource = notes.find(note => note.source === velocityPreference);
+                if (velocitySource) {
+                    prototype['midi.velocity'] = velocitySource['midi.velocity']
+                }
+            }
+
+            // keep only the prototype note and remove all source variants
+            console.log('Removing variants', notes, 'keeping', prototype);
+            for (const note of notes) {
                 msm.allNotes.splice(msm.allNotes.indexOf(note), 1);
             }
+            msm.allNotes.push({ ...prototype });
         }
     }
 }
