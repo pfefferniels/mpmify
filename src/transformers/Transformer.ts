@@ -67,7 +67,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
             if (!instruction.corresp) {
                 instruction.corresp = newCorresp
             }
-            else if (!instruction.corresp.split(' ').includes) {
+            else if (!instruction.corresp.split(' ').includes(newCorresp)) {
                 instruction.corresp += ' ' + newCorresp
             }
         })

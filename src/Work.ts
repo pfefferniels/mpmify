@@ -1,12 +1,33 @@
 import { v4 } from "uuid";
-import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertRelativeDuration, InsertRelativeVolume, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify } from "./transformers";
+import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify } from "./transformers";
 import { Transformer } from "./transformers/Transformer";
+
+export const beliefValues = [
+    'authentic',
+    'plausible',
+    'speculative',
+    'unfounded'
+] as const;
+
+export type BeliefValue = typeof beliefValues[number];
+
+export interface Information {
+    ids: string[] // MPM ids
+    note?: string // can be used for a verbal description of the information
+}
+
+export interface Belief<About = Information, Cert extends string | number = BeliefValue> {
+    that: About;
+    certainty: Cert;
+    description: string
+}
 
 export interface Argumentation {
     id: string;
-    description: string;
+    note: string;
     author?: string;
     encoder?: string;
+    conclusion: Belief;
 }
 
 export interface Work {
@@ -69,7 +90,10 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
                 Array.from(
                     new Set(transformers
                         .filter((t): t is MakeChoice => t.name === 'MakeChoice')
-                        .map(t => t.options.prefer))
+                        .map(t => 'prefer' in t.options
+                            ? [t.options.prefer]
+                            : [t.options.velocity, t.options.timing])
+                        .flat())
                 ),
             argumentations: Array.from(argumentations.entries()).map(([argumentation, calls]) => {
                 return {
@@ -154,12 +178,12 @@ export function importWork(json: string): Transformer[] {
                 else if (t.name === 'InsertMetricalAccentuation') {
                     transformer = new InsertMetricalAccentuation();
                 }
-                else if (t.name === 'InsertRelativeDuration') {
-                    transformer = new InsertRelativeDuration();
-                }
-                else if (t.name === 'InsertRelativeVolume') {
-                    transformer = new InsertRelativeVolume();
-                }
+                //else if (t.name === 'InsertRelativeDuration') {
+                //    transformer = new InsertRelativeDuration();
+                //}
+                //else if (t.name === 'InsertRelativeVolume') {
+                //    transformer = new InsertRelativeVolume();
+                //}
                 else if (t.name === 'InsertPedal') {
                     transformer = new InsertPedal();
                 }
