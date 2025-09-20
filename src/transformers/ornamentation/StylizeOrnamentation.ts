@@ -97,7 +97,13 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 if (label === "-1") {
                     group.forEach(({ ornament }) => {
                         const def = this.asDef(ornament)
-                        mpm.insertDefinition(def, scope)
+
+                        if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
+                            console.log('strange ornament', ornament)
+                        }
+                        else {
+                            mpm.insertDefinition(def, scope)
+                        }
                     })
                     continue
                 }
@@ -120,7 +126,13 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                     if (subLabel === "-1") {
                         subgroup.forEach(({ ornament }) => {
                             const def = this.asDef(ornament)
-                            mpm.insertDefinition(def, scope)
+
+                            if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
+                                console.log('strange ornament', ornament)
+                            }
+                            else {
+                                mpm.insertDefinition(def, scope)
+                            }
                         })
                     } else {
                         const sums = subgroup.reduce((acc, cur) => {
@@ -158,6 +170,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                                 intensity: avgIntensity
                             }
                         }
+
                         mpm.insertDefinition(def, scope)
                         subgroup.forEach(({ ornament }) => {
                             ornament["name.ref"] = defName

@@ -166,18 +166,18 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             }
             else if (placement === 'on-beat') {
                 frameStart = 0
-                newOnset = arpeggioNotes[0]['midi.onset']
+                newOnset = sortedByOnset[0]['midi.onset']
             }
             else if (placement === 'before-beat') {
                 frameStart = -frameLength
-                newOnset = arpeggioNotes[arpeggioNotes.length - 1]['midi.onset']
+                newOnset = sortedByOnset[sortedByOnset.length - 1]['midi.onset']
             }
             else {
                 // the estimated onset is the average of all onsets
-                newOnset = arpeggioNotes.map(note => note['midi.onset']).reduce((a, b) => a + b, 0) / arpeggioNotes.length
+                newOnset = sortedByOnset.map(note => note['midi.onset']).reduce((a, b) => a + b, 0) / arpeggioNotes.length
 
                 // frame start is the distance between the first note's onset and the estimated onset
-                frameStart = (arpeggioNotes[0]['midi.onset'] - newOnset) * 1000
+                frameStart = (sortedByOnset[0]['midi.onset'] - newOnset) * 1000
             }
 
             // determine the ornament's intensity
@@ -200,7 +200,8 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
                 'intensity': intensity === 1 ? undefined : intensity
             })
 
-            arpeggioNotes.forEach(note => {
+            sortedByOnset.forEach(note => {
+                console.log('changing', note['xml:id'], 'onset from', note['midi.onset'], 'to', newOnset)
                 note['midi.onset'] = newOnset
             })
         }
