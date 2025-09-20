@@ -12,14 +12,12 @@ export const beliefValues = [
 export type BeliefValue = typeof beliefValues[number];
 
 export interface Information {
-    ids: string[] // MPM ids
-    note?: string // can be used for a verbal description of the information
+    note: string // verbal description of the information
 }
 
 export interface Belief<About = Information, Cert extends string | number = BeliefValue> {
     that: About;
     certainty: Cert;
-    description: string
 }
 
 export interface Argumentation {
@@ -72,16 +70,29 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
             "crminf": "http://www.cidoc-crm.org/extensions/crminf/",
             "lrm": "http://iflastandards.info/ns/lrm/lrmoo/",
             "id": "@id",
+            "ids": "@id",
             "type": "@type",
-            "name": "crm:P2_has_title",
+            "name": "crm:P2_has_type",
             "expression": "lrm:R3_is_realised_in",
             "creation": "lrm:R16i_was_created_by",
-            "argumentations": "crm:P9_consists_of",
-            "calls": "crm:P9_consists_of",
+            "argumentations": {
+                "@id": "crm:P9_consists_of",
+                "@type": "crminf:I1_Argumentation"
+            },
+            "calls": {
+                "@id": "crm:P9_consists_of",
+                "@type": "crmdig:D10_Software_Execution"
+            },
             "author": "crm:P14_carried_out_by",
             "encoder": "crm:P14_carried_out_by",
-            "description": "crm:P3_has_note",
-            "incorporates": "crm:P15_was_influenced_by"
+            "note": "crm:P3_has_note",
+            "incorporates": "crm:P15_was_influenced_by",
+            "conclusion": {
+                "@id": "crminf:J2_concluded_that",
+                "@type": "crminf:I2_Belief"
+            },
+            "that": "crminf:J27_that_the_formal_meaning_of",
+            "certainty": "crminf:J5_holds_to_be"
         },
         "@type": "Reconstruction",
         ...work,
@@ -216,6 +227,7 @@ export function importWork(json: string): Transformer[] {
                 transformer.id = t.id || v4();
                 transformer.options = t.options;
                 transformer.argumentation = t.argumentation
+                transformer.created = t.created
                 return transformer;
             })
             .filter(t => t !== null)
