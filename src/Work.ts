@@ -1,32 +1,17 @@
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify } from "./transformers";
 import { Transformer } from "./transformers/Transformer";
+import { Argumentation } from "doubtful/inverse"
 
-export const beliefValues = [
-    'authentic',
-    'plausible',
-    'speculative',
-    'unfounded'
-] as const;
+// export const beliefValues = [
+// 'authentic',
+// 'plausible',
+// 'speculative',
+// 'unfounded'
+// ] as const;
+// 
+// export type BeliefValue = typeof beliefValues[number];
 
-export type BeliefValue = typeof beliefValues[number];
-
-export interface Information {
-    note: string // verbal description of the information
-}
-
-export interface Belief<About = Information, Cert extends string | number = BeliefValue> {
-    that: About;
-    certainty: Cert;
-}
-
-export interface Argumentation {
-    id: string;
-    note: string;
-    author?: string;
-    encoder?: string;
-    conclusion: Belief;
-}
 
 export interface Work {
     name: string;

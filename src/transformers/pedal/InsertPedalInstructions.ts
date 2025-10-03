@@ -1,11 +1,15 @@
 import { MPM } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { TranslatePhyiscalTimeToTicks } from "../tempo"
 
-export interface InsertPedalOptions extends TransformationOptions {
-    changeDuration: number
-}
+export type InsertPedalOptions =
+    TransformationOptions
+    & {
+        pedal?: string, // identify a pedal by its xml:id. If not given, all pedals are considered
+        changeDuration: number // the duration of the pedal change, default 0 (immediately)
+        depth?: number // [0..1], default 1
+    }
 
 export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     name = 'InsertPedal'
@@ -13,17 +17,29 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
 
     constructor(options?: InsertPedalOptions) {
         super()
-
-        // set the default options
-        this.options = options || {
-            changeDuration: 0
-        }
+        this.options = options
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        const validPedals = msm.pedals.filter(pedal => pedal.tickDate !== undefined && pedal.tickDuration !== undefined)
+        const validPedals = msm.pedals
+            .filter(pedal => {
+                const tickDate = pedal.tickDate
+                const tickDuration = pedal.tickDuration
+
+                if (tickDate === undefined || tickDuration === undefined) {
+                    return false
+                }
+
+                if (this.options.pedal) {
+                    return pedal["xml:id"] === this.options.pedal
+                }
+
+                return true
+            })
 
         mpm.removeInstructions('movement', 'global')
+
+        const depth = this.options.depth || 1
 
         for (const pedal of validPedals) {
             const tickDate = pedal.tickDate
@@ -35,7 +51,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
                     type: 'movement',
                     date: tickDate - this.options.changeDuration / 2,
                     position: 0,
-                    "transition.to": 1,
+                    "transition.to": depth,
                     controller: pedal.type
                 }, 'global')
             }
@@ -44,7 +60,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
                 'xml:id': `${pedal['xml:id']}_moveDown`,
                 type: 'movement',
                 date: tickDate + this.options.changeDuration / 2,
-                position: 1,
+                position: depth,
                 controller: pedal.type
             }, 'global')
 
@@ -53,7 +69,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
                     'xml:id': `${pedal['xml:id']}_moveUp`,
                     type: 'movement',
                     date: tickDate + tickDuration - this.options.changeDuration / 2,
-                    position: 1,
+                    position: depth,
                     "transition.to": 0,
                     controller: pedal.type
                 }, 'global')

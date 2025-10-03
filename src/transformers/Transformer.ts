@@ -2,7 +2,7 @@ import { InstructionType, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
-import { Argumentation } from "../Work";
+import { Argumentation } from "doubtful/inverse";
 
 /**
  * 

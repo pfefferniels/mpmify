@@ -16,6 +16,7 @@
     "vitest": "^0.34.4"
   },
   "dependencies": {
+    "doubtful": "file:../doubtful",
     "js2xmlparser": "^5.0.0",
     "jsdom": "^22.1.0",
     "mpm-ts": "file:../mpm-ts",
