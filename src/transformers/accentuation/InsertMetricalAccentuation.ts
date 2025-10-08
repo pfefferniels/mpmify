@@ -131,7 +131,12 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             currentCell.start += cellLength
             currentCell.end += cellLength
 
-            const currentVelocities = this.extractVelocities(this.options, msm)
+            const currentVelocities = this.extractVelocities({
+                ...this.options,
+                from: currentCell.start,
+                to: currentCell.end, 
+                beatLength: this.options.beatLength
+            }, msm)
             const currentScale = this.calculateScale(currentVelocities)
             if (currentScale === 0) break
 
