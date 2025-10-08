@@ -34,6 +34,12 @@ export const compareTransformers = (a: Transformer, b: Transformer) => {
     const aIndex = transformerOrder.indexOf(a.name);
     const bIndex = transformerOrder.indexOf(b.name);
 
+    if (aIndex === bIndex) {
+        if ('from' in a.options && 'from' in b.options && typeof a.options.from === 'number' && typeof b.options.from === 'number') {
+            return a.options.from - b.options.from;
+        }
+    }
+
     return aIndex - bIndex;
 }
 
