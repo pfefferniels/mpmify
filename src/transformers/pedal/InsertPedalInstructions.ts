@@ -36,9 +36,6 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
 
                 return true
             })
-
-        mpm.removeInstructions('movement', 'global')
-
         const depth = this.options.depth || 1
 
         for (const pedal of validPedals) {
