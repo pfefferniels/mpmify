@@ -58,11 +58,17 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         }
     }
 
-    private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient: DynamicsGradient) => {
+    /**
+     * @note If gradient is undefined, it will be estimated.
+     */
+    private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient?: DynamicsGradient) => {
         let arpeggioNotes = msm.asChords(this.options.scope).get(date)
 
         if (this.options.sortVelocities) {
-            this.sortVelocities(arpeggioNotes)
+            const defaultDirection = this.sortVelocities(arpeggioNotes)
+            if (!gradient && !isSingleGradient(this.options)) {
+                gradient = defaultDirection === 'crescendo' ? this.options.crescendo : this.options.decrescendo
+            }
         }
 
         // only consider notes with a defined onset time
@@ -108,26 +114,14 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         else {
             const chords = msm.asChords(this.options?.scope)
             for (let [date, arpeggioNotes] of chords) {
-                // only consider notes with a defined onset time
-                arpeggioNotes = arpeggioNotes
-                    .filter(note => isDefined(note['midi.onset']))
-                    .sort((a, b) => a['midi.onset'] - b['midi.onset'])
+                if (arpeggioNotes.length === 1) continue
 
-                const firstVel = arpeggioNotes[0]["midi.velocity"]
-                const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
-                const dynamicsDiff = lastVel - firstVel
-
-                if (dynamicsDiff > 0) {
-                    this.applyGradient(msm, mpm, date, this.options.crescendo)
-                }
-                else if (dynamicsDiff < 0) {
-                    this.applyGradient(msm, mpm, date, this.options.decrescendo)
-                }
+                this.applyGradient(msm, mpm, date)
             }
         }
     }
 
-    private sortVelocities(chord: MsmNote[]) {
+    private sortVelocities(chord: MsmNote[]): 'crescendo' | 'descrescendo' {
         chord.sort((a, b) => a["midi.onset"] - b["midi.onset"])
 
         let loudestPos = 0;
@@ -148,5 +142,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
             .forEach((note, i) => {
                 note["midi.velocity"] = velocities[i];
             })
+        
+        return loudestPos > quietestPos ? 'crescendo' : 'descrescendo';
     }
 }
