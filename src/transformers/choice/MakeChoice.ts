@@ -18,7 +18,7 @@ export type Preference = {
 } | {
     velocity: string
     timing: string
-    pedalling?: string
+    pedalling: string
 }
 
 export type MakeChoiceOptions = ScopedTransformationOptions
@@ -69,7 +69,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
 
         const velocityPreference = 'prefer' in this.options ? this.options.prefer : this.options.velocity;
         const timingPreference = 'prefer' in this.options ? this.options.prefer : this.options.timing;
-        const pedallingPreference = 'pedalling' in this.options && this.options.pedalling ? this.options.pedalling : undefined;
+        const pedallingPreference = 'prefer' in this.options ? this.options.prefer : this.options.pedalling;
 
         const equivalents = Map.groupBy(affected, note => `${note.date}-${note.duration}-${note["midi.pitch"]}`)
         for (const [_, notes] of equivalents) {
@@ -104,11 +104,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
                 }
             }
             else {
-                for (const pedal of msm.pedals) {
-                    if (pedal.source !== pedallingPreference) {
-                        msm.pedals.splice(msm.pedals.indexOf(pedal), 1)
-                    }
-                }
+                msm.pedals = msm.pedals.filter(pedal => pedal.source === pedallingPreference)
             }
         }
     }
