@@ -2,7 +2,44 @@ import { InstructionType, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
-import { Argumentation } from "doubtful/inverse";
+import { WithActor, WithId, WithNote } from "../../../doubtful/dist/assumption/utils";
+
+export const beliefValues = [
+    'authentic',
+    'plausible',
+    'speculative',
+    'unfounded'
+] as const;
+
+export type Certainty = typeof beliefValues[number];
+
+export interface Argumentation<T extends string = 'simpleArgumentation'> extends WithActor, WithNote, WithId {
+    type: T;
+    conclusion: ActivityBelief;
+}
+
+export const activityMotivations = [
+    'intensify',
+    'relax',
+    'shade',
+    'resonance', // shade?
+    'pianissimo',
+    'inegal',
+    'soften',
+    'emphasize',
+    'unknown'
+] as const;
+
+export type ActivityMotivation = typeof activityMotivations[number];
+
+/**
+ * For now both, E7 and I2
+ */
+export interface ActivityBelief extends WithId, WithNote {
+    motivation: ActivityMotivation
+    continued?: ActivityBelief
+    certainty: Certainty
+}
 
 /**
  * 
@@ -81,4 +118,68 @@ export const generateId = (type: InstructionType, date: number, mpm: MPM) => {
     const n = instructions.filter(i => i.date === date).length
     if (n === 0) return `${type}_${date}`
     return `${type}_${date}_${n}`
+}
+
+export const isRangeBased = (transformer: TransformationOptions): transformer is TransformationOptions & { from: number; to: number } => {
+    return 'from' in transformer && 'to' in transformer;
+}
+
+export const isDateBased = (transformer: TransformationOptions): transformer is TransformationOptions & { date: number } => {
+    return 'date' in transformer;
+}
+
+export const isNoteBased = (transformer: TransformationOptions): transformer is TransformationOptions & { noteIDs: string[] } => {
+    return 'noteIDs' in transformer;
+}
+
+type Range = {
+    from: number;
+    to?: number;
+}
+
+export const getRange = (transformer: TransformationOptions | TransformationOptions[], msm: MSM): Range | undefined => {
+    if (Array.isArray(transformer)) {
+        const ranges = transformer
+            .map(t => {
+                return getRange(t.options, msm)
+            })
+            .filter(d => !!d)
+
+        if (ranges.length === 0) {
+            return null;
+        }
+
+        const from = Math.min(...ranges.map(({ from }) => from));
+        const to = Math.max(...ranges.map(({ from, to }) => Math.max(from, to || 0)));
+        return { from, to };
+    }
+
+    if (isRangeBased(transformer)) {
+        return { from: transformer.from, to: transformer.to }
+    }
+    if (isDateBased(transformer)) {
+        return { from: transformer.date }
+    }
+    if (isNoteBased(transformer)) {
+        const noteids = transformer.noteIDs
+        const dates = noteids
+            .map(id => msm.getByID(id)?.date)
+            .filter((d): d is number => d !== undefined)
+        if (dates.length === 0) {
+            return null
+        }
+        return { from: Math.min(...dates), to: Math.max(...dates) }
+    }
+    if ('pedal' in transformer) {
+        const pedals = msm.pedals.filter(p => p['xml:id'] === transformer.pedal)
+        const dates = pedals
+            .map(p => p.tickDate)
+            .filter((d): d is number => d !== undefined)
+        if (dates.length === 0) {
+            return
+        }
+        return { from: Math.min(...dates) }
+    }
+
+    return { from: 0, to: msm.lastDate() };
 }

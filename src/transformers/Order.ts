@@ -1,4 +1,4 @@
-import { InsertMetricalAccentuation } from "./accentuation";
+import { InsertMetricalAccentuation, MergeMetricalAccentuations } from "./accentuation";
 import { InsertArticulation } from "./articulation";
 import { MakeChoice } from "./choice/MakeChoice";
 import { InsertDynamicsInstructions } from "./dynamics";
@@ -23,6 +23,7 @@ export const transformerOrder = [
     new InsertRubato().name,
     new InsertDynamicsInstructions().name,
     new InsertMetricalAccentuation().name,
+    new MergeMetricalAccentuations().name,
     new InsertArticulation().name,
     new InsertPedal().name
 ] as const;

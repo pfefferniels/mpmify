@@ -1,17 +1,6 @@
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify } from "./transformers";
-import { Transformer } from "./transformers/Transformer";
-import { Argumentation } from "doubtful/inverse"
-
-// export const beliefValues = [
-// 'authentic',
-// 'plausible',
-// 'speculative',
-// 'unfounded'
-// ] as const;
-// 
-// export type BeliefValue = typeof beliefValues[number];
-
+import { Argumentation, Transformer } from "./transformers/Transformer";
 
 export interface Work {
     name: string;

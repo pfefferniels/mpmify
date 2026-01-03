@@ -3,7 +3,7 @@ import { MSM } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
 export type ModifyOptions = ScopedTransformationOptions
-    & ({ noteids: string[] } | { from: number, to: number })
+    & ({ noteIDs: string[] } | { from: number, to: number })
     & {
         aspect: 'velocity' | 'onset' | 'duration' | 'pedal'
         change: number
@@ -30,8 +30,8 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
     protected transform(msm: MSM, mpm: MPM) {
         const { aspect, change } = this.options
 
-        const notes = ('noteids' in this.options)
-            ? this.options.noteids.map(id => msm.getByID(id))
+        const notes = ('noteIDs' in this.options)
+            ? this.options.noteIDs.map(id => msm.getByID(id))
             : msm.notesInRange(this.options.from, this.options.to, this.options.scope)
 
         for (const note of notes) {

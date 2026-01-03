@@ -222,7 +222,11 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                     endDate
                 }
 
-                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+                let endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
+                const empirical = msm.notesInPart(scope).find(n => n.date === endDate)
+                if (empirical) {
+                    endMs = empirical["midi.onset"] * 1000 - currentFrameBeginMs
+                }
 
                 msm.notesInPart(scope)
                     .filter(n => n["midi.duration"])

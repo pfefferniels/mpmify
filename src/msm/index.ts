@@ -108,7 +108,7 @@ export class MSM {
         const notesWithOnset = this.allNotes.filter(n => isDefined(n['midi.onset']))
         const min = Math.min(...notesWithOnset.map(n => n['midi.onset']))
 
-        const pedals = this.pedals.forEach(p => {
+        this.pedals.forEach(p => {
             if (p["midi.onset"] < min) {
                 p["midi.duration"] -= (min - p["midi.onset"])
                 p['midi.onset'] = 0

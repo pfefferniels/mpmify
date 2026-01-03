@@ -8,7 +8,7 @@ export interface RangeChoice {
 }
 
 export interface NoteChoice {
-    noteids: string[]
+    noteIDs: string[]
 }
 
 export type AnyChoice = RangeChoice | NoteChoice
@@ -54,11 +54,11 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
         }
 
         // (2) note mode
-        else if ('noteids' in this.options) {
+        else if ('noteIDs' in this.options) {
             affected = msm.allNotes.filter(note => {
                 if (!note.source) return false;
-                const { noteids } = this.options as NoteChoice
-                return noteids.includes(note['xml:id'])
+                const { noteIDs } = this.options as NoteChoice
+                return noteIDs.includes(note['xml:id'])
             })
         }
 

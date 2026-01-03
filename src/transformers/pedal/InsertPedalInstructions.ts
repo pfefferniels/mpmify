@@ -7,10 +7,20 @@ export type InsertPedalOptions =
     TransformationOptions
     & {
         pedal?: string, // identify a pedal by its xml:id. If not given, all pedals are considered
-        changeDuration: number // the duration of the pedal change, default 0 (immediately)
+        start: number // relative to the original time, in ticks
+        duration: number // in ticks
+        direction: 'up' | 'down',
         depth?: number // [0..1], default 1
     }
 
+/**
+ * This transformer is a shortcut. The developed "path" for encoding pedal changes
+ * would be to first insert accurate movements into the MSM (if necessary), and then
+ * to approximate the shape using a transformer similiar to `InsertDynamics`. However,
+ * this shortcut is useful for all cases in which the original source material
+ * cannot represent accurate pedal movements (such as reproducing piano rolls)
+ * and where these abrupt pedal changes are to be interpreted.
+ */
 export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     name = 'InsertPedal'
     requires = [TranslatePhyiscalTimeToTicks]
@@ -42,43 +52,44 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
             const tickDate = pedal.tickDate
             const tickDuration = pedal.tickDuration
 
-            if (this.options.changeDuration) {
+            if (this.options.direction === 'down') {
                 mpm.insertInstruction({
                     'xml:id': `${pedal['xml:id']}_start`,
                     type: 'movement',
-                    date: tickDate - this.options.changeDuration / 2,
+                    date: tickDate + this.options.start,
                     position: 0,
                     "transition.to": depth,
                     controller: pedal.type
                 }, 'global')
+
+                mpm.insertInstruction({
+                    'xml:id': `${pedal['xml:id']}_moveDown`,
+                    type: 'movement',
+                    date: tickDate + this.options.start + this.options.duration,
+                    position: depth,
+                    controller: pedal.type
+                }, 'global')
             }
+            else {
+                const endDate = tickDate + tickDuration
 
-            mpm.insertInstruction({
-                'xml:id': `${pedal['xml:id']}_moveDown`,
-                type: 'movement',
-                date: tickDate + this.options.changeDuration / 2,
-                position: depth,
-                controller: pedal.type
-            }, 'global')
-
-            if (this.options.changeDuration) {
                 mpm.insertInstruction({
                     'xml:id': `${pedal['xml:id']}_moveUp`,
                     type: 'movement',
-                    date: tickDate + tickDuration - this.options.changeDuration / 2,
+                    date: endDate + this.options.start,
                     position: depth,
                     "transition.to": 0,
                     controller: pedal.type
                 }, 'global')
-            }
 
-            mpm.insertInstruction({
-                'xml:id': `${pedal['xml:id']}_end`,
-                type: 'movement',
-                date: tickDate + tickDuration + this.options.changeDuration / 2,
-                position: 0,
-                controller: pedal.type
-            }, 'global')
+                mpm.insertInstruction({
+                    'xml:id': `${pedal['xml:id']}_end`,
+                    type: 'movement',
+                    date: endDate + this.options.start + this.options.duration,
+                    position: 0,
+                    controller: pedal.type
+                }, 'global')
+            }
         }
     }
 }
