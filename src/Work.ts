@@ -1,11 +1,16 @@
 import { v4 } from "uuid";
-import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify } from "./transformers";
+import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify, InsertMetadata } from "./transformers";
 import { Argumentation, Transformer } from "./transformers/Transformer";
 
 export interface Work {
     name: string;
     mpm: string;
     mei: string;
+}
+
+export type ImportResult = {
+    transformers: Transformer[];
+    secondary?: Record<string, unknown>;
 }
 
 export type ArgumentationWithCalls = Argumentation & {
@@ -33,7 +38,7 @@ export const getArgumentationsWithCalls = (transformers: Transformer[]): Argumen
     return Array.from(argumentations.values());
 }
 
-export function exportWork(work: Work, transformers: Transformer[]): string {
+export function exportWork(work: Work, transformers: Transformer[], secondary?: Record<string, unknown>): string {
     const argumentations = Map.groupBy(transformers, t => t.argumentation)
 
     // TODO: convert the order into a single-linked list (P134 continued)
@@ -86,7 +91,8 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
                     calls: calls.map(({ argumentation, ...rest }) => rest)
                 }
             })
-        }
+        },
+        ...(secondary !== undefined && { secondary })
     }
 
     function replacer(key: string, value: any) {
@@ -114,7 +120,7 @@ export function exportWork(work: Work, transformers: Transformer[]): string {
 }
 
 
-export function importWork(json: string): Transformer[] {
+export function importWork(json: string): ImportResult {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function reviver(_: string, value: any) {
         if (typeof value === 'object' && value !== null) {
@@ -190,6 +196,9 @@ export function importWork(json: string): Transformer[] {
                 else if (t.name === 'InsertArticulation') {
                     transformer = new InsertArticulation();
                 }
+                else if (t.name === 'InsertMetadata') {
+                    transformer = new InsertMetadata();
+                }
                 else {
                     return null;
                 }
@@ -206,5 +215,8 @@ export function importWork(json: string): Transformer[] {
             })
             .filter(t => t !== null)
 
-    return transformers.sort(compareTransformers);
+    return {
+        transformers: transformers.sort(compareTransformers),
+        ...(imported.secondary !== undefined && { secondary: imported.secondary })
+    };
 }

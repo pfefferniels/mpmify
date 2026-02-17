@@ -19,15 +19,10 @@ export interface Argumentation<T extends string = 'simpleArgumentation'> extends
 }
 
 export const activityMotivations = [
+    'move',
     'intensify',
     'relax',
-    'shade',
-    'resonance', // shade?
-    'pianissimo',
-    'inegal',
-    'soften',
-    'emphasize',
-    'unknown'
+    'calm',
 ] as const;
 
 export type ActivityMotivation = typeof activityMotivations[number];
@@ -37,7 +32,6 @@ export type ActivityMotivation = typeof activityMotivations[number];
  */
 export interface ActivityBelief extends WithId, WithNote {
     motivation: ActivityMotivation
-    continued?: ActivityBelief
     certainty: Certainty
 }
 
@@ -158,6 +152,9 @@ export const getRange = (transformer: TransformationOptions | TransformationOpti
         return { from: transformer.from, to: transformer.to }
     }
     if (isDateBased(transformer)) {
+        if ('length' in transformer && typeof transformer.length === 'number') {
+            return { from: transformer.date, to: transformer.date + transformer.length }
+        }
         return { from: transformer.date }
     }
     if (isNoteBased(transformer)) {
@@ -180,6 +177,4 @@ export const getRange = (transformer: TransformationOptions | TransformationOpti
         }
         return { from: Math.min(...dates) }
     }
-
-    return { from: 0, to: msm.lastDate() };
 }
