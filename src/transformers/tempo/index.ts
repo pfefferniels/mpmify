@@ -1,5 +1,2 @@
-export * from "./ApproximateBezierTempo"
 export * from "./ApproximateLogarithmicTempo"
-export * from "./ConfigurableTempoTransformer"
 export * from "./TranslatePhysicalTimeToTicks"
-export * from "./CompressTempo"
