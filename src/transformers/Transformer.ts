@@ -126,6 +126,10 @@ export const isNoteBased = (transformer: TransformationOptions): transformer is 
     return 'noteIDs' in transformer;
 }
 
+export const hasSegments = (transformer: TransformationOptions): transformer is TransformationOptions & { segments: { from: number; to: number }[] } => {
+    return 'segments' in transformer && Array.isArray((transformer as any).segments);
+}
+
 type Range = {
     from: number;
     to?: number;
@@ -150,6 +154,14 @@ export const getRange = (transformer: TransformationOptions | TransformationOpti
 
     if (isRangeBased(transformer)) {
         return { from: transformer.from, to: transformer.to }
+    }
+    if (hasSegments(transformer)) {
+        const segs = transformer.segments;
+        if (segs.length === 0) return undefined;
+        return {
+            from: Math.min(...segs.map(s => s.from)),
+            to: Math.max(...segs.map(s => s.to))
+        };
     }
     if (isDateBased(transformer)) {
         if ('length' in transformer && typeof transformer.length === 'number') {
