@@ -2,7 +2,9 @@ import { InstructionType, MPM, Scope } from "mpm-ts";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
-import { WithActor, WithId, WithNote } from "../../../doubtful/dist/assumption/utils";
+type WithId = { id: string };
+type WithActor = { actor?: { name: string; sameAs: string[]; role?: string } };
+type WithNote = { note?: string };
 
 export const beliefValues = [
     'authentic',
@@ -35,9 +37,7 @@ export interface ActivityBelief extends WithId, WithNote {
     certainty: Certainty
 }
 
-/**
- * 
- */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface TransformationOptions {
 }
 
@@ -52,6 +52,7 @@ export interface ScopedTransformationOptions extends TransformationOptions {
  * The Transformer interface declares a method for building the chain of transformations.
  * It also declares a method for executing a transformation.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TransformerConstructor = new (...args: any[]) => Transformer;
 
 export interface Transformer {
@@ -126,16 +127,12 @@ export const isNoteBased = (transformer: TransformationOptions): transformer is 
     return 'noteIDs' in transformer;
 }
 
-export const hasSegments = (transformer: TransformationOptions): transformer is TransformationOptions & { segments: { from: number; to: number }[] } => {
-    return 'segments' in transformer && Array.isArray((transformer as any).segments);
-}
-
 type Range = {
     from: number;
     to?: number;
 }
 
-export const getRange = (transformer: TransformationOptions | TransformationOptions[], msm: MSM): Range | undefined => {
+export const getRange = (transformer: TransformationOptions | Transformer[], msm: MSM): Range | undefined => {
     if (Array.isArray(transformer)) {
         const ranges = transformer
             .map(t => {
@@ -155,14 +152,6 @@ export const getRange = (transformer: TransformationOptions | TransformationOpti
     if (isRangeBased(transformer)) {
         return { from: transformer.from, to: transformer.to }
     }
-    if (hasSegments(transformer)) {
-        const segs = transformer.segments;
-        if (segs.length === 0) return undefined;
-        return {
-            from: Math.min(...segs.map(s => s.from)),
-            to: Math.max(...segs.map(s => s.to))
-        };
-    }
     if (isDateBased(transformer)) {
         if ('length' in transformer && typeof transformer.length === 'number') {
             return { from: transformer.date, to: transformer.date + transformer.length }
@@ -180,10 +169,24 @@ export const getRange = (transformer: TransformationOptions | TransformationOpti
         return { from: Math.min(...dates), to: Math.max(...dates) }
     }
     if ('pedal' in transformer) {
-        const pedals = msm.pedals.filter(p => p['xml:id'] === transformer.pedal)
+        const pedalId = (transformer as TransformationOptions & { pedal?: string }).pedal
+        const pedals = pedalId
+            ? msm.pedals.filter(p => p['xml:id'] === pedalId)
+            : msm.pedals
+
+        const direction = 'direction' in transformer ? (transformer as TransformationOptions & { direction?: string }).direction : undefined
+
         const dates = pedals
-            .map(p => p.tickDate)
+            .map(p => {
+                if (direction === 'up') {
+                    return p.tickDate !== undefined && p.tickDuration !== undefined
+                        ? p.tickDate + p.tickDuration
+                        : undefined
+                }
+                return p.tickDate
+            })
             .filter((d): d is number => d !== undefined)
+
         if (dates.length === 0) {
             return
         }

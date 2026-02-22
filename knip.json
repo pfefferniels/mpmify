@@ -1,0 +1,4 @@
+{
+  "ignoreDependencies": ["mpm-ts"],
+  "ignore": ["src/transformers/modification/Constrain.ts"]
+}

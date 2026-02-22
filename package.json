@@ -6,17 +6,21 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "npx tsc",
-    "test": "npx vitest"
+    "test": "npx vitest",
+    "knip": "knip"
   },
   "author": "Niels Pfeffer",
   "license": "ISC",
   "devDependencies": {
+    "@eslint/js": "^9.39.3",
     "@types/uuid": "^9.0.4",
+    "eslint": "^9.39.3",
+    "knip": "^5.85.0",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.56.0",
     "vitest": "^0.34.4"
   },
   "dependencies": {
-    "doubtful": "file:../doubtful",
     "js2xmlparser": "^5.0.0",
     "jsdom": "^22.1.0",
     "mpm-ts": "file:../mpm-ts",
