@@ -11,7 +11,7 @@ export const clamp = (min: number, middle: number, max: number) => {
     return Math.max(min, Math.min(middle, max))
 }
 
-export const toFixed = (num: number, precision: number) => {
+const toFixed = (num: number, precision: number) => {
     return +(+(Math.round(+(num + 'e' + precision)) + 'e' + -precision)).toFixed(precision);
 }
 

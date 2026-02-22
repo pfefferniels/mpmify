@@ -93,14 +93,14 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         const ornaments: Ornament[] = []
 
         const chords = msm.asChords(this.options.scope)
-        for (let [date, arpeggioNotes] of chords) {
+        for (const [date, chordNotes] of chords) {
             if ('date' in this.options && date !== this.options.date) {
                 // if a date is specified, only process that date
                 continue
             }
 
             // only consider notes with a defined onset time
-            arpeggioNotes = arpeggioNotes.filter(note => isDefined(note['midi.onset']))
+            const arpeggioNotes = chordNotes.filter(note => isDefined(note['midi.onset']))
 
             // Less than two notes cannot be arpeggiated
             if (arpeggioNotes.length < 2) continue

@@ -1,9 +1,10 @@
 import { Articulation, ArticulationDef, MPM } from "mpm-ts";
 import { MSM, MsmNote } from "../../msm";
-import { AbstractTransformer, ScopedTransformationOptions, Transformer } from "../Transformer";
+import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { TranslatePhyiscalTimeToTicks } from "../tempo";
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
 }
 

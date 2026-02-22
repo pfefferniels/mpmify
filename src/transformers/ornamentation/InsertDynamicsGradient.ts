@@ -1,7 +1,7 @@
-import { MPM, Ornament, Scope } from "mpm-ts"
+import { MPM, Ornament } from "mpm-ts"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
-import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions, Transformer } from "../Transformer"
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 
 export type DynamicsGradient = { from: number, to: number }
 export type DatedDynamicsGradient = Map<number, DynamicsGradient>
@@ -113,7 +113,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         }
         else {
             const chords = msm.asChords(this.options?.scope)
-            for (let [date, arpeggioNotes] of chords) {
+            for (const [date, arpeggioNotes] of chords) {
                 if (arpeggioNotes.length === 1) continue
 
                 this.applyGradient(msm, mpm, date)

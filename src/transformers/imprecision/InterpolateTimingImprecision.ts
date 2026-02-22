@@ -1,6 +1,6 @@
 import { MPM } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
 export interface InterpolateTimingImprecisionOptions extends TransformationOptions {
     predefinedImprecision: number
@@ -21,8 +21,8 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
         super()
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        const timingImprecision = {
+    protected transform(_msm: MSM, _mpm: MPM) {
+        const _timingImprecision = {
             'distribution.uniform': {
                 '@': {
                     'date': 0.0,

@@ -88,14 +88,14 @@ export function exportWork(work: Work, transformers: Transformer[], secondary?: 
             argumentations: Array.from(argumentations.entries()).map(([argumentation, calls]) => {
                 return {
                     ...argumentation,
-                    calls: calls.map(({ argumentation, ...rest }) => rest)
+                    calls: calls.map(({ argumentation: _, ...rest }) => rest)
                 }
             })
         },
         ...(secondary !== undefined && { secondary })
     }
 
-    function replacer(key: string, value: any) {
+    function replacer(key: string, value: unknown) {
         // ignore 'requires', its just an internal property
         if (key === 'requires') return undefined
 

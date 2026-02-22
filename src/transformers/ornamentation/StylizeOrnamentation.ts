@@ -1,6 +1,6 @@
 import { DynamicsGradient, MPM, Ornament, OrnamentDef } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer"
+import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { dbscan } from "../../utils/dbscan"
 import { InsertDynamicsGradient } from "./InsertDynamicsGradient"

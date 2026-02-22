@@ -1,6 +1,6 @@
 import { Dynamics, MPM, Scope } from "mpm-ts"
 import { MSM } from "../../msm"
-import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
@@ -65,10 +65,11 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     private setRelativeVolume(msm: MSM, mpm: MPM) {
         const instructions = mpm.getInstructions<Dynamics>('dynamics', this.options.scope)
         const instructionsWithEndDate = []
-        for (let i = 0; i < instructions.length - 1; i++) {
+        for (let i = 0; i < instructions.length; i++) {
+            const endDate = instructions[i + 1]?.date ?? msm.end
             instructionsWithEndDate.push({
                 ...instructions[i],
-                endDate: instructions[i + 1].date,
+                endDate,
                 ...computeInnerControlPointsXPositions(
                     instructions[i].curvature,
                     instructions[i].protraction)

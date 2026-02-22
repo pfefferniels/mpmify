@@ -27,7 +27,7 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
         }
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, _mpm: MPM) {
         const { aspect, change } = this.options
 
         const notes = ('noteIDs' in this.options)

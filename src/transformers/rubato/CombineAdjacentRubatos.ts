@@ -1,5 +1,5 @@
 import { MPM, Rubato } from "mpm-ts"
-import { AbstractTransformer, generateId, ScopedTransformationOptions, TransformationOptions } from "../Transformer"
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { InsertRubato } from "./InsertRubato"
 import { MSM } from "../../msm"
 

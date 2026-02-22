@@ -1,6 +1,6 @@
 import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM, Scope } from "mpm-ts";
 import { MSM } from "../../msm";
-import { AbstractTransformer, generateId, ScopedTransformationOptions, Transformer } from "../Transformer";
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
 
@@ -78,7 +78,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
                 const scaled = v.avgVelocityChange / scale
                 return ({
-                    type: 'accentuation' as 'accentuation',
+                    type: 'accentuation' as const,
                     'xml:id': 'accentuation_' + v4(),
                     beat: v.beat,
                     value: scaled,

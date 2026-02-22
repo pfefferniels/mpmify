@@ -92,7 +92,7 @@ export class MSM {
         return clone
     }
 
-    public addCustomInfo(scoreId: string, info: any) {
+    public addCustomInfo(scoreId: string, info: Record<string, unknown>) {
         const target = this.allNotes.find(note => note["xml:id"] === scoreId)
         if (!target) return
 
@@ -189,7 +189,7 @@ export class MSM {
                                         'octave': note['octave'],
                                         'accidentals': note['accidentals'],
                                         'duration': note['duration']
-                                    } as any
+                                    } as Record<string, unknown>
 
                                     if (!filterIntermediateAttributes) {
                                         if (note['midi.pitch']) {
@@ -300,27 +300,3 @@ export class MSM {
     }
 }
 
-export const parseMSM = (msm: string) => {
-    const domParser = new DOMParser()
-    const dom = domParser.parseFromString(msm, 'application/xml')
-    const notes = [...dom.querySelectorAll('note')].map(el => {
-        return {
-            'accidentals': +(el.getAttribute('accidentals') || ''),
-            'date': +(el.getAttribute('date') || ''),
-            'duration': +(el.getAttribute('duration') || ''),
-            'midi.duration': +(el.getAttribute('midi.duration') || ''),
-            'midi.onset': +(el.getAttribute('midi.onset') || ''),
-            'midi.pitch': +(el.getAttribute('midi.pitch') || ''),
-            'midi.velocity': +(el.getAttribute('midi.pitch') || ''),
-            'octave': +(el.getAttribute('octave') || ''),
-            'part': +(el.closest('part')?.getAttribute('number') || ''),
-            'pitchname': el.getAttribute('pitchname') || '',
-            'xml:id': el.getAttribute('pitchname') || ''
-        } as MsmNote
-    })
-    const timeSignature = dom.querySelector('timeSignature')
-    return new MSM(notes, {
-        numerator: +(timeSignature?.getAttribute('numerator') || ''),
-        denominator: +(timeSignature?.getAttribute('denominator') || '')
-    })
-}

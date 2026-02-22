@@ -1,7 +1,7 @@
 import { OrnamentDef, MPM } from "mpm-ts";
 import { MSM } from "../../msm";
-import { AbstractTransformer, TransformationOptions, Transformer } from "../Transformer";
-import { fix, toFixed } from "../../utils/utils";
+import { AbstractTransformer, TransformationOptions } from "../Transformer";
+import { fix } from "../../utils/utils";
 import { StylizeOrnamentation } from "./StylizeOrnamentation";
 
 interface CompressOrnamentationOptions extends TransformationOptions {
