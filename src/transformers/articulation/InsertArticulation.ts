@@ -46,7 +46,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
 
     private noteToArticulation(aspects: Set<ArticulationProperty>, note: ArticulatedNote): Articulation {
         const relativeDuration = note.tickDuration ? (note.tickDuration / note.duration) : undefined
-        const relativeVelocity = (note.absoluteVelocityChange + note["midi.velocity"]) / note["midi.velocity"]
+        const relativeVelocity = ((note.absoluteVelocityChange ?? 0) + note["midi.velocity"]) / note["midi.velocity"]
         const absoluteDuration = note.tickDuration
         const absoluteDurationChange = note.tickDuration - note.duration
 

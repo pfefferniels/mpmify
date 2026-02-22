@@ -168,6 +168,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             }
             note.tickDuration -= onsetDiff
 
+            // TODO: note.date (symbolic) + note.tickDuration (performed) mixes coordinate systems.
+            // Should this be note.date + note.duration (both symbolic)?
             const offset = note.date + note.tickDuration
 
             const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', this.options.scope)

@@ -52,11 +52,11 @@ const getTForDate = (instruction: { date: number, endDate: number} & InnerContro
     // while the difference in the x-domain is >= 1.0
     for (let tt = 0.25; Math.abs(diffX) >= 1.0; tt *= 0.5) {
         if (diffX > 0.0) {
-            // t is too small
+            // t is too big
             t -= tt;
         }
         else {
-            // t is too big            
+            // t is too small
             t += tt;
         }
         // compute difference
@@ -156,7 +156,9 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
             date: points[0].date,
             endDate: points[points.length - 1].date,
             volume: points[0].velocity,
-            "transition.to": equal ? undefined : points[points.length - 1].velocity
+            "transition.to": equal ? undefined : points[points.length - 1].velocity,
+            protraction: 0,
+            curvature: 0.5
         }
     }
 

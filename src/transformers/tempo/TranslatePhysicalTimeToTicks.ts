@@ -51,7 +51,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
-            const endDate = nextTempo && nextTempo.date
+            const endDate = nextTempo ? nextTempo.date : msm.end
 
             const tempoWithEndDate: TempoWithEndDate = {
                 ...tempo,
@@ -66,7 +66,6 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
 
             const note = msm.allNotes.find(n => n.date === endDate)
             if (!note) {
-                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
                 currentMs += endMs
             }
             else {
@@ -81,7 +80,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
         for (let i = 0; i < tempos.length; i++) {
             const tempo = tempos[i]
             const nextTempo = tempos[i + 1]
-            const endDate = nextTempo && nextTempo.date
+            const endDate = nextTempo ? nextTempo.date : msm.end
 
             const tempoWithEndDate: TempoWithEndDate = {
                 ...tempo,

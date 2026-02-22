@@ -50,7 +50,7 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
             .map(([date, chord]) => {
                 const onset = chord.at(0)?.['midi.onset']
                 const otherChords = msm.asChords(this.options?.part === 1 ? 0 : 1)
-                const otherOnset = otherChords.get(date)?.['midi.onset']
+                const otherOnset = otherChords.get(date)?.at(0)?.['midi.onset']
                 return [onset, otherOnset] as [number?, number?]
             })
             .filter(([onset, otherOnset]) => {
