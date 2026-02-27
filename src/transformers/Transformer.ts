@@ -18,6 +18,7 @@ export type Certainty = typeof beliefValues[number];
 export interface Argumentation<T extends string = 'simpleArgumentation'> extends WithActor, WithNote, WithId {
     type: T;
     conclusion: ActivityBelief;
+    continue?: string;  // id of the predecessor argumentation in the chain
 }
 
 export const activityMotivations = [
