@@ -1,6 +1,7 @@
 import { v4 } from "uuid";
-import { InsertDynamicsInstructions, InsertDynamicsGradient, InsertTemporalSpread, InsertRubato, ApproximateLogarithmicTempo, InsertMetricalAccentuation, InsertPedal, CombineAdjacentRubatos, StylizeOrnamentation, StylizeArticulation, TranslatePhyiscalTimeToTicks, MergeMetricalAccentuations, InsertArticulation, MakeChoice, compareTransformers, Modify, InsertMetadata } from "./transformers";
+import { MakeChoice, compareTransformers } from "./transformers";
 import { Argumentation, Transformer } from "./transformers/Transformer";
+import { createTransformer } from "./transformers/TransformerRegistry";
 
 export interface Work {
     name: string;
@@ -144,73 +145,15 @@ export function importWork(json: string): ImportResult {
             })))
             .flat()
             .map(t => {
-                let transformer: Transformer | null = null;
-                if (t.name === 'MakeChoice') {
-                    transformer = new MakeChoice();
-                }
-                else if (t.name === 'Modify') {
-                    transformer = new Modify(t.options);
-                }
-                else if (t.name === 'InsertDynamicsInstructions') {
-                    transformer = new InsertDynamicsInstructions();
-                }
-                else if (t.name === 'InsertDynamicsGradient') {
-                    transformer = new InsertDynamicsGradient();
-                }
-                else if (t.name === 'InsertTemporalSpread') {
-                    transformer = new InsertTemporalSpread();
-                }
-                else if (t.name === 'InsertRubato') {
-                    transformer = new InsertRubato();
-                }
-                else if (t.name === 'ApproximateLogarithmicTempo') {
-                    transformer = new ApproximateLogarithmicTempo();
-                }
-                else if (t.name === 'InsertMetricalAccentuation') {
-                    transformer = new InsertMetricalAccentuation();
-                }
-                //else if (t.name === 'InsertRelativeDuration') {
-                //    transformer = new InsertRelativeDuration();
-                //}
-                //else if (t.name === 'InsertRelativeVolume') {
-                //    transformer = new InsertRelativeVolume();
-                //}
-                else if (t.name === 'InsertPedal') {
-                    transformer = new InsertPedal();
-                }
-                else if (t.name === 'CombineAdjacentRubatos') {
-                    transformer = new CombineAdjacentRubatos();
-                }
-                else if (t.name === 'StylizeOrnamentation') {
-                    transformer = new StylizeOrnamentation();
-                }
-                else if (t.name === 'StylizeArticulation') {
-                    transformer = new StylizeArticulation();
-                }
-                else if (t.name === 'TranslatePhyiscalTimeToTicks') {
-                    transformer = new TranslatePhyiscalTimeToTicks();
-                }
-                else if (t.name === 'MergeMetricalAccentuations') {
-                    transformer = new MergeMetricalAccentuations();
-                }
-                else if (t.name === 'InsertArticulation') {
-                    transformer = new InsertArticulation();
-                }
-                else if (t.name === 'InsertMetadata') {
-                    transformer = new InsertMetadata();
-                }
-                else {
-                    return null;
-                }
-
+                const transformer = createTransformer(t.name);
                 if (!transformer) {
                     console.warn(`Unknown transformer name: ${t.name}`);
                     return null;
                 }
                 transformer.id = t.id || v4();
                 transformer.options = t.options;
-                transformer.argumentation = t.argumentation
-                transformer.created = t.created
+                transformer.argumentation = t.argumentation;
+                transformer.created = t.created;
                 return transformer;
             })
             .filter(t => t !== null)

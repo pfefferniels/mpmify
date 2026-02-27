@@ -54,7 +54,7 @@ export interface ScopedTransformationOptions extends TransformationOptions {
  * It also declares a method for executing a transformation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type TransformerConstructor = new (...args: any[]) => Transformer;
+export type TransformerConstructor = new (...args: any[]) => Transformer;
 
 export interface Transformer {
     id: string

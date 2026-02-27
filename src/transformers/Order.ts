@@ -1,39 +1,43 @@
 import { InsertMetricalAccentuation, MergeMetricalAccentuations } from "./accentuation";
 import { InsertArticulation } from "./articulation";
+import { StylizeArticulation } from "./articulation/StylizeArticulation";
 import { MakeChoice } from "./choice/MakeChoice";
 import { InsertDynamicsInstructions } from "./dynamics";
+import { InsertMetadata } from "./metadata";
 import { Modify } from "./modification/Modify";
 import { InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
 import { InsertPedal } from "./pedal/InsertPedalInstructions";
+import { CombineAdjacentRubatos } from "./rubato/CombineAdjacentRubatos";
 import { InsertRubato } from "./rubato/InsertRubato";
 import { ApproximateLogarithmicTempo, TranslatePhyiscalTimeToTicks } from "./tempo";
 import { Transformer } from "./Transformer";
+import { getTransformerOrder, registerTransformer } from "./TransformerRegistry";
 
-/**
- * The standard order of transformers.
- */
-export const transformerOrder = [
-    new MakeChoice().name,
-    new Modify().name,
-    new InsertTemporalSpread().name,
-    new InsertDynamicsGradient().name,
-    new ApproximateLogarithmicTempo().name,
-    new TranslatePhyiscalTimeToTicks().name,
-    new StylizeOrnamentation().name,
-    new InsertRubato().name,
-    new InsertDynamicsInstructions().name,
-    new InsertMetricalAccentuation().name,
-    new MergeMetricalAccentuations().name,
-    new InsertArticulation().name,
-    new InsertPedal().name
-] as const;
+// Register all built-in transformers in their standard order.
+registerTransformer(MakeChoice);
+registerTransformer(Modify);
+registerTransformer(InsertTemporalSpread);
+registerTransformer(InsertDynamicsGradient);
+registerTransformer(ApproximateLogarithmicTempo);
+registerTransformer(TranslatePhyiscalTimeToTicks);
+registerTransformer(StylizeOrnamentation);
+registerTransformer(InsertRubato);
+registerTransformer(CombineAdjacentRubatos);
+registerTransformer(InsertDynamicsInstructions);
+registerTransformer(InsertMetricalAccentuation);
+registerTransformer(MergeMetricalAccentuations);
+registerTransformer(InsertArticulation);
+registerTransformer(StylizeArticulation);
+registerTransformer(InsertPedal);
+registerTransformer(InsertMetadata);
 
 /**
  * This function is meant to be passed to Array.sort()
  */
 export const compareTransformers = (a: Transformer, b: Transformer) => {
-    const aIndex = transformerOrder.indexOf(a.name);
-    const bIndex = transformerOrder.indexOf(b.name);
+    const currentOrder = getTransformerOrder();
+    const aIndex = currentOrder.indexOf(a.name);
+    const bIndex = currentOrder.indexOf(b.name);
 
     if (aIndex === bIndex) {
         if ('from' in a.options && 'from' in b.options && typeof a.options.from === 'number' && typeof b.options.from === 'number') {
@@ -66,4 +70,3 @@ export const validate = (chain: Transformer[]) => {
     }
     return messages
 }
-
