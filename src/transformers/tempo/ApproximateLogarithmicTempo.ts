@@ -32,6 +32,11 @@ interface OnsetPair {
     onsetMs: number;    // physical time in ms (relative to chain start)
 }
 
+interface SegmentOnset {
+    x: number;          // normalised position within segment [0, 1]
+    elapsedMs: number;  // observed elapsed time from segment start (ms)
+}
+
 interface TempoPoint {
     position: number;   // score position in ticks
     bpm: number;
@@ -46,8 +51,7 @@ interface DataPoint {
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const W_TIMING = 5;      // timing constraint weight
-const W_SHAPE = 500;     // shape regularisation weight
+const W_TIMING = 5;      // timing constraint weight (Step B)
 const LAMBDA = 0.01;     // Tikhonov regularisation
 const TURNING_PAIR_COUPLING = 0.8;  // im_left + im_right ≈ 1 at turning boundaries
 const TURNING_EPS = 0.02;           // enforce strict side of 0.5 for rounded turning
@@ -334,6 +338,7 @@ function fitSegments(
 
     const nSeg = chainSegments.length;
     const segData = partitionData(chain, tempoPoints);
+    const segOnsets = partitionOnsets(chain, onsetPairs, boundaryTimesMs);
     const inferredDirections = inferSegmentDirections(segData);
 
     // Initialise boundary tempos via per-segment linear regression
@@ -348,18 +353,24 @@ function fitSegments(
     // ── Alternating optimisation ──
 
     const MAX_ITER = 30;
+    const prevShapes: number[] = new Array(nSeg).fill(NaN);
+
     for (let iter = 0; iter < MAX_ITER; iter++) {
         const prevTau = tau.slice();
 
-        // Step A: fix τ, optimise each shape im independently
+        // Step A: fix τ, optimise each shape im via simulated annealing.
+        // After the first iteration, warm-start SA from the previous shape.
         for (let k = 0; k < nSeg; k++) {
             shapes[k] = optimizeShape(
-                segData[k], tau[k], tau[k + 1],
-                boundaryTimesMs[k + 1] - boundaryTimesMs[k],
-                segLengthBeats[k]
+                segOnsets[k], tau[k], tau[k + 1],
+                segLengthBeats[k],
+                iter > 0 ? prevShapes[k] : undefined
             );
         }
         regularizeTurningPairs(shapes, tau);
+
+        // Save current shapes for next iteration's warm start
+        for (let k = 0; k < nSeg; k++) prevShapes[k] = shapes[k];
 
         // Step B: fix shapes, solve for τ jointly
         solveBoundaryTempos(
@@ -368,11 +379,11 @@ function fitSegments(
         );
         enforceDirectionConstraints(tau, segData, inferredDirections);
 
-        let maxDiff = 0;
+        let maxTauDiff = 0;
         for (let i = 0; i < tau.length; i++) {
-            maxDiff = Math.max(maxDiff, Math.abs(tau[i] - prevTau[i]));
+            maxTauDiff = Math.max(maxTauDiff, Math.abs(tau[i] - prevTau[i]));
         }
-        if (maxDiff < 0.01) break;
+        if (maxTauDiff < 0.01) break;
     }
 
     enforceDirectionConstraints(tau, segData, inferredDirections);
@@ -499,6 +510,30 @@ function partitionData(chain: number[], tempoPoints: TempoPoint[]): DataPoint[][
     return segData;
 }
 
+function partitionOnsets(
+    chain: number[],
+    onsetPairs: OnsetPair[],
+    boundaryTimesMs: number[]
+): SegmentOnset[][] {
+    const nSeg = chain.length - 1;
+    const result: SegmentOnset[][] = Array.from({ length: nSeg }, () => []);
+
+    for (const onset of onsetPairs) {
+        for (let k = 0; k < nSeg; k++) {
+            if (onset.date >= chain[k] && onset.date <= chain[k + 1]) {
+                const span = chain[k + 1] - chain[k];
+                result[k].push({
+                    x: (onset.date - chain[k]) / span,
+                    elapsedMs: onset.onsetMs - boundaryTimesMs[k]
+                });
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
 /**
  * Initialise boundary tempos via per-segment weighted linear regression.
  * For each segment, fit BPM = a + b·x on normalised data, giving
@@ -597,53 +632,136 @@ function computePowerElapsedMs(
     return sum * segLengthBeats / steps;
 }
 
-// ── Step A: shape optimisation (1D per segment) ─────────────────
+// ── Cumulative elapsed-time helpers ──────────────────────────────
 
-function shapePenalty(im: number): number {
-    if (im < 0.1) return (0.1 - im) * (0.1 - im);
-    if (im > 0.9) return (im - 0.9) * (im - 0.9);
-    return 0;
+/**
+ * Build a cumulative elapsed-time table (ms) over a 200-step grid
+ * for the power-function model with given boundary tempos and shape.
+ * table[i] = elapsed time from x=0 to x=i/200.
+ */
+function cumulativeElapsedTable(
+    tau0: number, tau1: number, im: number, segLengthBeats: number
+): Float64Array {
+    const steps = 200;
+    const table = new Float64Array(steps + 1);
+    for (let i = 0; i < steps; i++) {
+        const x0 = i / steps;
+        const x1 = (i + 1) / steps;
+        const T0 = tau0 + (tau1 - tau0) * powerBasis(x0, im);
+        const T1 = tau0 + (tau1 - tau0) * powerBasis(x1, im);
+        table[i + 1] = table[i] + 0.5 * (60000 / T0 + 60000 / T1) * segLengthBeats / steps;
+    }
+    return table;
 }
 
+function lookupElapsed(table: Float64Array, x: number): number {
+    const steps = table.length - 1;
+    if (x <= 0) return 0;
+    if (x >= 1) return table[steps];
+    const idx = x * steps;
+    const lo = Math.floor(idx);
+    const hi = Math.min(lo + 1, steps);
+    const frac = idx - lo;
+    return table[lo] + frac * (table[hi] - table[lo]);
+}
+
+// ── Step A: shape optimisation ───────────────────────────────────
+
+/**
+ * Optimise the shape parameter im for a single segment using a
+ * cumulative elapsed-time objective — the squared difference between
+ * observed and modelled physical time at each onset position.
+ *
+ * First call (no hint): uses simulated annealing for broad exploration
+ * of the shape space, finding the right basin even in multi-modal
+ * landscapes.
+ *
+ * Subsequent calls (with hint): uses deterministic golden-section
+ * refinement seeded from the grid search and previous shape.  This
+ * eliminates SA jitter from the alternating loop so boundary tempos
+ * converge cleanly.
+ *
+ * @param hint  Shape from the previous alternating iteration.
+ */
 function optimizeShape(
-    data: DataPoint[],
+    segOnsets: SegmentOnset[],
     tau0: number, tau1: number,
-    targetElapsedMs: number, segLengthBeats: number
+    segLengthBeats: number,
+    hint?: number
 ): number {
     if (Math.abs(tau0 - tau1) < 0.01) return 0.5;
 
+    // Only interior-and-endpoint onsets contribute (x=0 trivially gives 0)
+    const effectiveOnsets = segOnsets.filter(o => o.x > 0);
+    if (effectiveOnsets.length === 0) return 0.5;
+
     function objective(im: number): number {
-        let sse = 0;
-        for (const d of data) {
-            const phi = powerBasis(d.x, im);
-            const Tmodel = tau0 * (1 - phi) + tau1 * phi;
-            sse += d.weight * (Tmodel - d.bpm) * (Tmodel - d.bpm);
+        const table = cumulativeElapsedTable(tau0, tau1, im, segLengthBeats);
+        let totalError = 0;
+        for (const onset of effectiveOnsets) {
+            const diff = lookupElapsed(table, onset.x) - onset.elapsedMs;
+            totalError += diff * diff;
         }
-        const elapsed = computePowerElapsedMs(tau0, tau1, im, segLengthBeats);
-        const timingErr = elapsed - targetElapsedMs;
-        return sse + W_TIMING * timingErr * timingErr + W_SHAPE * shapePenalty(im);
+        return totalError;
     }
 
-    // Grid search over 51 points in [0.02, 0.98]
+    // Grid search covers [0.02, 0.98] to detect landscape shifts
     let bestIm = 0.5;
     let bestVal = objective(0.5);
-    for (let g = 0; g <= 50; g++) {
-        const im = 0.02 + g * 0.96 / 50;
+    for (let g = 0; g <= 20; g++) {
+        const im = 0.02 + g * 0.96 / 20;
         const val = objective(im);
         if (val < bestVal) { bestVal = val; bestIm = im; }
     }
 
-    // Golden-section refinement in ±0.05 neighbourhood
-    let lo = Math.max(0.02, bestIm - 0.05);
-    let hi = Math.min(0.98, bestIm + 0.05);
-    const gr = (Math.sqrt(5) + 1) / 2;
-    for (let iter = 0; iter < 50; iter++) {
-        if (hi - lo < 1e-6) break;
-        const c = hi - (hi - lo) / gr;
-        const d = lo + (hi - lo) / gr;
-        if (objective(c) < objective(d)) hi = d; else lo = c;
+    // Also evaluate the hint — take whichever is better
+    if (hint !== undefined) {
+        const hintVal = objective(hint);
+        if (hintVal < bestVal) { bestVal = hintVal; bestIm = hint; }
     }
-    return (lo + hi) / 2;
+
+    if (hint !== undefined) {
+        // ── Deterministic refinement (iterations 2+) ──
+        // Golden-section search around the best candidate.
+        let lo = Math.max(0.02, bestIm - 0.1);
+        let hi = Math.min(0.98, bestIm + 0.1);
+        const gr = (Math.sqrt(5) + 1) / 2;
+        for (let iter = 0; iter < 50; iter++) {
+            if (hi - lo < 1e-6) break;
+            const c = hi - (hi - lo) / gr;
+            const d = lo + (hi - lo) / gr;
+            if (objective(c) < objective(d)) hi = d; else lo = c;
+        }
+        return (lo + hi) / 2;
+    }
+
+    // ── SA exploration (first iteration) ──
+    let currentIm = bestIm;
+    let currentError = bestVal;
+    let temperature = Math.max(1, bestVal * 0.1);
+    const coolingRate = 0.99;
+
+    for (let i = 0; i < 500; i++) {
+        const neighborIm = clamp(
+            currentIm + (Math.random() - 0.5) * 0.15,
+            0.02, 0.98
+        );
+        const neighborError = objective(neighborIm);
+
+        if (neighborError < bestVal) {
+            bestIm = neighborIm;
+            bestVal = neighborError;
+        }
+
+        if (Math.exp((currentError - neighborError) / temperature) > Math.random()) {
+            currentIm = neighborIm;
+            currentError = neighborError;
+        }
+
+        temperature *= coolingRate;
+    }
+
+    return bestIm;
 }
 
 /**

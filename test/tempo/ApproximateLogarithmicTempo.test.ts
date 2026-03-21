@@ -451,6 +451,64 @@ describe('ApproximateLogarithmicTempo', () => {
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
     });
 
+    test('silentOnsets with reference timing mixed into slower student creates negative BPM', () => {
+        // Models the actual Träumerei pipeline:
+        //
+        // The segment for m2.2 covers dates 3600–5760 (beatLength=0.25).
+        // info.json specifies a silentOnset at {date:5040, onset:7.7} — this
+        // is from the REFERENCE performance (Welte-Mignon roll).
+        //
+        // After implantLocal(), the student's note onsets are much later
+        // (student is consistently slower). After shiftToFirstOnset(),
+        // student onsets around date 5040 might be ~10s, but the silentOnset
+        // at 5040 is still 7.7s (reference timing, NOT adjusted).
+        //
+        // In extractOnsetPairs, silentOnsets take priority (set first).
+        // This creates a backwards jump in the onset sequence:
+        //   date 4320 → ~10.0s (student)
+        //   date 5040 →  7.7s  (reference silentOnset!)  ← backwards!
+        //   date 5760 → ~11.5s (student)
+        //
+        // computeTempoPoints skips the backward interval (4320→5040),
+        // leaving sparse/biased data that the regression can extrapolate
+        // to negative BPM at a segment boundary.
+
+        // Student notes: monotonic but much slower than reference.
+        // Reference would be at ~80 BPM; student at ~30 BPM.
+        // After shiftToFirstOnset, student note at date 5040 ≈ 14s.
+        // But silentOnset at 5040 = 7.7s (reference).
+        const onsets = [
+            { date: 0 * BEAT, onset: 0.0 },
+            { date: 1 * BEAT, onset: 2.0 },  // ~30 BPM
+            { date: 2 * BEAT, onset: 4.0 },
+            { date: 3 * BEAT, onset: 6.0 },
+            { date: 4 * BEAT, onset: 8.0 },
+            { date: 5 * BEAT, onset: 10.0 },   // date=3600
+            { date: 6 * BEAT, onset: 12.0 },   // date=4320
+            { date: 7 * BEAT, onset: 14.0 },   // date=5040 (silentOnset overrides!)
+            { date: 8 * BEAT, onset: 16.0 },   // date=5760
+        ];
+
+        // The silentOnset at date 5040 with reference timing 7.7s
+        // will override the student's onset of 9.33s at that date.
+        const silentOnsets: SilentOnset[] = [
+            { date: 5040, onset: 7.7 },
+        ];
+
+        const tempos = fitAndGetTempos(onsets, 5 * BEAT, 8 * BEAT, 0.25, silentOnsets);
+
+        // The silentOnset at 5040 (7.7s) is ~6s earlier than the student's
+        // actual onset at that date (14s). This creates a backwards jump in
+        // the onset sequence, causing computeTempoPoints to skip the interval
+        // before the silentOnset. The surviving data has a steep downward trend
+        // that the regression extrapolates to negative BPM at the segment end.
+        expect(tempos).toHaveLength(1);
+        const hasNegative = tempos.some(t =>
+            t.bpm < 0 || (t['transition.to'] !== undefined && t['transition.to'] < 0)
+        );
+        expect(hasNegative).toBe(true);
+    });
+
     test('continue chain stops at different beatLength', () => {
         const onsets = generateOnsets(() => 100, 8);
         const msm = buildMsm(onsets);
