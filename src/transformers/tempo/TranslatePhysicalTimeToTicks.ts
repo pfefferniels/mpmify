@@ -2,8 +2,6 @@ import { MPM, Ornament, Tempo } from "mpm-ts";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt } from "./tempoCalculations";
-import { ApproximateLogarithmicTempo } from "./ApproximateLogarithmicTempo";
-
 interface TempoWithEndDate extends Tempo {
     endDate: number
 }
@@ -29,7 +27,7 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
  */
 export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslatePhyiscalTimeToTicksOptions> {
     name = 'TranslatePhyiscalTimeToTicks'
-    requires = [ApproximateLogarithmicTempo]
+    requires = []
 
     constructor(options?: TranslatePhyiscalTimeToTicksOptions) {
         super()

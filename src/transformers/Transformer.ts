@@ -146,7 +146,8 @@ export const getRange = (transformer: TransformationOptions | Transformer[], msm
         }
 
         const from = Math.min(...ranges.map(({ from }) => from));
-        const to = Math.max(...ranges.map(({ from, to }) => Math.max(from, to || 0)));
+        const to = Math.max(...ranges.map(({ from, to }) => Math.max(from, to ?? from)));
+        if (to <= from) return { from };
         return { from, to };
     }
 
@@ -176,21 +177,20 @@ export const getRange = (transformer: TransformationOptions | Transformer[], msm
             : msm.pedals
 
         const direction = 'direction' in transformer ? (transformer as TransformationOptions & { direction?: string }).direction : undefined
+        const start = 'start' in transformer ? (transformer as TransformationOptions & { start?: number }).start ?? 0 : 0
+        const duration = 'duration' in transformer ? (transformer as TransformationOptions & { duration?: number }).duration ?? 0 : 0
 
-        const dates = pedals
+        const ranges = pedals
             .map(p => {
-                if (direction === 'up') {
-                    return p.tickDate !== undefined && p.tickDuration !== undefined
-                        ? p.tickDate + p.tickDuration
-                        : undefined
-                }
-                return p.tickDate
+                if (p.tickDate === undefined || p.tickDuration === undefined) return undefined
+                const base = direction === 'up' ? p.tickDate + p.tickDuration : p.tickDate
+                return { from: base + start, to: base + start + duration }
             })
-            .filter((d): d is number => d !== undefined)
+            .filter((r): r is { from: number; to: number } => r !== undefined)
 
-        if (dates.length === 0) {
+        if (ranges.length === 0) {
             return
         }
-        return { from: Math.min(...dates) }
+        return { from: Math.min(...ranges.map(r => r.from)), to: Math.max(...ranges.map(r => r.to)) }
     }
 }
