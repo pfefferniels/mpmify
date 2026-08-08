@@ -1,0 +1,220 @@
+"""Train the tempo model (CPU, length-bucketed batches, packed tensors).
+
+Usage: python3 train.py [epochs] [run_name]
+Expects data/train.pt and data/val.pt (see preprocess.py; val needs --eval).
+"""
+
+import json
+import math
+import random
+import statistics
+import sys
+import time
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+
+from dsl import (PAD, VOCAB, V1_VOCAB_SIZE, V2_VOCAB_SIZE, decode_tokens,
+                 decode_piece, decode_piece_v3)
+from evaluate import evaluate_piece, evaluate_piece_v2, evaluate_piece_v3
+from model import TempoTransformer
+from dataset import N_FEATURES, N_FEATURES_V2
+
+EPOCHS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
+RUN = sys.argv[2] if len(sys.argv) > 2 else "v1"
+MODE = sys.argv[3] if len(sys.argv) > 3 else "v1"
+V3 = MODE == "v3"
+V2 = MODE == "v2" or V3
+BATCH = 64
+LR = 3e-4
+WARMUP = 300
+EVAL_PIECES = 100
+EVAL_EVERY = 2
+
+torch.set_num_threads(4)
+device = torch.device("cpu")
+run_dir = Path("../runs") / RUN
+run_dir.mkdir(parents=True, exist_ok=True)
+log_f = open(run_dir / "log.txt", "a")
+
+
+def log(msg):
+    line = f"[{time.strftime('%H:%M:%S')}] {msg}"
+    print(line, flush=True)
+    log_f.write(line + "\n")
+    log_f.flush()
+
+
+SUFFIX = "_v3" if V3 else ("_v2" if V2 else "")
+train = torch.load(f"../data/train{SUFFIX}.pt")
+val = torch.load(f"../data/val{SUFFIX}.pt")
+n_train = len(train["feats"])
+N_FEAT = N_FEATURES_V2 if V2 else N_FEATURES
+MAX_DECODE = 448 if V3 else (320 if V2 else 224)
+
+# length-bucketed batches: sort by note count, batch contiguously, shuffle batch order
+order = sorted(range(n_train), key=lambda i: train["feats"][i].shape[0])
+batches = [order[i : i + BATCH] for i in range(0, n_train, BATCH)]
+
+
+def make_batch(idxs):
+    fs = [train["feats"][i] for i in idxs]
+    ts = [train["tgts"][i].long() for i in idxs]
+    max_n = max(f.shape[0] for f in fs)
+    max_t = max(t.shape[0] for t in ts)
+    B = len(fs)
+    x = torch.zeros(B, max_n, N_FEAT)
+    xm = torch.ones(B, max_n, dtype=torch.bool)
+    y = torch.full((B, max_t), PAD, dtype=torch.long)
+    for i, (f, t) in enumerate(zip(fs, ts)):
+        x[i, : f.shape[0]] = f
+        xm[i, : f.shape[0]] = False
+        y[i, : t.shape[0]] = t
+    return x, xm, y
+
+
+# explicit per-version vocab freeze — NEVER bare len(VOCAB) for old versions
+# (appending tokens for a new version must not desync resumable checkpoints)
+VOCAB_SIZES = {"v1": V1_VOCAB_SIZE, "v2": V2_VOCAB_SIZE, "v3": len(VOCAB)}
+VERSION = "v3" if V3 else ("v2" if V2 else "v1")
+MODEL_CFG = {"d_model": 160, "nhead": 8, "enc_layers": 3, "dec_layers": 3, "ff": 640,
+             "n_features": N_FEAT, "vocab_size": VOCAB_SIZES[VERSION]}
+model = TempoTransformer(dropout=0.1, **MODEL_CFG)
+opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01)
+crit = nn.CrossEntropyLoss(ignore_index=PAD)
+total_steps = EPOCHS * len(batches)
+step = 0
+
+start_epoch = 0
+ck_path = run_dir / "ckpt.pt"
+if ck_path.exists():
+    prev = torch.load(ck_path, map_location="cpu")
+    prev_cfg = prev.get("config") or {}
+    # tolerate older ckpts without n_features/vocab_size keys
+    if all(prev_cfg.get(k, MODEL_CFG[k]) == MODEL_CFG[k] for k in MODEL_CFG):
+        model.load_state_dict(prev["model"])
+        if "opt" in prev:
+            opt.load_state_dict(prev["opt"])
+        start_epoch = prev["epoch"] + 1
+        step = start_epoch * len(batches)
+        print(f"resuming from epoch {start_epoch}")
+    else:
+        # a config mismatch on an existing run dir means silent-overwrite danger:
+        # refuse instead of restarting from scratch over a live checkpoint
+        raise SystemExit(
+            f"ABORT: {ck_path} exists but its config {prev_cfg} does not match "
+            f"{MODEL_CFG}. Use a new run name or delete the checkpoint explicitly."
+        )
+
+
+def lr_at(s):
+    if s < WARMUP:
+        return LR * s / WARMUP
+    return LR * 0.5 * (1 + math.cos(math.pi * min(1.0, (s - WARMUP) / total_steps)))
+
+
+@torch.no_grad()
+def run_eval(n_pieces=EVAL_PIECES, decode_batch=50):
+    model.eval()
+    n = min(n_pieces, len(val["feats"]))
+    metrics = []
+    exact = 0
+    for lo in range(0, n, decode_batch):
+        idxs = range(lo, min(lo + decode_batch, n))
+        fs = [val["feats"][i] for i in idxs]
+        max_n = max(f.shape[0] for f in fs)
+        x = torch.zeros(len(fs), max_n, N_FEAT)
+        xm = torch.ones(len(fs), max_n, dtype=torch.bool)
+        for j, f in enumerate(fs):
+            x[j, : f.shape[0]] = f
+            xm[j, : f.shape[0]] = False
+        out = model.greedy_decode(x, xm, max_len=MAX_DECODE)
+        for j, i in enumerate(idxs):
+            ids = [t for t in out[j].tolist() if t != PAD]
+            if ids == val["tgts"][i].long().tolist():
+                exact += 1
+            rec = {"notes": val["notes"][i].tolist(), "tempo": val["tempo"][i]}
+            if V3:
+                pt, pd, pa, pr, errs = decode_piece_v3(ids)
+                rec["dynamics"] = val["dynamics"][i]
+                rec["articulation"] = val["articulation"][i]
+                rec["rubato"] = val["rubato"][i]
+                metrics.append(evaluate_piece_v3(pt, pd, pa, pr, rec))
+            elif V2:
+                pred_tempo, pred_dyn, errs = decode_piece(ids)
+                if not pred_tempo:
+                    pred_tempo = [[0, 100.0, None, None]]
+                rec["dynamics"] = val["dynamics"][i]
+                metrics.append(evaluate_piece_v2(pred_tempo, pred_dyn, rec))
+            else:
+                pred_map, errs = decode_tokens(ids)
+                if not pred_map:
+                    pred_map = [[0, 100.0, None, None]]
+                metrics.append(evaluate_piece(pred_map, rec))
+    import math as _math
+    med = {}
+    for k in metrics[0]:
+        vals = [m[k] for m in metrics
+                if isinstance(m[k], (int, float)) and _math.isfinite(m[k])]
+        med[k] = statistics.median(vals) if vals else float("nan")
+    med["exact"] = exact / len(metrics)
+    model.train()
+    return med
+
+
+log(f"device=cpu train={n_train} val={len(val['feats'])} "
+    f"params={sum(p.numel() for p in model.parameters())/1e6:.2f}M "
+    f"epochs={EPOCHS} batches/epoch={len(batches)}")
+
+for epoch in range(start_epoch, EPOCHS):
+    model.train()
+    random.seed(epoch)
+    random.shuffle(batches)
+    t0 = time.time()
+    tot_loss = tot_tok = 0
+    for bi, idxs in enumerate(batches):
+        step += 1
+        for g in opt.param_groups:
+            g["lr"] = lr_at(step)
+        x, xm, y = make_batch(idxs)
+        logits = model(x, xm, y[:, :-1])
+        loss = crit(logits.reshape(-1, logits.shape[-1]), y[:, 1:].reshape(-1))
+        opt.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step()
+        ntok = int((y[:, 1:] != PAD).sum())
+        tot_loss += float(loss.detach()) * ntok
+        tot_tok += ntok
+        if step % 100 == 0:
+            log(f"epoch {epoch} step {step}/{total_steps} loss {tot_loss/tot_tok:.4f} "
+                f"({(time.time()-t0)/(bi+1):.2f}s/step)")
+            tot_loss = tot_tok = 0
+    msg = f"EPOCH {epoch} DONE ({time.time()-t0:.0f}s)"
+    if epoch % EVAL_EVERY == EVAL_EVERY - 1 or epoch == EPOCHS - 1:
+        med = run_eval()
+        if V3:
+            msg += (f" val: exact={med['exact']:.2f} "
+                    f"render_rmse={med['render_rmse']:.1f}ms (base {med['base_render_rmse']:.1f}ms) "
+                    f"vel_rmse={med['vel_rmse']:.2f} (base {med['base_vel_rmse']:.2f}) "
+                    f"boundary_f1={med['boundary_f1']:.2f} rubato_f1={med['rubato_f1']:.2f} "
+                    f"artic_f1={med['artic_f1']:.2f} mdl_ratio={med['mdl_ratio']:.2f} "
+                    f"nonfinite={med['n_nonfinite']:.1f} "
+                    f"n_pred={med['n_pred']} n_gt={med['n_gt']}")
+        else:
+            msg += (f" val: exact={med['exact']:.2f} curve_rmse={med['curve_rmse']:.4f} "
+                    f"(base {med['base_curve_rmse']:.4f}) render_rmse={med['render_rmse']:.1f}ms "
+                    f"(base {med['base_render_rmse']:.1f}ms) boundary_f1={med['boundary_f1']:.2f} "
+                    f"n_pred={med['n_pred']} n_gt={med['n_gt']}")
+            if V2:
+                msg += (f" | vel_rmse={med['vel_rmse']:.2f} (base {med['base_vel_rmse']:.2f}) "
+                        f"dyn_f1={med['dyn_boundary_f1']:.2f}")
+    log(msg)
+    torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
+                "epoch": epoch, "config": MODEL_CFG},
+               run_dir / "ckpt.pt")
+
+with open(run_dir / "final_val.json", "w") as f:
+    json.dump(run_eval(min(500, len(val["feats"]))), f, indent=2)
+log("TRAINING_COMPLETE")
