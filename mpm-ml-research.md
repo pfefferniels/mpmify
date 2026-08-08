@@ -149,6 +149,17 @@ No standard metric exists for symbolic instruction-level agreement; naive instru
 6. **Real-data track**: nASAP adapter hardening (optional physical attributes for deletions, insertion slots), fine-tune, listening test.
 7. **Later**: implement ornament note generation in the fork to lift the trill ceiling; extend attribution (`modified`) coverage beyond asynchrony/articulation for per-note causal supervision.
 
+## Experimental validation (live program — status 2026-08-08)
+
+The plan above is now a running autonomous program (`ml/` in this repo; journal: `ml/LOG.md`). Empirical results so far:
+
+- **The end-to-end concept works.** A 2.2M-param encoder-decoder (CPU-trained on an 8 GB M1!) learns to emit valid canonical MPM from purely synthetic meico-rendered pairs. v1 (tempo only): curve RMSE −53% vs. constant baseline, render-space RMSE −37%. v2 (joint tempo+dynamics, 24 epochs): −36% / −26% / velocity −19%, correct instruction counts on both maps. v3 (tempo+dynamics+articulation+rubato) is training now. Segmentation (boundary F1 ~0.5–0.6) is the frontier, exactly as §3 predicted.
+- **Bit-exactness required porting fdlibm.** The "0.0 diff" cross-validation claims hid a 1-ulp gap: macOS libm vs. the JVM's fdlibm differ on ~10% of pow/log arguments. With a Python fdlibm port, the four-map rendering chain now reproduces meico to the last bit (0 ulp over 25k+ notes) — labels are *exactly* what the renderer produces.
+- **MDL makes "natural decomposition" a theorem, not a preference.** With exact fitters: explaining one 13-token rubato span via staircase-tempo instructions costs 5.85× the description length; canonical MPM strictly dominates every staircase on the fidelity-vs-length Pareto front (`ml/CANONICAL.md`, `ml/analysis/`). The `mdl_ratio` metric (DL(pred)/DL(GT)) is part of the evaluation suite.
+- **The sim2real gap is real and measured.** v1 on Vienna 4x22 (88 real performances ingested with exact pedal streams): render RMSE 2.9–9.0 s vs. ~0.4 s baseline — purely-synthetic training does not transfer yet, confirming §6's central caveat. Causes separated: domain gap (tempo range, texture density, 31 ms chord melody-lead) → v4 domain randomization; plus a representation-ceiling question (≥4-beat segments can't express beat-level fluctuation) → measurable with the staircase oracle.
+- **The pedal path is unblocked.** The three fork movementMap bugs are fixed and committed (`meico 1b3711f0`), verified by XML round-trip test; the parallel meico-ts team mirrored them with byte-for-byte fixture verification — v4 pedal supervision has two independently validated renderers, and Vienna 4x22 supplies genuine continuous half-pedalling ground truth (312k CC64 events).
+- **New meico findings filed**: NaN rendering when a rubato frame straddles a tempo transition (`bugs.md` #7); dangling transitions are inert; first-instruction 100 bpm quirk; pendingDurations asymmetries — all now canonical-form rules or sampler constraints.
+
 ## Corrections to project docs surfaced by the fact-check pass
 
 - The tempo-curve paper is **Berndt, "Musical Tempo Curves", ICMC 2011** (not 2010) — fix in `fitting.md`, MEMORY.md, and any future citations. The paper introduces two curve families; which parameterization meico implements has never been checked against it.

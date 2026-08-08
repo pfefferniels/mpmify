@@ -114,9 +114,15 @@ effective. meico-ts conductor notified. Niels approved their fixture regeneratio
 their session, 2026-08-08 evening); T20b (mirror fixes + regenerate references + TS
 MovementFixTest) runs first in their Phase 3 — when it lands, the TS renderer honors
 controller/curvature/protraction and the v4 pedal-supervision path has two validated
-renderers. Still open on Niels' desk: adopting our JSONL triples as meico-ts fixtures, and
-committing the fork movement fixes (snapshotted meanwhile as
-ml/patches/meico-movement-fixes-on-450193e4.patch).
+renderers. **Governance (2026-08-08, Niels)**: the program is purely autonomous and long-running;
+the orchestrating agent makes ALL calls (same for the meico-ts refactor). Consequences
+executed immediately: movement fixes committed in the fork (**meico 1b3711f0**), ML
+workspace committed in mpmify (**a1cbe39**), triples-adoption question handed to the
+meico-ts conductor as their-invariant/their-call (patch file
+ml/patches/meico-movement-fixes-on-450193e4.patch retained as provenance backup).
+Outcome: provenance re-pointed to meico@1b3711f0 (independently verified by them);
+triples **declined** — redundant proof mass against the same fork; revisit post-T13
+as a facade test consuming our JSONL directly (no frozen XML fixtures). Sound call.
 **T20b landed** (meico-ts commit 304e90a): TS mirrors the fixes exactly, fixtures
 regenerated and independently verified byte-for-byte (56-case negative-control battery:
 exactly the six fix-dependent cases flip). v4 pedal supervision now has two validated
