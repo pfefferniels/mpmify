@@ -149,8 +149,19 @@ def sustain_state_lookup(cc_rows):
     fractions of a millisecond, and a real Vienna window opens with a negative timestamp
     carrying the pedal state the performance was entered with. So: stable sort, then
     last-wins per timestamp (Python's sort keeps the file order of a tie, and the value that
-    stands after meico has written them all is the last one). Before the first event the
-    state is 0 -- meico's own pedal-up default.
+    stands after meico has written them all is the last one).
+
+    Before the first event the state is 0 -- meico's own pedal-up default. That branch is
+    a **choice, not a verified behaviour**: on all 308 Vienna records no note precedes the
+    first CC event (0 records, and 0 with no stream at all), so nothing observable
+    distinguishes it from carrying the first value backwards. It is unreachable by a
+    margin of exactly **0.0 ms** in the tightest case -- Chopin op10/3 puts its first CC
+    event and its first note both at ms 0 -- so the invariant is thin, not comfortable:
+    an adapter that ever emits its first CC fractionally later than its first note flips
+    this branch into use. Two v5-shaped changes would do it: a window excerpted from
+    mid-performance without carrying the pedal state in (the MLign robustness layer's
+    excerpting is exactly this), or a sampler that stops emitting an instruction at date 0.
+    Revisit the choice then; until then it is untested because it cannot be reached.
     """
     times, values = [], []
     for point in sorted(cc_rows or [], key=lambda p: p[0]):
