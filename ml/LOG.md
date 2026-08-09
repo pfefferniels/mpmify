@@ -423,8 +423,22 @@ the tempo. `pos_frac` now comes from `total_ticks`. Pedal state is read from a s
 last-wins step function (the stream has 36.6 % duplicate timestamps and can step backwards),
 and for a later part it is read at `note_ms − asynchrony_offset`, because `sustain_cc` is
 part 1's unshifted stream: that correction alone changes the state on 235 of 2095 part-2
-notes, by up to 107 CC. 0 non-finite values over 11708 notes × 15, and over 12562 Vienna
-notes.
+notes, by up to 107 CC. 0 non-finite values over 11708 synthetic notes × 15, and over all
+94578 Vienna notes (88 performances + 220 windows).
+
+The Vienna side closed a sim2real skew in the same pass: `pos_frac` fell back to
+`max(date+dur)` there because the adapter emitted no `total_ticks`, which is a *different
+quantity* from the sampled piece length — the synthetic generator can end a piece with a
+trailing rest (2/100 pilot records), and a real excerpt's last bar is often not filled
+(3 of the 4 Vienna pieces). The adapter now emits the notated length, guarded as
+`max(notated, max(date+dur))`; 132 of 308 records had differed, median `pos_frac` shift
+0.010, max 0.033. Small, but systematic and in the one feature every note carries.
+
+`python3 dataset.py --self-test` pins the pedal-state conventions. The case that earned it
+is real and unreachable from synthetic data: Vienna stamps a performance's opening pedal
+gesture at a single instant — 315 sustain events all at ms 0 on Chopin op10/3, ramping
+3 → 127 — so only a stable sort with last-wins reads the state the excerpt actually starts
+in. A sequential scan reads one of the 314 intermediate values, plausibly and silently.
 
 **B6 evaluation.** `evaluate_piece_v4` renders through `PerfChainV4` and reports render and
 velocity RMSE, CC RMSE, CC-64 threshold agreement, asynchrony offset error and `mdl_ratio`
