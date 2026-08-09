@@ -10,20 +10,27 @@ Per-note features (F=9):
   6 local_log2_bpm   (log2 of 60*ioi_beats/ioi_s, 0 where undefined) / 4
   7 is_chord_tone    (1 if same onset as previous note)
   8 pos_frac         (onset / piece length)
+
+v4 adds two features and re-scopes three of the above to the note's own part; see
+:func:`piece_to_features_v4`.
 """
 
 import json
 import math
+from bisect import bisect_right
 
 import torch
 from torch.utils.data import Dataset
 
+from asynchrony_math import AsynchronyTimeline
 from dsl import encode_tempo_map, PAD
+from perf_chain import _index_at_after
 
 PPQ = 720
 N_FEATURES = 9        # v1 (no velocity)
 N_FEATURES_V2 = 10    # + velocity/127
 N_FEATURES_V31 = 13   # + log2 duration-ratio, onset residual, velocity spike
+N_FEATURES_V4 = 15    # + part, pedal state
 
 
 def piece_to_features(rec, with_velocity=False):
@@ -125,6 +132,152 @@ def piece_to_features_v31(rec):
         med = sorted(wv)[len(wv) // 2] if wv else 100.0
         base[i].append(max(-1.0, min(1.0, (vels[i] - med) / 32.0)))
     return base
+
+
+def _v4_part(note):
+    """v4 notes are ``[date, dur, pitch, msOn, msOff, vel, part]``; v3's and the pre-part
+    Vienna windows' are the same row without the 7th element, which means part 1."""
+    return note[6] if len(note) > 6 else 1
+
+
+def sustain_state_lookup(cc_rows):
+    """``sustain_cc`` -> a step function ``ms -> CC value`` (CANONICAL M8 / wave-4 H2).
+
+    The stream is **not** a clean monotone series and must not be scanned sequentially:
+    ``getMovementSegment`` emits each segment endpoint twice and a plateau three times
+    (36.6 % duplicate timestamps on the pilot), consecutive points can step *backwards* by
+    fractions of a millisecond, and a real Vienna window opens with a negative timestamp
+    carrying the pedal state the performance was entered with. So: stable sort, then
+    last-wins per timestamp (Python's sort keeps the file order of a tie, and the value that
+    stands after meico has written them all is the last one). Before the first event the
+    state is 0 -- meico's own pedal-up default.
+    """
+    times, values = [], []
+    for point in sorted(cc_rows or [], key=lambda p: p[0]):
+        ms, value = float(point[0]), float(point[1])
+        if times and times[-1] == ms:
+            values[-1] = value
+        else:
+            times.append(ms)
+            values.append(value)
+
+    def state(ms):
+        i = bisect_right(times, ms)
+        return values[i - 1] if i else 0.0
+
+    return state
+
+
+def piece_to_features_v4(rec):
+    """v3.1's 13 features re-scoped to the note's own part, plus part and pedal state (15).
+
+    Two parts with independent rhythms break three of the v3.1 features if the notes are
+    treated as one stream (wave-4 blocker B5). `is_chord_tone` fires on a cross-part
+    coincidence that is not a chord; `ioi_beats`/`ioi_s` -- and therefore `local_log2_bpm`,
+    the feature the v1/v2 root-cause analysis credits for the model working at all -- are
+    measured across the part boundary, where the millisecond IOI carries part 2's asynchrony
+    offset (up to +-60 ms) instead of the tempo. The fix is to compute every neighbour- and
+    window-based feature inside the part, which is what splitting the record per part and
+    running the v3.1 extractor on each does. Only feature 8 has to be repaired afterwards:
+    `pos_frac` is a position in the *piece*, so it comes from `total_ticks` (v4 records carry
+    it; without it we fall back to the last note end, which is what v3 always used).
+
+      13 part         0 for part 1, 1 for any other part
+      14 pedal_state  sustain CC in force at the note's onset, /127
+
+    The pedal lookup happens in the **unshifted** domain: `sustain_cc` is part 1's stream,
+    while meico shifts a later part's positionMap by that part's asynchrony offset, so a
+    part-2 note sounding at `ms` meets the pedal state the stream has at `ms - offset`.
+    """
+    notes = sorted(rec["notes"], key=lambda n: (n[0], n[2], _v4_part(n)))
+    if not notes:
+        return []
+    total_ticks = rec.get("total_ticks") or max(n[0] + n[1] for n in notes)
+    total_ticks = max(float(total_ticks), 1.0)
+    state = sustain_state_lookup(rec.get("sustain_cc"))
+
+    by_part = {}
+    for i, note in enumerate(notes):
+        by_part.setdefault(_v4_part(note), []).append(i)
+    # AS0: the asynchronyMap sits on the LAST part and the flat record spells it globally.
+    asyn_part = max(by_part)
+    timeline = AsynchronyTimeline(rec.get("asynchrony") or [])
+
+    out = [None] * len(notes)
+    for part, idxs in by_part.items():
+        rows = piece_to_features_v31({"notes": [notes[i] for i in idxs]})
+        for row, i in zip(rows, idxs):
+            note = notes[i]
+            row[8] = note[0] / total_ticks
+            row.append(0.0 if part == 1 else 1.0)
+            offset = timeline.offset_at(note[0]) if part == asyn_part else 0.0
+            row.append(state(note[3] - offset) / 127.0)
+            out[i] = row
+    return out
+
+
+def piece_to_note_labels_v4(rec):
+    """Per-note supervision for the two v4 bands the DSL decoder does **not** carry.
+
+    Articulation and pedal were moved out of the token target for two different reasons and
+    both end up here, aligned row-for-row with :func:`piece_to_features_v4`:
+
+    *articulation* -- because a date-keyed label is the wrong representation. Even with
+    part-local maps (CANONICAL A6) the token cost is a median 186 per piece, and what the
+    renderer actually does is modify *notes*; so the label is the resolved effect on each
+    note. ``relative_duration`` is a product and ``velocity_change`` a sum, because two
+    articulations can land on the same note and meico composes them that way.
+    *pedal* -- because a movementMap costs a median 408 tokens, more than every other map
+    combined, and the observable is a per-note state anyway.
+
+    Targeting follows meico exactly (:meth:`PerfChain._apply_articulation_at_or_after`): an
+    articulation whose date carries no note in its part articulates that part's next note --
+    and only the *first* note of it if that is a chord. On A6-conforming data every date is
+    an onset of its own part, so this reduces to "all notes at the date"; it is used anyway
+    because the rule is what makes a *predicted* map's labels well-defined.
+
+    Returns ``{"artic_present", "relative_duration", "velocity_change", "pedal_state"}``,
+    lists of floats; ``pedal_state`` is the integer CC value 0..127, not the /127 feature.
+    """
+    notes = sorted(rec["notes"], key=lambda n: (n[0], n[2], _v4_part(n)))
+    n = len(notes)
+    labels = {"artic_present": [0.0] * n, "relative_duration": [1.0] * n,
+              "velocity_change": [0.0] * n, "pedal_state": [0.0] * n}
+    if not notes:
+        return labels
+
+    by_part = {}
+    for i, note in enumerate(notes):
+        by_part.setdefault(_v4_part(note), []).append(i)
+
+    artic_by_part = {}
+    for row in rec.get("articulation") or []:
+        artic_by_part.setdefault(row[3] if len(row) > 3 else 1, []).append(row)
+    for part, idxs in by_part.items():
+        dates = [notes[i][0] for i in idxs]
+        for row in artic_by_part.get(part) or []:
+            k = _index_at_after(dates, row[0])
+            if k < 0:                       # past the part's last note: meico drops it
+                continue
+            targets = [k]
+            j = k + 1
+            while j < len(dates) and dates[j] == row[0]:
+                targets.append(j)
+                j += 1
+            for t in targets:
+                i = idxs[t]
+                labels["artic_present"][i] = 1.0
+                labels["relative_duration"][i] *= float(row[1])
+                labels["velocity_change"][i] += float(row[2])
+
+    state = sustain_state_lookup(rec.get("sustain_cc"))
+    asyn_part = max(by_part)
+    timeline = AsynchronyTimeline(rec.get("asynchrony") or [])
+    for part, idxs in by_part.items():
+        for i in idxs:
+            offset = timeline.offset_at(notes[i][0]) if part == asyn_part else 0.0
+            labels["pedal_state"][i] = float(state(notes[i][3] - offset))
+    return labels
 
 
 class TempoDataset(Dataset):
