@@ -475,3 +475,40 @@ under a name any `pilot_v4*` glob picked up — moved to `data/defective/`.
 through the Java fork. JSONL records carry `renderer` and `seed`, so a file says what
 produced it. The two new `MovementMap` fork defects are filed as `../bugs.md` #8 and #9.
 `README.md` documents the v4 generator, the four verification legs and the training path.
+
+### Batch size for the v4 run — measured, and it is not the constraint the plan expected
+
+The wave plan's B2 projected 9–10 GB of activations at BATCH=64 and called the v4 shape
+unaffordable on an 8 GB M1. That projection assumed the **full** §11 grammar as the target
+(T≈768). With the training target cut to the four cheap maps it does not hold. Peak RSS
+measured over 20 optimiser steps, always on the *worst* length bucket (211 notes, 313-token
+targets — the shape that sets the peak, not the average one), same MODEL_CFG as `train.py`,
+`torch.set_num_threads(4)`, `nice -n 15`, on a machine already running the v3.1 job and
+MLign's v0-syn:
+
+| BATCH | median s/step | min–max | peak RSS |
+|---|---|---|---|
+| 24 | 4.39 | 1.37–6.23 | 0.69 GB |
+| 32 | 4.52 | 1.98–7.57 | 0.67 GB |
+| 48 | 3.98 | 1.91–8.71 | 0.68 GB |
+
+**Peak RSS is flat in the batch size** — 0.67–0.69 GB across a 2× range — so memory is not
+what limits the v4 batch; the resident set is dominated by the interpreter, the 4.21M
+parameters and the packed data, not by activations. Anything up to 64 fits the 2.5 GB bar
+with an order of magnitude to spare.
+
+The step times, on the other hand, are **not** usable for choosing: at load average 18–25
+the 24-step and 48-step medians differ by less than the min–max spread of either, and B=48
+measuring *faster* per step than B=24 while doing twice the work is a direct readout of the
+noise. A separate run of the same harness through `train.py` itself, which also holds the
+eval-side tensors, measured 1.63 GB and 7.32 s/step at BATCH=24 — the higher RSS is real
+(eval data) and the higher step time is contention. Both are recorded; neither is a clean
+throughput number, and a B=64 run was abandoned after 25 minutes at 17 % CPU because the
+machine was saturated.
+
+**Recommendation for step 9: BATCH=48.** It is the largest size measured to fit with
+margin, it keeps 20k pieces at 417 batches/epoch (close to v3.1's 313, so the LR schedule
+and epoch budget carry over), and the memory headroom means the choice can be revisited
+upward without a new measurement. Re-measure s/step once the machine is quiet — the
+projection to a 24-epoch wall-clock is worth having before committing to a multi-day run,
+and no number taken under load average 20 can supply it.
