@@ -48,12 +48,14 @@ Each record carries its `renderer` and `seed`, so a file says what produced it.
 
 ## Verifying it
 
-Four independent legs, in the order they should be run:
+Five legs, in the order they should be run — the second and third are the same gate on two
+configurations:
 
 ```sh
 cd ml/node
 node verify_v4.mjs invariants ../data/pilot_v4.jsonl     # canonical rules hold on the data
-node verify_v4.mjs cross ../data/pilot_v4_exact.jsonl ../data/debug_v4_exact java
+node verify_v4.mjs cross ../data/pilot_v4.jsonl ../data/debug_v4 java       # both renderers agree
+node verify_v4.mjs cross ../data/pilot_v4_exact.jsonl ../data/debug_v4_exact java   # narrow control
 cd ../python
 python3 validate_v4.py --cross-java                      # Python chain == Java fork
 python3 roundtrip_v4.py ../data/pilot_v4.jsonl           # the DSL loses nothing
@@ -92,7 +94,11 @@ and that is what the MDL metric and any MPM export use.
 
 `preprocess.py --v4` **fails loudly** on a piece that exceeds the length caps rather than
 dropping it: the pieces that overflow are the long, densely-marked ones, so silently
-skipping them shrinks and biases the set at the same time.
+skipping them shrinks and biases the set at the same time. The cap is `MAX_TGT["v4"] = 448`,
+set from 200 pieces across two seeds (median 181, p90 265, p99 339, max 435); it is not a
+proof, since the sampler's own worst case is ~770 tokens, so expect to meet the failure
+occasionally and raise the cap deliberately rather than filter. `train.py` reads the ceiling
+back out of the packed set, so the two cannot drift apart.
 
 ## Reproducing v0 (historical)
 
