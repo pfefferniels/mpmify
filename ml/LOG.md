@@ -374,3 +374,97 @@ anyway (equivalent decompositions exist); render/curve metrics are the honest on
 Weakest link: boundary F1 0.59 — segmentation is, as predicted in the feasibility
 study, the hard part. Ideas queued: boundary-aware loss weighting, coarse+fine date
 tokens, more training.
+
+## v4 integration: pedal, asynchrony, part-local articulation (2026-08-09)
+
+The wave-4 readiness review returned 6 blockers and 5 hazards (`waves/v4/summary.md`).
+This is what integrating them changed. Steps were run against a regenerated 100-piece
+pilot (`generate_v4.mjs ../data/pilot_v4.jsonl 100 4242 --renderer java`), and every
+number below is measured on it.
+
+**B1 vocab freeze.** `V3_VOCAB_SIZE = 31` is now a named constant and `VOCAB_SIZES` has an
+explicit `"v4"` arm, so appending `G Z Y J` (31 → 35) cannot desync a live checkpoint.
+Re-checked rather than assumed, after the append: `runs/v31/ckpt.pt` (epoch 14, the run
+that was training at the time) and `runs/v3/ckpt.pt` (epoch 23) both still match the config
+their own mode recomputes, at `vocab_size 31`.
+
+**B2 architecture split — the DSL decoder does not carry the pedal.** Measured token cost
+put the full §11 grammar at a median 731 tokens/piece (p90 1051, max 1205), against 183
+for tempo+dynamics+rubato+asynchrony alone. movementMap is the reason: a median 408 tokens,
+more than every other map combined. So the v4 **training target** is the four cheap maps,
+and articulation + pedal become per-note label arrays (`dataset.piece_to_note_labels_v4`:
+`artic_present`, `relative_duration`, `velocity_change`, `pedal_state`). The full six-map
+grammar is still what `encode_piece_v4(maps, subset="full")` emits, and it is what the MDL
+metric and any MPM export mean — the training target is a subset of the representation, not
+a different one, and `roundtrip_v4.py` checks exactly that.
+
+**B3 articulation was targeting the wrong notes → CANONICAL A6.** meico resolves a
+`noteid`-less `<articulation>` with *at-or-after*, not *at*. With two independently sampled
+rhythms only 5.8 % of onset dates are shared, so a global map drawn from the union
+articulated a note its own label did not name in 80 % of cases. `articulationMap` is
+**part-local** from this revision (one map per `<part>`, dates from that part's own
+onsets); JSONL articulation rows gained a 4th element, the part number. On the regenerated
+pilot the two targeting rules now coincide exactly — 1779 note-hits by at-or-after, 1779 by
+plain (date, part) matching — which is what A6 was for. `perf_chain.py` keeps both rules
+(`artic_targeting="exact"` for the v3 metrics, `"at-or-after"` for v4 and for **any**
+predicted map, whose dates need not land on an onset at all).
+
+**B4 renderer default.** `generate_v4.mjs` defaults to `--renderer java`. espressivo's two
+parsing defects (E1 articulation modifiers, E2 dynamics curvature/protraction) are live, so
+it mislabels velocity and note ends wherever those maps appear; a warning on stderr is not
+a safe default for a backgrounded 20k run.
+
+**B5 features.** `N_FEATURES_V4 = 15`: v3.1's 13, plus `part` and `pedal_state`, with every
+neighbour- and window-based feature re-scoped to the note's **own part**. Without that,
+`is_chord_tone` fires on cross-part coincidences and the millisecond IOI — hence
+`local_log2_bpm`, the feature this program credits for the model working at all — is
+measured across the part boundary, where it carries part 2's asynchrony offset instead of
+the tempo. `pos_frac` now comes from `total_ticks`. Pedal state is read from a stable-sorted
+last-wins step function (the stream has 36.6 % duplicate timestamps and can step backwards),
+and for a later part it is read at `note_ms − asynchrony_offset`, because `sustain_cc` is
+part 1's unshifted stream: that correction alone changes the state on 235 of 2095 part-2
+notes, by up to 107 CC. 0 non-finite values over 11708 notes × 15, and over 12562 Vienna
+notes.
+
+**B6 evaluation.** `evaluate_piece_v4` renders through `PerfChainV4` and reports render and
+velocity RMSE, CC RMSE, CC-64 threshold agreement, asynchrony offset error and `mdl_ratio`
+(priced on the **full** grammar), with non-finite renders counted rather than averaged in.
+Fed the ground-truth maps it returns exactly 0.0 on every error metric and exactly 1.0 on
+`mdl_ratio` and `cc64_agree` — the floor the whole evaluation rests on, checked on 20
+records.
+
+**Length cap.** `preprocess.py --v4` raises on an overlong piece instead of skipping it: the
+old silent `skipped += 1` would have dropped ~88 % of a v4 set behind a one-line count, and
+the pieces that overflow are the long, densely-marked ones, so the survivors would have been
+a biased sample as well as a small one. The cap is 448, set from 200 pieces across two
+independent pilots (median 181, p90 265, p99 339, max 435) — 320 and 384 both reject a
+percent or two of legitimate pieces.
+
+### Gate results (100-piece A6 pilot, all under `nice -n 15` alongside the live v3.1 run)
+
+| leg | result |
+|---|---|
+| `verify_v4.mjs invariants` | INVARIANTS_PASS |
+| `verify_v4.mjs cross` (E1/E2-free config) | CROSS_RENDERER_ULP_PASS — 11708 notes, 19462 CC, every JSONL field bit-exact; 78 values differ, all inside the derived per-piece libm envelope |
+| `validate_v4.py` | EXACT — 0/11708 ms_on, ms_off, velocity; 0/19635 cc_ms, cc_value |
+| `validate_v4.py --cross-java` | EXACT — 24 parts, 1712 notes, 5958 CC, 2967 asynchrony-on-positionMap events covered |
+| `roundtrip_v4.py` | ROUNDTRIP_EXACT — 100 records, 11708 notes, 19635 CC bit-exact, 0 decode errors |
+| 20-step training smoke (BATCH=24) | peak RSS **1.63 GB**, median 7.32 s/step (min 3.01, max 23.23) at load average 15–18 |
+
+`verify_v4.mjs cross` on a set containing articulation or dynamics transitions is a
+guaranteed fail while E1/E2 are live (100 pieces: 323892 comparisons, 7817 differing, all
+in `note.velocity` and `note.ms.end`) — that is meico-ts's defect, not the data's, which is
+why the cross leg runs on `pilot_v4_exact.jsonl` (`--maps tempo,rubato,asynchrony,movement`)
+and `validate_v4.py --cross-java` covers the full-map set instead.
+
+The smoke's step time is contention-dominated; min 3.01 s is the closer estimate of the
+uncontended cost. At 20k pieces and BATCH=24 (834 batches/epoch) that projects to roughly
+17 h for 24 epochs uncontended and ~40 h at the contended median — worth deciding on before
+step 9 rather than during it.
+
+**Hygiene.** `data/pilot_v4_espressivo.jsonl` — knowingly wrong velocities and note ends,
+under a name any `pilot_v4*` glob picked up — moved to `data/defective/`.
+`pilot_v4_exact.jsonl` was espressivo-rendered despite its name and is now regenerated
+through the Java fork. JSONL records carry `renderer` and `seed`, so a file says what
+produced it. The two new `MovementMap` fork defects are filed as `../bugs.md` #8 and #9.
+`README.md` documents the v4 generator, the four verification legs and the training path.
