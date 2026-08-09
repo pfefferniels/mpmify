@@ -29,10 +29,12 @@ V4 = MODE == "v4"
 V31 = MODE == "v31"
 V3 = MODE == "v3" or V31
 V2 = MODE == "v2" or V3
-# v4 pieces are ~2.4x longer than v3.1's (median 121 notes vs 51) at a comparable target
-# length, and activation memory scales with batch x notes. BATCH is therefore per-mode and
-# was chosen by measurement, not by analogy -- see the 20-step smoke in ml/LOG.md.
-BATCH = 24 if V4 else 64
+# Per-mode and set by measurement, not by analogy. v4 pieces are ~2.4x longer than v3.1's
+# (median 114 notes vs 51), but peak RSS turned out flat in the batch size -- 0.67-0.69 GB
+# from 24 to 48 on the worst length bucket -- so memory does not bind here and 48 is the
+# largest size measured with margin. 20k pieces at 48 is 417 batches/epoch, close enough to
+# v3.1's 313 that the LR schedule carries over. See the sweep in ml/LOG.md.
+BATCH = 48 if V4 else 64
 LR = 3e-4
 WARMUP = 300
 EVAL_PIECES = 100
