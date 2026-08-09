@@ -258,6 +258,15 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+**MPS datapoint from MLign (2026-08-09 ~15:45)**: their custom blocks over
+F.scaled_dot_product_attention train NORMALLY on MPS (3-epoch smoke green) — the
+torch-2.11 MPS hang is specific to nn.Transformer's module machinery, not attention.
+Implication: rewriting our model with custom SDPA blocks could unlock MPS (potentially
+5-10x CPU on this M1) for the v4 training. Queued as an optional experiment behind the
+step-8 smoke; CPU remains the safe default. Resource protocol with MLign locked:
+they hold ~2GB niced during our runs, burst in our v31→v4 gap (ping owed at v31
+TRAINING_COMPLETE), mutual caps during v4 training.
+
 **v4 wave landed + integration dispatched (2026-08-09 ~18:30)**: 10 agents, 0 errors;
 full reports + the 11-blocker readiness review preserved in ml/waves/v4/ (v3 wave in
 ml/waves/v3/). Headlines: Team D's generator ports v3 bit-exactly (89,639 comparisons,
