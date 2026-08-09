@@ -445,17 +445,24 @@ percent or two of legitimate pieces.
 | leg | result |
 |---|---|
 | `verify_v4.mjs invariants` | INVARIANTS_PASS |
-| `verify_v4.mjs cross` (E1/E2-free config) | CROSS_RENDERER_ULP_PASS — 11708 notes, 19462 CC, every JSONL field bit-exact; 78 values differ, all inside the derived per-piece libm envelope |
+| `verify_v4.mjs cross` (full map set) | CROSS_RENDERER_ULP_PASS — 11708 notes, 19635 CC, every JSONL field bit-exact including all 11708 velocities; 88 values differ, all inside the derived per-piece libm envelope |
 | `validate_v4.py` | EXACT — 0/11708 ms_on, ms_off, velocity; 0/19635 cc_ms, cc_value |
 | `validate_v4.py --cross-java` | EXACT — 24 parts, 1712 notes, 5958 CC, 2967 asynchrony-on-positionMap events covered |
 | `roundtrip_v4.py` | ROUNDTRIP_EXACT — 100 records, 11708 notes, 19635 CC bit-exact, 0 decode errors |
 | 20-step training smoke (BATCH=24) | peak RSS **1.63 GB**, median 7.32 s/step (min 3.01, max 23.23) at load average 15–18 |
 
-`verify_v4.mjs cross` on a set containing articulation or dynamics transitions is a
-guaranteed fail while E1/E2 are live (100 pieces: 323892 comparisons, 7817 differing, all
-in `note.velocity` and `note.ms.end`) — that is meico-ts's defect, not the data's, which is
-why the cross leg runs on `pilot_v4_exact.jsonl` (`--maps tempo,rubato,asynchrony,movement`)
-and `validate_v4.py --cross-java` covers the full-map set instead.
+The cross leg moved during the integration, and the sequence is worth recording. Run first
+against the then-current meico-ts it was a guaranteed fail on any set containing
+articulation or dynamics transitions — 100 pieces, 323892 comparisons, 7817 differing, every
+one of them in `note.velocity` or `note.ms.end`, i.e. exactly E1 and E2 and nothing else. So
+the gate ran on `pilot_v4_exact.jsonl` (`--maps tempo,rubato,asynchrony,movement`), which
+passed, and `validate_v4.py --cross-java` covered the full-map set against the fork. The
+espressivo team then landed the E1/E2 fix (main `da24612`), and re-running the same command
+on the same 100-piece file turns those 7817 differences into 0: the full map set is now
+`CROSS_RENDERER_ULP_PASS` with every JSONL field bit-exact. That the failure set was
+*precisely* the two defects' blast radius, and that it vanished entirely on their fix, is
+the cleanest evidence so far that the derived-envelope gate discriminates logic divergence
+from libm noise rather than merely tolerating both.
 
 The smoke's step time is contention-dominated; min 3.01 s is the closer estimate of the
 uncontended cost. At 20k pieces and BATCH=24 (834 batches/epoch) that projects to roughly

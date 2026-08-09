@@ -59,12 +59,15 @@ python3 validate_v4.py --cross-java                      # Python chain == Java 
 python3 roundtrip_v4.py ../data/pilot_v4.jsonl           # the DSL loses nothing
 ```
 
-The `cross` leg compares the two renderers against each other and must be run on an
-**E1/E2-free configuration** (`--maps tempo,rubato,asynchrony,movement`) — that is what
-`pilot_v4_exact.jsonl` is. On a set containing articulation or dynamics transitions it
-fails by construction, and the failure is meico-ts's, not the data's. Its pass verdict is
+The `cross` leg compares the two renderers against each other. Its pass verdict is
 `CROSS_RENDERER_ULP_PASS`: differences are allowed only inside a *derived* per-piece libm
-envelope, never as a logic difference.
+envelope, never as a logic difference. Since meico-ts fixed E1/E2 (main `da24612`,
+2026-08-09) it passes on the **full** map set — 100 pieces, 11708 notes, 19635 CC, every
+JSONL field bit-exact — so run it on `pilot_v4.jsonl` and treat a failure as a real
+divergence. `pilot_v4_exact.jsonl` (`--maps tempo,rubato,asynchrony,movement`) remains
+useful as the narrower control: it is the configuration that stayed green throughout the
+E1/E2 period, so a regression there is a different and more serious signal than one that
+shows up only with articulation or dynamics present.
 
 `validate_v4.py` is the leg that matters for the Python pipeline: it renders every record
 through `perf_chain_v4.py` and requires bit-identical milliseconds, velocities and CC
