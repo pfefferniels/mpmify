@@ -180,6 +180,20 @@ Sampler decisions: R3 deadband widened to [0.89,1.12] uniformly; frameLength ant
 (sample frame first: 85/12/4 → 67/21/12); T2 relaxed until v4 regeneration
 (documented in CANONICAL.md changelog).
 
+**T13 facade validated cross-renderer (2026-08-09 ~04:00)**: meico-ts@c432849 exposes
+performMsmToData (JSON-in/JSON-out, seeded imprecision via RenderOptions). Smoke test on
+the movement fixture: notes 0.0-diff vs Java fork; CC stream structurally identical
+(19 points, controller=soft→CC67, movement fixes honored). **Decision: the v4 generator
+migrates to meico-ts** — single language, deterministic imprecision, no JVM/file I/O.
+Java fork remains the cross-check renderer. Conductor revisits triples at T23.
+
+**v3 mid-run diagnosis (epoch 11/24, 2026-08-09 01:15)**: render at baseline parity,
+velocity −47% vs baseline; rubato/artic F1 0.00 — inspection shows grammar +
+marginal-statistics learned (emits both productions on 30/30 pieces, values
+mode-collapsed at relDur≈0.57/velChange≈−13/intensity≈0.57, rubato hallucinated on
+no-rubato pieces). Same shape as v2's dynamics at its midpoint. Decision: run to 24;
+if F1s still flat → v3.1 with larger model (capacity suspect at 2.2M for 4 maps).
+
 **v3 autopilot armed**: waits for v2 → generates 20k/1k/1k (all four maps) →
 bit-level spot-validation gate → preprocess → 24-epoch training. v3 keeps the v2
 score/tempo domain deliberately (one variable at a time); domain randomization from
