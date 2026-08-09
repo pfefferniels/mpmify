@@ -351,6 +351,17 @@ def _self_test():
     # (-1.04 ms in Chopin_op10_no3_p01_w1). A note at ms 0 must see it.
     assert sustain_state_lookup([[-1.04, 64], [500.0, 0]])(0.0) == 64.0
 
+    # The two hazards above CO-OCCUR, which is the configuration real data actually
+    # contains: 49 of 88 Vienna performances open their pedal stream before the first
+    # matched note, and the opening gesture is a burst at that negative instant --
+    # Schubert D783/15 p05 has 127 events at -704.2 ms ramping 8 -> 70, p09 has 101 at
+    # -626.0 ms. Pinned together rather than separately, because a lookup can pass both
+    # single-hazard cases and still mishandle the pair.
+    neg_burst = [[-704.2, v] for v in (8, 30, 55, 70)] + [[1200.0, 0]]
+    assert sustain_state_lookup(neg_burst)(-704.2) == 70.0   # last-wins at the burst
+    assert sustain_state_lookup(neg_burst)(0.0) == 70.0      # carried into the excerpt
+    assert sustain_state_lookup(neg_burst)(-800.0) == 0.0    # ... but not before it
+
     # Before any event at all the pedal is up -- meico's own default.
     assert sustain_state_lookup([[100.0, 64]])(0.0) == 0.0
     assert sustain_state_lookup([])(0.0) == 0.0
