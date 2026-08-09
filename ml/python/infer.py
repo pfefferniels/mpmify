@@ -17,7 +17,7 @@ from pathlib import Path
 import torch
 
 from dataset import piece_to_features, N_FEATURES, N_FEATURES_V2
-from dsl import PAD, V1_VOCAB_SIZE, VOCAB, decode_tokens, decode_piece
+from dsl import PAD, V1_VOCAB_SIZE, V3_VOCAB_SIZE, VOCAB, decode_tokens, decode_piece
 from evaluate import constant_baseline, render_rmse, velocity_render_rmse
 from model import TempoTransformer
 
@@ -34,7 +34,7 @@ cfg = dict(ckpt.get("config") or {})
 cfg.setdefault("d_model", 160); cfg.setdefault("nhead", 8)
 cfg.setdefault("enc_layers", 3); cfg.setdefault("dec_layers", 3); cfg.setdefault("ff", 640)
 cfg.setdefault("n_features", N_FEATURES_V2 if V2 else N_FEATURES)
-cfg.setdefault("vocab_size", len(VOCAB) if V2 else V1_VOCAB_SIZE)
+cfg.setdefault("vocab_size", V3_VOCAB_SIZE if V2 else V1_VOCAB_SIZE)
 model = TempoTransformer(**cfg)
 model.load_state_dict(ckpt["model"])
 model.eval()

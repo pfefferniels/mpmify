@@ -18,6 +18,7 @@ TOK2ID = {t: i for i, t in enumerate(VOCAB)}
 PAD, BOS, EOS = 0, 1, 2
 V1_VOCAB_SIZE = 19
 V2_VOCAB_SIZE = 24  # frozen: runs/v2 ckpts were trained with exactly these 24 tokens
+V3_VOCAB_SIZE = 31  # frozen: runs/v3 and runs/v31 ckpts (incl. the live v3.1 run)
 
 
 def _num_tokens(x):

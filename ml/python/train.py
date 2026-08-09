@@ -15,8 +15,8 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from dsl import (PAD, VOCAB, V1_VOCAB_SIZE, V2_VOCAB_SIZE, decode_tokens,
-                 decode_piece, decode_piece_v3)
+from dsl import (PAD, VOCAB, V1_VOCAB_SIZE, V2_VOCAB_SIZE, V3_VOCAB_SIZE,
+                 decode_tokens, decode_piece, decode_piece_v3)
 from evaluate import evaluate_piece, evaluate_piece_v2, evaluate_piece_v3
 from model import TempoTransformer
 from dataset import N_FEATURES, N_FEATURES_V2, N_FEATURES_V31
@@ -77,7 +77,8 @@ def make_batch(idxs):
 
 # explicit per-version vocab freeze — NEVER bare len(VOCAB) for old versions
 # (appending tokens for a new version must not desync resumable checkpoints)
-VOCAB_SIZES = {"v1": V1_VOCAB_SIZE, "v2": V2_VOCAB_SIZE, "v3": len(VOCAB)}
+VOCAB_SIZES = {"v1": V1_VOCAB_SIZE, "v2": V2_VOCAB_SIZE, "v3": V3_VOCAB_SIZE,
+               "v4": len(VOCAB)}
 VERSION = "v3" if V3 else ("v2" if V2 else "v1")
 if V31:  # moderate capacity bump alongside the conditioning features
     MODEL_CFG = {"d_model": 192, "nhead": 8, "enc_layers": 4, "dec_layers": 4, "ff": 768,
