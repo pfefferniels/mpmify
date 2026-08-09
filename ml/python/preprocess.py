@@ -14,7 +14,8 @@ from dsl import encode_tempo_map, encode_piece
 
 src, dst = sys.argv[1], sys.argv[2]
 keep_eval = "--eval" in sys.argv
-v3 = "--v3" in sys.argv  # velocity feature + all four map targets
+v31 = "--v31" in sys.argv  # v3 targets + conditioning features (13)
+v3 = "--v3" in sys.argv or v31
 v2 = "--v2" in sys.argv or v3
 
 feats, tgts, notes, tempi, dyns, artics, rubs = [], [], [], [], [], [], []
@@ -33,7 +34,11 @@ for line in open(src):
         tgt = encode_piece(rec["tempo"], rec.get("dynamics", []))
     else:
         tgt = encode_tempo_map(rec["tempo"])
-    f = piece_to_features(rec, with_velocity=v2)
+    if v31:
+        from dataset import piece_to_features_v31
+        f = piece_to_features_v31(rec)
+    else:
+        f = piece_to_features(rec, with_velocity=v2)
     if len(f) > 320 or len(tgt) > max_tgt:
         skipped += 1
         continue

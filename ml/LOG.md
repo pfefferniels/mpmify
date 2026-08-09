@@ -194,6 +194,16 @@ mode-collapsed at relDur≈0.57/velChange≈−13/intensity≈0.57, rubato hallu
 no-rubato pieces). Same shape as v2's dynamics at its midpoint. Decision: run to 24;
 if F1s still flat → v3.1 with larger model (capacity suspect at 2.2M for 4 maps).
 
+**v3 final + v3.1 decision (2026-08-09 ~04:30)**: v3 completed 24 epochs — tempo below
+baseline, velocity −55%, but rubato/artic F1 flat 0.00 throughout. Root-cause analysis:
+NOT (only) capacity — v1/v2 succeeded exactly on maps whose signal was exposed as a
+direct input feature (local_log2_bpm, velocity); articulation/rubato had none.
+**v3.1 = conditioning features + moderate capacity** (d192/4+4/ff768 ≈ 4.2M):
+f10 log2 duration-ratio vs local tempo, f11 onset residual vs local linear fit,
+f12 velocity spike vs local median. Feature validation on pilot (medians):
+f10 0.247 at-artic vs 0.008 off (30×); f12 0.385 vs 0.000 (clean separation);
+f11 0.042 in-rubato vs 0.0026 outside (16×). Pipeline chained behind v3 completion.
+
 **v3 autopilot armed**: waits for v2 → generates 20k/1k/1k (all four maps) →
 bit-level spot-validation gate → preprocess → 24-epoch training. v3 keeps the v2
 score/tempo domain deliberately (one variable at a time); domain randomization from

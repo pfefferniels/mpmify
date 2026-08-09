@@ -19,12 +19,13 @@ from dsl import (PAD, VOCAB, V1_VOCAB_SIZE, V2_VOCAB_SIZE, decode_tokens,
                  decode_piece, decode_piece_v3)
 from evaluate import evaluate_piece, evaluate_piece_v2, evaluate_piece_v3
 from model import TempoTransformer
-from dataset import N_FEATURES, N_FEATURES_V2
+from dataset import N_FEATURES, N_FEATURES_V2, N_FEATURES_V31
 
 EPOCHS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 RUN = sys.argv[2] if len(sys.argv) > 2 else "v1"
 MODE = sys.argv[3] if len(sys.argv) > 3 else "v1"
-V3 = MODE == "v3"
+V31 = MODE == "v31"
+V3 = MODE == "v3" or V31
 V2 = MODE == "v2" or V3
 BATCH = 64
 LR = 3e-4
@@ -46,11 +47,11 @@ def log(msg):
     log_f.flush()
 
 
-SUFFIX = "_v3" if V3 else ("_v2" if V2 else "")
+SUFFIX = "_v31" if V31 else ("_v3" if V3 else ("_v2" if V2 else ""))
 train = torch.load(f"../data/train{SUFFIX}.pt")
 val = torch.load(f"../data/val{SUFFIX}.pt")
 n_train = len(train["feats"])
-N_FEAT = N_FEATURES_V2 if V2 else N_FEATURES
+N_FEAT = N_FEATURES_V31 if V31 else (N_FEATURES_V2 if V2 else N_FEATURES)
 MAX_DECODE = 448 if V3 else (320 if V2 else 224)
 
 # length-bucketed batches: sort by note count, batch contiguously, shuffle batch order
@@ -78,8 +79,12 @@ def make_batch(idxs):
 # (appending tokens for a new version must not desync resumable checkpoints)
 VOCAB_SIZES = {"v1": V1_VOCAB_SIZE, "v2": V2_VOCAB_SIZE, "v3": len(VOCAB)}
 VERSION = "v3" if V3 else ("v2" if V2 else "v1")
-MODEL_CFG = {"d_model": 160, "nhead": 8, "enc_layers": 3, "dec_layers": 3, "ff": 640,
-             "n_features": N_FEAT, "vocab_size": VOCAB_SIZES[VERSION]}
+if V31:  # moderate capacity bump alongside the conditioning features
+    MODEL_CFG = {"d_model": 192, "nhead": 8, "enc_layers": 4, "dec_layers": 4, "ff": 768,
+                 "n_features": N_FEAT, "vocab_size": VOCAB_SIZES[VERSION]}
+else:
+    MODEL_CFG = {"d_model": 160, "nhead": 8, "enc_layers": 3, "dec_layers": 3, "ff": 640,
+                 "n_features": N_FEAT, "vocab_size": VOCAB_SIZES[VERSION]}
 model = TempoTransformer(dropout=0.1, **MODEL_CFG)
 opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01)
 crit = nn.CrossEntropyLoss(ignore_index=PAD)
