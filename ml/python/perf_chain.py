@@ -158,6 +158,30 @@ def _diff_timing(date, seg):
     return result_const * result_sum
 
 
+def _index_at_after(dates, date):
+    """``GenericMap.getElementIndexAtAfter(date)`` -- the first index whose key is **at or
+    after** ``date``, or -1 if there is none. Mirrors the reference's binary search
+    verbatim (Java and espressivo agree line for line)."""
+    n = len(dates)
+    if n == 0 or dates[n - 1] < date:
+        return -1
+    if dates[0] >= date:
+        return 0
+    first, last = 0, n - 1
+    mid = last // 2
+    while first <= last:
+        # first >= 0 and first <= last, so first+last >= 0 and Java's truncating `/ 2`
+        # agrees with Python's flooring `// 2` on every value actually used.
+        if dates[mid] >= date:
+            last = mid - 1
+        elif dates[mid + 1] >= date:
+            return mid + 1
+        else:
+            first = mid + 1
+        mid = (first + last) // 2
+    return -1
+
+
 class PerfChain:
     """Composes the four maps of the v3 canonical form into meico's rendering chain.
 
@@ -168,9 +192,30 @@ class PerfChain:
 
     ``tempo=None`` selects meico's no-tempoMap fallback (1 tick = 1 ms), ``tempo=[]`` its
     empty-tempoMap branch (a fixed 100 bpm at beatLength 0.25).
+
+    ``artic_targeting`` selects how an ``<articulation>`` finds its notes:
+
+    ``"exact"`` (default)
+        date-keyed: only notes *at* the articulation's date are articulated, and an
+        articulation whose date carries no note is dropped. This is what every v3 dataset
+        needs and what every v3 metric was computed with -- and on v3 sampler output it is
+        indistinguishable from the faithful rule below, because v3 articulation dates are
+        drawn from the single part's own onsets.
+    ``"at-or-after"``
+        CANONICAL A6, meico's actual rule (see :meth:`_apply_articulation_at_or_after`).
+        Required for anything whose articulation dates are not guaranteed to be onsets of
+        the notes being rendered -- v4 data, and *any* model-predicted map.
     """
 
-    def __init__(self, tempo=None, dynamics=None, articulation=None, rubato=None):
+    #: the two ``artic_targeting`` modes, spelled out so a typo is not a silent no-op
+    ARTIC_TARGETING = ("exact", "at-or-after")
+
+    def __init__(self, tempo=None, dynamics=None, articulation=None, rubato=None,
+                 artic_targeting="exact"):
+        if artic_targeting not in self.ARTIC_TARGETING:
+            raise ValueError(f"artic_targeting must be one of {self.ARTIC_TARGETING}, "
+                             f"got {artic_targeting!r}")
+        self.artic_targeting = artic_targeting
         self.tempo = list(tempo) if tempo else ([] if tempo is not None else None)
         self.dynamics = list(dynamics or [])
         self.articulation = list(articulation or [])
@@ -259,6 +304,12 @@ class PerfChain:
     # ------------------------------------------------------------------ step 2: articulation
 
     def _apply_articulation(self, notes):
+        if self.artic_targeting == "at-or-after":
+            return self._apply_articulation_at_or_after(notes)
+        return self._apply_articulation_exact(notes)
+
+    def _apply_articulation_exact(self, notes):
+        """Date-keyed matching: an articulation reaches exactly the notes at its own date."""
         if not self.artic_by_date:
             return
         for n in notes:
@@ -274,6 +325,59 @@ class PerfChain:
                     n.duration_perf = n.duration_perf * rel_dur
                 if vel_change != 0.0:
                     n.velocity = n.velocity + vel_change
+
+    def _apply_articulation_at_or_after(self, notes):
+        """CANONICAL A6 -- meico's own targeting rule.
+
+        ``ArticulationMap.renderArticulationToMap_noMillisecondModifiers`` resolves a
+        ``noteid``-less ``<articulation>`` through ``GenericMap.getAllElementsAt(date)``,
+        which is ``getElementIndexAtAfter(date)`` -- *at or after* -- and then adds that
+        element **unconditionally**, key-checking only the ones after it. So:
+
+          * a date that carries notes articulates all of them (the chord case, A4);
+          * a date that carries none articulates exactly **one** note, the first at or
+            after it -- and if that note is part of a chord, only that one note of it;
+          * a date past the last note articulates nothing.
+
+        This is what ``perf_chain_v4._ScoreChain`` renders v4 parts with, and it is also
+        the only correct rule for a *predicted* articulation map, whose dates are digit
+        tokens and need not land on an onset at all.
+        """
+        if not self.articulation:
+            return
+        dates = [n.date for n in notes]
+        per_note = {}
+        for a in self.articulation:                     # map order
+            idx = _index_at_after(dates, a[0])
+            if idx < 0:                                 # nothing at or after -> dropped
+                self.stats["artic_unmatched"] = self.stats.get("artic_unmatched", 0) + 1
+                continue
+            targets = [idx]
+            j = idx + 1
+            # NB: compared against the REQUESTED date, not against dates[idx]
+            while j < len(dates) and dates[j] == a[0]:
+                targets.append(j)
+                j += 1
+            if dates[idx] != a[0]:
+                self.stats["artic_offdate"] = self.stats.get("artic_offdate", 0) + 1
+            for t in targets:
+                per_note.setdefault(t, []).append(a)
+
+        for t in sorted(per_note):                      # meico walks the score in map order
+            artics = per_note[t]
+            if len(artics) > 1:
+                self.stats["stacked_articulations"] = (
+                    self.stats.get("stacked_articulations", 0) + len(artics) - 1)
+            note = notes[t]
+            for a in artics:                            # ... applying each list in map order
+                if a[1] != 1.0:                         # ArticulationData.articulateNote
+                    note.duration_perf = note.duration_perf * a[1]
+                if a[2] != 0.0:
+                    if note.velocity is None:           # D0: `if (velocityAtt != null)`
+                        self.stats["artic_velocity_skipped"] = (
+                            self.stats.get("artic_velocity_skipped", 0) + 1)
+                    else:
+                        note.velocity = note.velocity + a[2]
 
     # ------------------------------------------------------------------ step 3: rubato
 

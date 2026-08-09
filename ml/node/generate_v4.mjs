@@ -48,11 +48,11 @@
  *                       logic divergence. Never use the output as training data.
  *
  * JSONL schema v4:
- *   {"id","ppq","total_ticks",                                    <- total_ticks is new
+ *   {"id","ppq","total_ticks","renderer","seed",     <- total_ticks/renderer/seed are new
  *    "notes":[[date,dur,pitch,msOn,msOff,vel,part],...]          <- 7th element is new
  *    "tempo":[[date,bpm,to|null,meanTempoAt|null],...]
  *    "dynamics":[[date,vol,to|null,curvature|null,protraction|null],...]
- *    "articulation":[[date,relativeDuration,velocityChange],...]
+ *    "articulation":[[date,relativeDuration,velocityChange,part],...]  <- 4th element is new
  *    "rubato":[[date,frameLength,intensity,lateStart,earlyEnd,loop],...]
  *    "asynchrony":[[date,msOffset],...]                           <- new (part 2 only)
  *    "movement":[[date,position,to|null,curvature|null,protraction|null,controller],...] <- new
@@ -61,6 +61,18 @@
  * `total_ticks` is the sampled piece length. A validator that derives it from the last note end
  * instead cannot tell a map that stops short of the piece from one that ends with it — which is
  * exactly how a lost movement terminator used to slip through.
+ *
+ * `renderer` and `seed` make a file self-describing: `--renderer espressivo` output is
+ * knowingly mislabelled (E1/E2 below) and used to be indistinguishable from the good path once
+ * the filename was lost, and a set whose seed lived only in a shell history was not
+ * regenerable. Both are omitted in `--v3-compat`, whose schema is frozen by the v3proof diff.
+ *
+ * The articulation part column is **schema v4.1** (2026-08-09). articulationMaps are part-local
+ * from this revision on (CANONICAL A6): a global map addresses *dates*, and meico resolves a
+ * date carrying no note in a given part onto that part's next note, so on two independent
+ * rhythms the label named a note the renderer did not articulate. Records written before this
+ * revision have 3-element articulation rows and a global map; both shapes are readable, and
+ * `ml/python/validate_v4.py::_record_parts` branches on the row length.
  *
  * The movement row is a **6-tuple ending in the controller**, the same shape
  * `ml/python/validate_v4.py` specifies, so a row moves between the two without a rewrite (v4
@@ -170,6 +182,11 @@ export const DOMAIN = {
   tempoSegments: { v3: '4 + U{0..12} beats (mean 10)', v4: 'per piece segMax ∈ {6,8,12,16}; 4 + U{0..segMax-4} (mean 5/6/8/10) → up to 2× the v3 instruction density' },
   dynamicsSegments: { v3: '4 + U{0..12} beats', v4: 'same scheme as tempo, drawn independently' },
   parts: { v3: '1 (melody)', v4: '2: melody + bass ({360,720,1440,2880} grid, pitch 24..60, 12% rests, 10% 2-note chords)' },
+  articulation: {
+    v3: 'one GLOBAL map, dates from the single part\'s onsets',
+    v4: 'one PART-LOCAL map per part, dates from that part\'s own onsets (CANONICAL A6); ~15% of dates (A1)',
+    why: 'a global map addresses dates, and meico articulates the next note at-or-after a date that carries none — with two independent rhythms only 5.8% of onset dates are shared, so 80% of a global map\'s instructions hit a note the label does not name',
+  },
   asynchrony: { v3: 'n/a', v4: 'part 2 only, 1..3 beat-aligned segments >= 4 beats apart, integer ms in [-60,-5]∪[5,60] (CANONICAL Y3); date-0 segment positive (Y5)' },
   movement: { v3: 'n/a', v4: 'sustain only (M7); 1/4-beat grid, segments >= 180 ticks (M3); position/transition.to on the 128-value CC alphabet round(127p)/127 (M4); curvature [0,0.9] / protraction [-0.7,0.7], omitted at the 0.4/0.0 defaults (M9); neutral terminator at the piece end, always closing a ramp (M1)' },
   accentuation: { v3: 'n/a', v4: 'implemented, DEFAULT OFF (--with-accentuation)' },
@@ -322,20 +339,29 @@ export function samplePieceV4(rng, index, want, opt) {
   const tempi = sampleTempoMap(rng, totalTicks, { bpmLo: 25, bpmHi: 240, segMin: 4, segSpan: tSegMax - 3 });
   const dSegMax = TEMPO_SEG_MAX[rng.nextInt(4)];
   const dyns = want.dynamics ? sampleDynamicsMap(rng, totalTicks, { volLo: 30, volSpan: 85, segMin: 4, segSpan: dSegMax - 3 }) : [];
-  const artics = want.articulation ? sampleArticulationMap(rng, distinctDates([score1, score2])) : [];
+  // CANONICAL A6: one articulationMap PER PART, drawn from that part's own onset dates.
+  // Drawing from the union and installing the map globally (what v4 did until 2026-08-09)
+  // is not a labelling detail: only 5.8 % of onset dates are shared between the two parts,
+  // and meico resolves a date that carries no note in this part onto its NEXT note, so
+  // 80 % of the instructions articulated a note the label does not name.
+  const artics1 = want.articulation ? sampleArticulationMap(rng, distinctDates([score1])) : [];
+  const artics2 = want.articulation && twoPart ? sampleArticulationMap(rng, distinctDates([score2])) : [];
   const rubs = want.rubato ? sampleRubatoMap(rng, totalTicks, tempi) : [];
   const asyn = want.asynchrony && twoPart && rng.nextDouble() < opt.asynchronyProb ? sampleAsynchronyMap(rng, totalTicks) : [];
   const movs = want.movement && rng.nextDouble() < opt.movementProb ? sampleMovementMap(rng, totalTicks) : [];
   const acc = want.accentuation ? sampleAccentuation(rng, 4) : null;
 
-  const parts = [{ name: 'Piano', number: 1, midiChannel: 0, midiPort: 0, notes: score1, asynchrony: [] }];
-  if (twoPart) parts.push({ name: 'Bass', number: 2, midiChannel: 1, midiPort: 0, notes: score2, asynchrony: asyn });
+  const parts = [{ name: 'Piano', number: 1, midiChannel: 0, midiPort: 0, notes: score1, asynchrony: [], articulation: artics1 }];
+  if (twoPart)
+    parts.push({ name: 'Bass', number: 2, midiChannel: 1, midiPort: 0, notes: score2, asynchrony: asyn, articulation: artics2 });
 
   return {
     index,
     totalTicks,
     parts,
-    maps: { tempo: tempi, dynamics: dyns, articulation: artics, rubato: rubs, movement: movs, accentuation: acc },
+    // `articulation: []` here is not an omission — the map is part-local now (A6), and
+    // `buildMpm` writes a *global* `<articulationMap>` only for the v3-compat path.
+    maps: { tempo: tempi, dynamics: dyns, articulation: [], rubato: rubs, movement: movs, accentuation: acc },
   };
 }
 
@@ -372,15 +398,35 @@ export function sustainStream(data) {
   return part.controlChanges.find((s) => s.kind === 'position' && s.controller === 'sustain') ?? null;
 }
 
-export function pieceToJsonl(piece, data, v3) {
+/**
+ * Articulation rows. v3 keeps the 3-tuple of a single global map; v4 appends the **part
+ * number** (A6: the maps are part-local), streams in part order, ascending within a part.
+ * The part column is not decoration — without it the rows cannot be routed back to the map
+ * that produced them, and a consumer would re-create exactly the global-map defect A6 fixes.
+ */
+function articulationJson(piece, v3) {
+  if (v3) return piece.maps.articulation.map((a) => `[${num(a.date)},${num(a.relDur)},${num(a.velChange)}]`).join(',');
+  const rows = [];
+  for (const p of piece.parts)
+    for (const a of p.articulation ?? []) rows.push(`[${num(a.date)},${num(a.relDur)},${num(a.velChange)},${num(p.number)}]`);
+  return rows.join(',');
+}
+
+export function pieceToJsonl(piece, data, v3, provenance) {
   const m = piece.maps;
-  const head = v3 ? `{"id":${piece.index},"ppq":${PPQ}` : `{"id":${piece.index},"ppq":${PPQ},"total_ticks":${num(piece.totalTicks)}`;
+  // `renderer` and `seed` are provenance, not data: a JSONL that does not say which renderer
+  // labelled it cannot be told apart from one labelled by the defective path (E1/E2), and a
+  // set whose seed is only in someone's shell history is not reproducible.
+  const prov = v3 || !provenance ? '' : `,"renderer":"${provenance.renderer}","seed":${num(provenance.seed)}`;
+  const head = v3
+    ? `{"id":${piece.index},"ppq":${PPQ}`
+    : `{"id":${piece.index},"ppq":${PPQ},"total_ticks":${num(piece.totalTicks)}${prov}`;
   const out = [`${head},"notes":[`, notesJson(data, v3), '],"tempo":['];
   out.push(m.tempo.map((t) => `[${num(t.date)},${fmt(t.bpm)},${t.transitionTo === null ? 'null' : fmt(t.transitionTo)},${orNull(t.meanTempoAt)}]`).join(','));
   out.push('],"dynamics":[');
   out.push(m.dynamics.map((d) => `[${num(d.date)},${fmt(d.volume)},${d.transitionTo === null ? 'null' : fmt(d.transitionTo)},${orNull(d.curvature)},${orNull(d.protraction)}]`).join(','));
   out.push('],"articulation":[');
-  out.push(m.articulation.map((a) => `[${num(a.date)},${num(a.relDur)},${num(a.velChange)}]`).join(','));
+  out.push(articulationJson(piece, v3));
   out.push('],"rubato":[');
   out.push(m.rubato.map((r) => `[${num(r.date)},${num(r.frameLength)},${num(r.intensity)},${num(r.lateStart)},${num(r.earlyEnd)},${r.loop ? 1 : 0}]`).join(','));
   out.push(']');
@@ -533,7 +579,7 @@ export async function main(argv) {
       notes += p.notes.length;
       for (const s of p.controlChanges) ccPoints += s.points.length;
     }
-    if (!sink.write(pieceToJsonl(pieces[i], renders[i], opt.v3compat) + '\n'))
+    if (!sink.write(pieceToJsonl(pieces[i], renders[i], opt.v3compat, { renderer: opt.renderer, seed: Number(opt.seed) }) + '\n'))
       await new Promise((r) => sink.once('drain', r));
   }
   await new Promise((r) => sink.end(r));

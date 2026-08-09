@@ -1,0 +1,8 @@
+{
+  "name": "mpmify-ml-node",
+  "private": true,
+  "version": "4.0.0",
+  "type": "module",
+  "description": "v4 synthetic-data generator for the mpmify ML program (espressivo-backed). No npm dependencies: espressivo is imported from an absolute dist path.",
+  "dependencies": {}
+}

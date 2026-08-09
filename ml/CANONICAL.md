@@ -371,3 +371,400 @@ token-for-token.
 - New rule (from Team A, now normative): **R8** — no tempo instruction date strictly
   inside a rubato frame (meico selects the tempo segment by the unwarped key but
   evaluates the curve at the warped date; violating placements render NaN).
+
+---
+
+# v4 addendum — movementMap (pedal) and asynchronyMap
+
+Status: **normative for the v4 sampler, DSL and evaluation suite.** Additive: nothing
+above is retracted. §7.5 ("out of scope, deliberately: asynchrony … movement/pedal") is
+superseded for those two maps only; imprecision, metrical accentuation and ornamentation
+stay out.
+Owner: Team F. Companion measurements: `analysis/findings_v4.md`, reproducible via
+
+```sh
+cd ml/analysis && nice -n 15 python3 pedal_fit.py --n 20 --java-proof   # ~12 min
+cd ml/analysis && nice -n 15 python3 vienna_ceiling.py --n 40           # ~15 min
+cd ml/analysis && python3 pedal_fit.py --from-json                      # re-print only
+cd ml/analysis && python3 vienna_ceiling.py --from-json                 # re-print only
+```
+
+Unlike §§1–7, this section is calibrated on **real performances** (Vienna 4x22,
+`ml/data/vienna_infer*.jsonl`), not on the sampler's own output. The scope caveat of §0
+therefore does not apply to it — and §0's "queued test … it has not been run" is now
+**run**: `analysis/vienna_ceiling.py` fits the oracle tempo explanation on the corpus.
+Its verdict (findings_v4 §B) is that the canonical tempo family is *not* the bottleneck
+on real playing; §0's caveat about §A's self-consistency stands unchanged, but the
+worry it flags does not materialise. (§0's last sentence, "it has not been run", is
+now stale; §0 is outside this addendum's edit scope, so it is flagged here instead.)
+
+**Sampling.** The 40 ceiling windows are stratified over pieces, pianists **and window
+index**; the 20 pedal performances over pianists within each piece. This matters: the
+corpus lays each performance's 2–3 windows out consecutively, so a stride selection
+aliases onto one window index. The first release of this addendum was calibrated on a
+selection that turned out to be **all `_w0`** — piece openings, which are systematically
+easier — and every figure below has been re-measured on a representative sample. The
+qualitative conclusions are unchanged; several magnitudes moved by 10–40 %.
+
+## 8. Attribution hierarchy — v4 status
+
+Additive amendment to §1's table:
+
+```
+ render order (meico)              canonical band                       v4 status
+ 2  movementMap                    sustain/soft pedal CC, a DISJOINT     IN  (§9)
+                                   observable channel (MIDI CC 64/67)
+ 8  asynchronyMap        (ms)      constant per-part ms offsets,         IN  (§10)
+                                   part 2 only, >=4-beat steps
+```
+
+**H6 — movement owns the control-change stream and nothing else.** `movementMap` is the
+only map in `Performance.perform` whose output leaves meico as MIDI *control changes*
+(`Msm.parsePositionMap` → `EventMaker.createControlChange`); every other in-scope map
+writes note onsets, offsets or velocities. The pedal band is therefore disjoint **at the
+level of the observable**, not merely at the level of the model — see §9.9.
+
+**H7 — asynchrony owns the between-part onset *difference*; tempo owns the *common
+mode*.** For two parts A (reference) and B (offset δ), the rendered onsets are
+`ms(t)` and `ms(t) + δ(t)`. Sum and difference are an exact bijection with `(ms, δ)`, so
+the only thing that separates them is which side gets the smooth curve and which gets the
+piecewise-constant step — which is exactly what §10's rules pin down.
+
+---
+
+## 9. movementMap (M rules)
+
+A movementMap is a **chain** of `<movement>` instructions. Instruction *j* at tick `b_j`
+carries `position` p_j and `transition.to` p_{j+1}; its end date is the next
+instruction's date, and between them meico evaluates the same cubic-Bézier S-curve as
+`DynamicsData` (`MovementData.getPositionAt`). The rendered observable is
+`round(127 · position)` on CC 64 (`controller="sustain"`) or CC 67 (`"soft"`), with
+zero-order hold between emitted events.
+
+| id | rule | why the inverse is well-posed |
+|---|---|---|
+| **M1** | the chain is **closed by a terminator**: a final `<movement>` at the chain end date with **no** `transition.to`. | `MovementMap.renderMovementToMap` iterates `movementIndex < this.size() - 1` — the **last instruction never renders**. Without a terminator the last *real* ramp is silently dropped, so `[…, ramp]` and `[…]` are render-identical: a pure alias, and a trap for a decoder that stops at the last curve. This is the movement analogue of G7 (tempo/dynamics) and R6 (rubato). |
+| **M2** | first instruction at `date = 0` with an explicit `position` (G3). | otherwise the pedal state before the first instruction is meico's silent `position = 0.0` default, which the model would have to learn as an implicit token. Real performances do **not** start with the pedal released: the collapsed opening state (M8) is **> 0 in 20/20** measured performances, median **CC 85**, range 5 … 126. |
+| **M3** | boundaries on a **1/4-beat grid** (`date` a multiple of 180 ticks) and every segment **≥ 180 ticks**. | two independent floors meet here. (i) *Renderer resolution*: `MovementData.getTForDate` terminates as soon as the Bézier's x-error is `< 1.0` **tick**, so on a segment of `L` ticks the returned position carries a systematic error of up to **127/L CC units** — measured exactly (`pedal_fit.py` proof V4): 2.82 cc at L=45, 1.41 at 90, **0.71 at 180**, 0.50 at 254. Below ~180 ticks the renderer's own inversion error exceeds the CC quantiser and `curvature`/`protraction` stop meaning anything. (ii) *Physics*: a real pedal lift-and-catch takes 200–300 ms (findings_v4 §A); 1/4 beat is 125–500 ms over the corpus tempo range. G4 (integer beats) does **not** apply to movement — see §9.9. |
+| **M4** | `position` and `transition.to` are written as **`round(127·p)/127`**, i.e. the canonical alphabet is the 128 integer CC values. | the observable is `Math.round(value)` in `Msm.parsePositionMap`; anything finer is unfalsifiable, and `round(127·(k/127)) == k` exactly, so the rewrite is idempotent (G6 analogue). It is also cheaper: on a real 1/4-beat chain, 2-decimal 0..1 positions cost 13.2 tokens/segment against 11.0 for integer CC at the same date encoding — a median 1.36× (findings_v4 §A5). |
+| **M5** | no degenerate transitions: omit `transition.to` when it equals `position` (a plateau), and never emit a transition whose CC endpoints are equal after M4. | `getPositionAt` returns `position` for the whole segment when `transitionTo == position`, and `getMovementSegment` emits a flat hold — render-identical to the constant form at more tokens (T4 analogue). |
+| **M6** | `position` is written **explicitly on every rendering instruction** in v4; inheritance is forbidden. The **terminator is exempt**: its `position` never renders, and the compiler writes it deterministically as the previous instruction's `transition.to` (or `position`, after a plateau), so it costs zero description length. That exemption is not optional — `renderMovementToMap` still calls `getMovementDataOf` on the last index, so a terminator that *omitted* `position` would re-enter the defective `getPreviousPosition` below. | MPM allows `position` to be omitted (inherited from the previous `transition.to`), and that would save ~37 % of the movement DL (findings_v4 §A5). Two fork defects make it unusable: (a) `MovementMap.getPreviousPosition` loops `for (j = index-1; j > 0; --j)`, so **instruction #1 can never inherit** — it silently gets 0.0, i.e. a full pedal drop (reproduced: the chain `[.1→.9] [omit→.2]` renders 114.3 → **0.0** at the boundary); (b) the same method dereferences `getAttribute("transition.to").getValue()` unguarded, so an omitted `position` after a plateau throws **NullPointerException** (`MovementMap.java:203`, reproduced). Both are one-line fixes (`j >= 0`; null-guard). **When they land, M6 relaxes to "omit `position` iff it equals the previous `transition.to`"**, and this rule's rationale becomes the changelog entry. |
+| **M7** | `controller ∈ {"sustain", "soft"}` only, one chain per controller, both global. | `Msm.parsePositionMap` initialises `short controllerNumber = 0` and only overwrites it for exactly those two strings — every other controller name renders as **CC 0 (Bank Select MSB)**, a silent catastrophic aliasing. The two chains do not alias each other because CC 64 and CC 67 are different observables. |
+| **M8** | a movement chain fitted to a **real** trace is canonicalised by: (1) sort by ms, **last-wins** at duplicate timestamps; (2) **collapse the opening burst** — every Vienna performance opens with 1–286 events at a single timestamp (median 49), i.e. a ramp at zero elapsed time; keep only its final value, which is the pedal state the piece starts in; (3) convert ms → ticks with the performance's own onset-derived tick↔ms map, which must **extrapolate in both directions** (the pedal outlives the last matched note by a median 83 of 3498 events); (4) fit positions by **bounded** least squares on the M3 grid — the box `0 ≤ p ≤ 1` is genuinely active (a median 84 of 418 positions sit on it at 1/4-beat density) and an unconstrained solve followed by a clip is 0.4 cc worse, which matters when the result is quoted as a ceiling; (5) apply M4/M5/M1. | no movement curve can express infinite slope, and MPM/MIDI state semantics are last-wins anyway. Measured on 20 performances: **every** duplicate timestamp in the corpus's `sustain_cc` streams lies inside that opening burst (20/20; `dropped == burst − 1` exactly), so the two rewrites (1) and (2) are the same rewrite. |
+| **M9** | `curvature ∈ [0, 0.9]` and `protraction ∈ [−0.7, 0.7]`, 2 decimals, and **omitted when equal to meico's defaults (0.4 / 0.0)**. | an omitted attribute renders as the `MovementData` field default, so writing `curvature="0.4"` is a pure alias for writing nothing (G8 analogue). Free shapes are worth ~1 % of RMSE on a 4-beat grid and **35 % at the canonical 1/4-beat grid of M3** (18.5 → 12.0 cc) — the payoff *grows* as the grid gets finer, because `protraction` moves the S-curve's steep part **inside** the segment, i.e. it is a *sub-grid boundary-placement parameter*. Since M3 makes 1/4 beat the canonical density, shape sampling is worthwhile; see findings_v4 §A3. |
+| **M10** | `MovementMap.movementSampleMaxStep = 0.1` (the fork default). | the emitted CC stream is a zero-order hold of the Bézier at `maxStep`-spaced samples. Measured on real fits, the whole discretisation is worth **+0.02 … +0.80 cc** — i.e. going from the default 0.1 to 0.02 buys at most 0.8 cc (free-shape 1/4-beat chain: 12.72 → 11.92) and at least nothing (0.25-beat default chain: 18.45 → 18.43) for **4.5×** the CC events (2216 → 10114) and 4.5× the quadratic sampling time. Keep the default. Note the discretised render is sometimes *better* than the continuous chain, because it also rounds to integer CC. |
+
+### 9.9 Identifiability of the pedal band
+
+**Why pedal CC cannot be confused with any other map.** The argument is stronger than for
+every other pair in this document, and it is structural rather than statistical:
+
+1. **Disjoint observable.** `movementMap` renders into `positionMap`, which
+   `Msm.parsePositionMap` turns into MIDI *control-change* events. No other map in the
+   render order writes control changes; no other map's output can appear on CC 64/67, and
+   the movementMap cannot appear on note onsets, offsets or velocities. Contrast the
+   genuinely ambiguous pairs of §1 (articulation vs dynamics both write velocity;
+   tempo vs rubato vs asynchrony all write onsets). Aliasing is not merely improbable
+   here — it is not expressible.
+2. **Dedicated controller per chain.** Within the CC stream, `"sustain"` → CC 64 and
+   `"soft"` → CC 67 are distinct controller numbers, so the two chains are separately
+   observable. M7 forbids every other controller string precisely because they all
+   collapse onto CC 0.
+3. **Triangular coupling, one way only.** The positionMap *is* pushed through the
+   tempoMap and the asynchronyMap (`Performance.java:542-543`) but **not** the rubatoMap
+   and **not** the imprecisionMaps (`Performance.java:519-551`: the score and the MSM
+   pedalMap get `ImprecisionMap.renderImprecisionToMap`, the positionMap does not), and
+   nothing flows back: pedal instructions never move a note. So the dependency graph is
+   triangular — tempo/asynchrony → pedal dates, never the reverse — and the joint inverse
+   problem stays invertible band by band. Two useful consequences: pedal event *times*
+   are a second observation of the tempo curve, and (once v5 lands) they are the only
+   **noise-free** one, since timing imprecision never reaches them.
+4. **The one real-data caveat.** On a physical piano the sustain pedal lengthens a note's
+   *sounding* duration. meico does not model this (it emits CC and lets the synth decide),
+   so within the render model there is no aliasing with articulation `relativeDuration` —
+   but when fitting articulation against **real** data, durations must come from key
+   release (note-off), never from acoustic decay. `vienna_adapter.py` already handles this
+   ("pedal-extended note-offs"); any future real-data articulation fit must too.
+
+---
+
+## 10. asynchronyMap (Y rules)
+
+An asynchrony instruction is `<asynchrony date="…" milliseconds.offset="…"/>`; it is a
+**step function of score date** applied to the already-rendered millisecond dates of one
+part (`AsynchronyMap.renderAsynchronyToMap`, after tempo). There is no interpolation and
+no transition form.
+
+| id | rule | why the inverse is well-posed |
+|---|---|---|
+| **Y1** | asynchrony exists **only on part 2**, never global, never on part 1. Part 1 defines the timeline (offset ≡ 0). | a *global* asynchrony is a rigid translation of the whole performance. Relative to the score→performance alignment it is unobservable, and meico clamps it at 0 anyway (below), so it is a pure alias for "where the piece starts". Restricted to part 2 the observable is the between-part onset *difference* at a shared score date — a quantity **no tempoMap can produce**, because a tempoMap assigns one millisecond value to one tick (H7). This rule is also what lets the DSL omit a part token entirely (§11). |
+| **Y2** | `milliseconds.offset` is an **integer**, constant between instruction dates. | MIDI onset resolution is 1 ms; the map has no other form. Integer offsets make the alphabet 3–4 digit tokens. |
+| **Y3** | `\|offset\| ∈ [5, 60]` ms — **deadband `(−5, 5)`**. | 5 ms is this document's observability floor throughout (§4.T2, findings §C). It is also ~2 standard errors of the real quantity: measured on 40 Vienna windows, the per-window sd of the top-voice-vs-rest lead is **18.1 ms** over a median of 64 chords, i.e. SE ≈ 2.3 ms. The 60 ms cap is the p90 of the observed per-window median lead (33 ms) with headroom. |
+| **Y4** | instruction dates on the beat grid (G4), segments **≥ 4 beats**, instruction at date 0 (G3), **no terminator needed**, adjacent equal offsets merged (G8). | unlike rubato and movement, an asynchrony instruction has no transition to leak, so the "dangling" failure mode does not exist; the last instruction simply extends to `Double.MAX_VALUE`, which is the intended semantics. ≥4 beats guarantees enough shared onset dates per segment to beat the imprecision floor (§10.9). |
+| **Y5** | the offset in force at the part's **first** onset must satisfy `offset >= 0` **or** `first_onset_ms >= \|offset\|`. A map violating this is **rejected**, not rounded. | `renderAsynchronyToMap` writes `Math.max(0.0, date + offset)` — a negative offset that would push an onset before time 0 is silently truncated, which destroys recoverability (two different offsets render identically). Canonically: give part 1 to the **leading** voice, which makes part 2's offset positive. Empirically that is the usual assignment but not a law — **35 of 40** measured windows have a positive mean top-voice lead (median 19.3 ms, p10 −1.7 ms), so a real-data fitter must decide the assignment *per piece* from the sign of the fitted offset rather than assume it. |
+| **Y6** | do not rely on note-off displacement. | the same method writes `Math.max(ms_end, ms_start + 1)` for end dates, so a note shorter than the offset change has its duration silently rewritten. Onsets are the observable; offsets under an active asynchrony change are not. |
+
+### 10.9 What asynchrony can and cannot explain
+
+Measured on 40 Vienna windows, treating "highest pitch at a score tick" vs "the rest" as
+the two parts an asynchronyMap would model:
+
+| quantity | median | p10 | p90 |
+|---|---|---|---|
+| per-window median lead (ms) | 21.5 | 8.9 | 33.3 |
+| per-window mean lead (ms) | 19.3 | −1.7 | 30.5 |
+| per-window sd of the lead (ms) | 18.1 | 11.0 | 52.0 |
+| share of the lead's **second moment** a single constant offset explains | **0.39** | 0.00 | 0.85 |
+| windows with a positive mean lead | **35 / 40** | | |
+
+A constant per-part offset is a *usable* first-order model of real chord spread on a
+typical window — it accounts for a median 39 % of the lead's second moment — but the
+majority of the signal is scatter that asynchrony cannot express by construction. That
+residual is the imprecision band (v5, `ImprecisionMap`), and it is also the *floor* of
+every timing metric in this program: `vienna_ceiling.py` measures it directly as
+`chord-floor` (see findings_v4 §B).
+
+**Read the 0.39 carefully.** It is `μ²/(μ² + σ²)`, the share of the *second moment*
+`E[lead²]` — **not** a share of the variance (a constant explains exactly 0 % of the
+variance, by definition). And it is not robust: the p10 of ≈0.00 says that in the
+windows where the lead is small relative to its scatter, a constant offset explains
+essentially nothing. The number licenses "a constant offset is worth its ~27 tokens on
+a typical window"; it does **not** license arithmetic that multiplies `1 − 0.39` into
+some other quantity (see D3).
+
+An earlier release of this table reported 0.73 with a positive lead in 40/40 windows.
+Both figures came from the all-`_w0` selection: piece openings have larger, steadier
+melody lead than the corpus average. The rule set above is unchanged by the correction
+— Y3's deadband and cap still bracket the observed distribution, and Y5 is still the
+right *canonical* assignment — but Y5's empirical support is now 35/40, not 40/40.
+
+---
+
+## 11. v4 DSL additions and description length
+
+```
+movement     := 'G' date [ 'Z' position ] ( 'C' | 'R' to [ 'Q' curvature 'P' protraction ] )
+asynchrony   := 'Y' date 'J' offsetMs
+```
+
+- `G` = movement instruction, `Z` = position, `Y` = asynchrony, `J` = milliseconds.offset;
+  `C R Q P` are reused from the dynamics production with identical meaning. Vocab
+  31 → **35**, appended after `U F I X A L W` so all earlier token ids stay stable
+  (B1 vocab-freeze discipline).
+- `Z position` is present on every **rendering** instruction while M6 holds; when the two
+  fork defects are fixed it appears only on the first instruction of a chain.
+- `position` / `to` are **integer CC values 0..127** (M4), not 0..1 decimals.
+- movement `date` is written as an **integer delta in 1/4-beat units** from the previous
+  instruction (the M3 grid). Absolute fractional-beat dates cost a median **1.36×** as
+  many tokens at the same integer-CC position encoding, and **1.59×** if the positions are
+  spelled as 2-decimal 0..1 as well (findings_v4 §A5). They carry no extra information: a
+  chain is read left to right anyway.
+- the terminator is `G <date> C` — **no `Z`**. Its `position` never renders
+  (`renderMovementToMap` skips the last instruction) and the compiler emits it into the
+  XML from the previous instruction, so it costs nothing. See M6: the compiler *must*
+  emit it, because `getMovementDataOf` is still called on the last index.
+
+Measured cost of one **real** sustain chain (median over 20 Vienna performances). Both
+rows marked canonical are **M3-conforming** chains — 1/4-beat grid, every segment ≥ 180
+ticks — priced in 1/4-beat date units:
+
+| chain | RMSE (cc) | tokens | per segment |
+|---|---|---|---|
+| **canonical, fixed 1/4-beat grid, 416 segments** (M3 + M6) | **18.5** | **3350** | 8.0 |
+| … same, with per-segment `curvature`/`protraction` (M9) | 12.0 | 5398 | 13.0 |
+| … same, dates as absolute fractional beats | 18.5 | 5510 | 13.2 |
+| … same, positions as 2-decimal 0..1 | 18.5 | 4578 | 11.0 |
+| … same, with `position` inheritance (post-fork-fix) | 18.5 | 2094 | 5.0 |
+| **canonical, adaptive knots, 159 segments** (M3 + M6) | **24.7** | **1282** | 8.1 |
+| … same, with `position` inheritance (post-fork-fix) | 24.7 | 808 | 5.1 |
+
+For scale, §5's whole-piece tempo+dynamics budget is **85.5 tokens**. A movementMap
+fitted to real continuous half-pedalling costs **1.3 k – 5.4 k tokens**, i.e. **15–63×**
+every other map combined — the single most consequential fact about v4. See findings_v4
+§A for what to do about it.
+
+**Do not quote a sub-M3 chain as canonical.** A 1/8-beat adaptive fit is cheaper (it
+reaches ~21 cc for ~960 tokens) but it is *not* in the canonical class: at 90-tick
+segments the renderer's own `getTForDate` inversion carries 1.4 cc of systematic error
+(M3(i)), so those tokens buy resolution the renderer cannot deliver.
+
+---
+
+## 12. Canonicalisation procedure — v4 additions
+
+Extend §6's fixed-point rewrite with, for every movementMap:
+
+12. snap movement dates to the 1/4-beat grid; merge segments shorter than 180 ticks (M3);
+13. rewrite `position`/`transition.to` to `round(127·p)/127` (M4);
+14. drop `transition.to` when it equals `position` after step 13 (M5);
+15. write `position` on every rendering instruction (M6) — including on the terminator,
+    where the compiler supplies it from the previous instruction and the DSL does not
+    spell it — and drop `curvature`/`protraction` equal to 0.4 / 0.0 (M9);
+16. append a terminator at the chain end date if the last instruction has a
+    `transition.to` (M1); **reject** a map whose `controller` is not `sustain`/`soft` (M7);
+
+and for every asynchronyMap:
+
+17. round offsets to integer ms, drop instructions inside the (−5, 5) deadband, merge
+    adjacent equal offsets, snap dates to beats, merge segments < 4 beats (Y2–Y4);
+18. **reject** a map whose date-0 offset would clamp the first onset at 0 (Y5);
+19. **reject** an asynchronyMap on part 1 or on the global performance (Y1).
+
+Acceptance test unchanged: `render(canonicalise(M)) == render(M)` to ≤1e-9 ms / ≤0 cc,
+and `canonicalise` idempotent token-for-token.
+
+---
+
+## 13. Known residual ill-posedness added by v4
+
+1. **The pedal band is not compressible at canonical density.** A movement chain on a
+   1-beat grid explains essentially nothing of a real trace (RMSE 29.8 cc against a signal
+   sd of 32.2 cc). Fidelity is governed by segment **duration in milliseconds**, not in
+   beats — 11 cc below 180 ms, 18.5 cc at 180–360 ms, 24.7 cc at 360–720 ms, 29–31 cc
+   above 720 ms, asymptoting to the signal sd (findings_v4 §A2). A beat-grid canonical
+   form therefore has *tempo-dependent* pedal fidelity, which no rule in this document can
+   remove: the **same** canonical 1/4-beat chain reaches 11.5 cc on Schubert D783/15
+   (beat 410 ms) and 25.9 cc on Chopin op10/3 (beat 1804 ms). Worse, M3's 180-tick floor
+   *is* the binding constraint on the slow pieces — 1/4 beat is 451 ms there, so the
+   sub-180 ms bucket is unreachable for them at any legal grid. v4 samples the
+   band-limited part and leaves the rest to a future movement-imprecision band.
+2. **`protraction` vs boundary placement.** Free shape parameters cut the 1/4-beat RMSE by
+   35 %, mostly by relocating the steep part of the S-curve inside its segment. That means
+   `(boundary, protraction)` is only jointly identifiable up to the grid — the same
+   ambiguity R1/R5 handle for rubato, and the reason M3 fixes the grid instead of letting
+   the fitter choose boundaries freely.
+3. **Asynchrony below the chord rate.** A ≥4-beat asynchrony segment needs shared onset
+   dates to be observable; in a texture where the two parts rarely coincide, the offset is
+   estimable only through the tempo curve and the separation of H7 degrades. No rule
+   fixes this; it is an estimation limit, like §7.1.
+4. **Most of real chord spread is not asynchrony** — a single constant offset accounts for
+   a median 39 % of the top-voice lead's second moment, and as little as 0 % on the p10
+   window (§10.9) — and 100 % of the pedal high-frequency component is not movement
+   (item 1). Both belong to imprecision (v5). Until that band exists, v4's exactness
+   proofs still hold by construction (H5) because the *sampler* emits nothing outside the
+   modelled bands — but a fit to real data has a non-zero floor, and findings_v4 §B
+   quantifies it (20.4 ms median, p90 50.2 ms).
+
+---
+
+## 14. What the real-data ceiling changes in §§1–7 (decision record)
+
+`analysis/vienna_ceiling.py` fits the **oracle** canonical tempo explanation to 40 Vienna
+windows — the best map in the v1/v3 hypothesis class, fitted with full knowledge of the
+target — stratified over pieces, pianists **and window index** (19 pianists; w0 18 / w1 16
+/ w2 6). Full numbers in findings_v4 §B; the three decisions they force. All three survive
+the re-measurement on a representative sample; only their magnitudes moved (D1 and D3 got
+larger, D2 got sharper).
+
+**D1 — T1 (segments ≥ 4 beats) stands for v4.** The canonical family reaches a median
+**57.8 ms** render RMSE on real playing, against a 383.9 ms constant baseline and a
+20.4 ms absolute floor (the best monotone tick→ms map of *any* kind). A ½-beat family
+would reach 24.7 ms ≈ 1.03× the floor, so finer granularity *is* available — but the v1
+model produced 5287 ms, i.e. it sits **91× above its own ceiling**, and it is worse than
+a one-instruction constant tempo in **39/40** windows. Finer canonical granularity would
+buy nothing until a model gets within ~2× of the ceiling. Revisit T1 then, not before.
+The queued fix is domain randomisation (`LOG.md`), not a spec change.
+
+**D2 — H1's MDL justification is sampler-internal; do not quote it about humans.**
+On real performances, at equal description length a piecewise-constant staircase is
+**mildly better** than the power-transition family, not worse. State the comparison
+carefully, because the two obvious framings give opposite-looking numbers:
+
+| comparison | RMSE ratio | DL ratio | dominance |
+|---|---|---|---|
+| `stair-4` vs `power-8` — **both canonical** (≥4 beats) | 0.88 | 0.90 | `stair-4` dominates `power-8` in **31/40** windows |
+| `power-4` vs `stair-4` — same grid, both canonical | 0.66 | 2.11 | no staircase in the canonical class dominates `power-4`: **0/40** |
+| `stair-2` vs `power-4` — the rival **violates T1** | 0.91 | 0.96 | `stair-2` dominates `power-4` in 26/40 |
+
+Read left to right: *within* the canonical class the transition earns its tokens on its
+own grid (RMSE −34 % for 2.1× the DL) but loses to simply halving the segment length
+(`stair-4` beats `power-8` at 0.90× the DL). The rival that beats `power-4` outright is
+`stair-2`, which is **not** canonical — it is exactly the T1 violation D1 declines to
+license. Do not quote "a staircase dominates `power-4` in 26/40" without that
+qualification; the canonical-class count is **0/40**, and a power chain dominates
+`stair-4` in 0/40 too. The mechanism is granularity: human rubato lives at the 0.5–2 beat
+scale, below the canonical segment length. H1 remains the right **attribution** rule (it
+is what makes the decomposition unique); `findings.md` §A remains a correct statement
+about sampler output. Neither is a claim about human performances, and §0's caveat is now
+measured rather than assumed.
+
+**D3 — the imprecision band is a ~20 ms effect at most, and it is chord asynchrony.**
+The irreducible residual is **20.4 ms** (p90 50.2) and `isotonic == chord-floor` in
+**40/40** windows: the per-tick mean onsets are already monotone, so *everything* a
+tempoMap cannot explain is within-chord spread. §10.9 shows a constant per-part offset
+accounts for a median 39 % of the *lead's second moment*, so an asynchronyMap takes a
+real but minority bite out of that 20.4 ms and the remainder is `ImprecisionMap`'s.
+
+That is a **bracket, not an identity** — the 39 % is a share of a between-voice
+statistic and the 20.4 ms is a note-level RMSE, so they cannot be multiplied together
+(an earlier release did exactly that and quoted "≈8–9 ms"). What the bracket supports is
+only the ordering, and the ordering is all D3 needs: `ImprecisionMap` lives inside a
+20 ms budget, two orders of magnitude below the v1 error (5287 ms) and well below the
+canonical tempo ceiling (57.8 ms). v5's imprecision work is therefore justified by
+*realism*, not by residual reduction. The one band where the representation ceiling
+genuinely bites is the pedal (§13.1).
+
+---
+
+## 15. articulationMap in v4 — rule A6 (part-local maps)
+
+Added 2026-08-09 (orchestrator decision on wave-4 blocker B3, option (a)). Additive:
+§4's A1–A5 stand unchanged; A6 fixes **where the map lives**, which v3 never had to
+decide because it had one part.
+
+| id | rule | why the inverse is well-posed |
+|---|---|---|
+| **A6** | an `articulationMap` is **part-local**: one map inside each `<part>`, and its dates are drawn from **that part's own onset dates**. A global `articulationMap` is forbidden in v4 and later. | see below — a global map does not mean what its dates say as soon as the parts have independent rhythms. |
+
+**The mechanism.** `ArticulationMap.renderArticulationToMap_noMillisecondModifiers`
+resolves a `noteid`-less `<articulation>` through `GenericMap.getAllElementsAt(date)`,
+which is `getElementIndexAtAfter(date)` — *at or after*, not *at* — and then adds the
+element it lands on **unconditionally**, key-checking only the elements *after* it
+(`GenericMap.java`; espressivo's `GenericMap.ts` is line-for-line identical). So an
+articulation whose date carries no note in the part being rendered is **not skipped**: it
+articulates the part's next note, and if that note belongs to a chord, only its first
+note. Only a date that lies past the part's last note is dropped.
+
+In v3 this branch was unreachable — the articulation dates were the single part's own
+onsets, so *at-or-after* and *at* coincide and A4 ("all notes of a chord share it") is
+exactly what happens. v4's two parts are sampled independently, and **5.8 %** of onset
+dates are shared between them (305 of 5234, measured on the 60-piece pilot of
+2026-08-09 11:28). A map placed globally and drawn from the union therefore mostly
+addresses dates the part in hand does not have: on that pilot, **115 of 813 articulation
+dates were not an onset of part 1 and 650 of 813 (80 %) not an onset of part 2**,
+producing 743 off-date landings, 282 articulations stacked onto a note that had already
+been articulated, and 22 dropped past the last note. Every one of those is a label that
+names a note the renderer did not articulate — which makes date-keyed articulation
+supervision (and any per-note articulation head trained on it) systematically wrong.
+
+**Why part-local rather than the alternatives.** Restricting the dates to the
+*intersection* of the parts' onsets keeps the map global but leaves 5.8 % of dates to
+draw from, i.e. a channel too sparse to estimate. Keeping the global map and redefining
+the supervision as the note *index* meico resolves to would work for a per-note head but
+silently retires the DSL's `A date L relDur W velChange` production, whose date is then
+not the thing being labelled. Part-local maps restore A4 verbatim, keep the DSL date
+meaningful, and cost one `<articulationMap>` element per part.
+
+**Consequences already implemented.**
+
+1. `ml/node/sampler.mjs` / `ml/node/generate_v4.mjs` draw one map per part from
+   `distinctDates([thatPart])` and `ml/node/xml.mjs::buildMpm` writes it inside the
+   `<part>`. The global element remains only for `--v3-compat`, whose documents must stay
+   byte-comparable with `ml/java/SampleAndRender.java`.
+2. JSONL schema v4.1: articulation rows are `[date, relativeDuration, velocityChange,
+   part]`. `ml/python/validate_v4.py::_record_parts` branches on the row width, so pre-A6
+   files keep rendering (and keep proving) exactly as before.
+3. `ml/python/perf_chain.py` gained `artic_targeting="at-or-after"`, the faithful rule,
+   next to the `"exact"` default that v3 metrics were computed with. The distinction
+   outlives the sampler fix: a **predicted** articulation map's dates are digit tokens and
+   need not land on an onset at all, so any evaluation of model output must use the
+   at-or-after rule to render what meico would render.
+4. `ml/node/verify_v4.mjs invariants` checks A6 on the emitted file — every articulation
+   date must be an onset of its own part. The pre-A6 defect passed every other invariant
+   in that suite, which is why the check belongs on the data rather than in the sampler.
+
+**What A6 does not change.** The renderer quirk itself is not a defect to be fixed —
+`perf_chain_v4._ScoreChain` still reproduces it exactly, and `validate_v4.py`'s
+negative-control battery still requires the exact-date renderer to break the comparison.
+A6 removes the *sampler's* dependence on the quirk; it does not remove the quirk from the
+model of meico.
