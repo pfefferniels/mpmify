@@ -258,6 +258,14 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+**Ornamentation W7 facade final (2026-08-09 ~18:30)**: PerformedNote gains
+ornamented/ornamentRef/Source/Slot/Pass/Anchor (anchor = principal's score id — bonus
+for principal-linkage supervision); expandOrnaments opt-out. Critical semantics for v5
+labels: THREE ornamented shapes — generated notes (full field set), v2-altered
+(fields null), and CARVED HEADS (at-end ornaments shorten their principal; ornamented
++ ref only). Carved heads become their own v5 label class — otherwise the articulation
+head would learn ornament carving as staccato. Their W8-W10 remain before merge.
+
 **espressivo E1/E2 FIXED and verified (2026-08-09 ~16:15)**: meico-ts main da24612
 (fix c77f4aa), dist rebuilt (also freshening the dist-stale TD3). 2365 tests green
 (13 new, 11 revert-sensitive + 2 controls); cross-renderer on a 40-piece all-maps
