@@ -37,7 +37,9 @@ v2 = "--v2" in sys.argv or v3
 #: target, not to the cap, and `TempoTransformer.greedy_decode` breaks as soon as every
 #: sequence in the batch has emitted EOS, so the ceiling is a safety limit and not a
 #: per-step price.
-MAX_TGT = {"v1": 224, "v2": 320, "v3": 448, "v4": 448}
+#: v4 raised 448 -> 512 on 2026-08-09: the first full 20k generation produced 6/20000
+#: pieces (0.03 %) above 448 (max 472) — the deliberate-raise path this guard exists for.
+MAX_TGT = {"v1": 224, "v2": 320, "v3": 448, "v4": 512}
 MAX_NOTES = 320
 VERSION = "v4" if v4 else ("v3" if v3 else ("v2" if v2 else "v1"))
 max_tgt = MAX_TGT[VERSION]
