@@ -7,7 +7,10 @@ partitura (the canonical reader) and emit the same record shape the synthetic me
 pipeline produces:
 
     {"id", "piece", "pianist", "ppq": 720,
-     "notes": [[date_ticks, dur_ticks, pitch, msOn, msOff, velocity], ...]}
+     "notes": [[date_ticks, dur_ticks, pitch, msOn, msOff, velocity, part], ...],
+     "sustain_cc": [[ms, value], ...], "soft_cc": [[ms, value], ...]}
+
+part is 1 for the top voice and 2 for everything else (see assign_parts).
 
 date_ticks/dur_ticks are score quarters * 720 (beatLength 0.25 convention), shifted so
 the first onset is beat 0; msOn/msOff are the performed times in ms, shifted so the first
@@ -46,6 +49,43 @@ def match_files(corpus):
     if not os.path.isdir(d):
         sys.exit(f"no match/ directory under {corpus}")
     return sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith(".match"))
+
+
+def assign_parts(notes):
+    """Top-voice (1) vs rest (2), per score onset. notes sorted by (date, pitch).
+
+    At each distinct score onset we take the highest pitch among all notes SOUNDING there
+    -- a note sounds over [date, date+dur), so a half note held from an earlier onset
+    still counts and can outrank everything that starts here. A note gets part 1 only if
+    it starts at that onset AND carries the top sounding pitch, so onsets whose top voice
+    is sustained from earlier (accompaniment under a held melody note) get no part-1 note
+    at all. That is the intent: part 1 is the melody, not "the highest thing struck now".
+
+    Tie-break when several notes start on the same onset at the same top pitch: longest
+    score duration wins, then earliest performed onset, then original order. This only
+    fires on unisons; in this corpus it is the Schubert appoggiatura written at the same
+    pitch as its principal note, where the long principal is the structural melody note
+    and the short grace is the ornament -- picking the longer one keeps melody-lead
+    measurements on the note the voice actually consists of.
+    """
+    by_date = {}
+    for i, n in enumerate(notes):
+        by_date.setdefault(n[0], []).append(i)
+    parts = [2] * len(notes)
+    active, ptr = [], 0
+    for d in sorted(by_date):
+        while ptr < len(notes) and notes[ptr][0] <= d:
+            active.append(ptr)
+            ptr += 1
+        # max(dur,1) so a zero-duration note still sounds at its own onset
+        active = [i for i in active if notes[i][0] + max(notes[i][1], 1) > d]
+        if not active:
+            continue
+        top = max(notes[i][2] for i in active)
+        cands = [i for i in by_date[d] if notes[i][2] == top]
+        if cands:
+            parts[min(cands, key=lambda i: (-notes[i][1], notes[i][3], i))] = 1
+    return parts
 
 
 PEDAL_LINE = re.compile(r"^(sustain|soft)\((-?\d+),(\d+)\)")
@@ -148,6 +188,8 @@ def parse_match(path, grace_dur_ticks, pedal_offsets, dedupe_pedal=False):
         notes.append([date, dur, int(p["pitch"]), ms_on, ms_off, int(p["velocity"])])
 
     notes.sort(key=lambda n: (n[0], n[2]))
+    for n, part in zip(notes, assign_parts(notes)):
+        n.append(part)
 
     base = os.path.basename(path)[: -len(".match")]
     piece, pianist = base.rsplit("_p", 1)
@@ -194,7 +236,12 @@ def _emit(rec, sel, start, span, idx, tail):
         "window_beats": span,
         "window_start_ms": round(t0, 6),  # window clock -> full-record clock
         "tail": tail,
-        "notes": [[n[0] - d0, n[1], n[2], n[3] - t0, n[4] - t0, n[5]] for n in sel],
+        # parts come from the full record, not recomputed per window: a window cannot see
+        # a note sustained in from before its start, so recomputing would relabel onsets
+        # near the window head
+        "notes": [
+            [n[0] - d0, n[1], n[2], n[3] - t0, n[4] - t0, n[5], n[6]] for n in sel
+        ],
         "sustain_cc": clip_pedal(rec["sustain_cc"], t0, t1),
         "soft_cc": clip_pedal(rec["soft_cc"], t0, t1),
     }
@@ -250,8 +297,8 @@ def windows(rec, max_beats, min_beats, max_notes, tail_window=True):
 def local_bpms(notes):
     """Median-style local tempo from consecutive distinct score onsets."""
     by_onset = {}
-    for date, _dur, _p, ms_on, _off, _v in notes:
-        by_onset.setdefault(date, []).append(ms_on)
+    for n in notes:
+        by_onset.setdefault(n[0], []).append(n[3])
     onsets = sorted(by_onset)
     bpms = []
     for a, b in zip(onsets, onsets[1:]):
@@ -481,6 +528,94 @@ def main():
         f"{sum(m['n_grace'] for m in metas)}"
     )
     print(f"alignment labels: {dict(sum((Counter(m['labels']) for m in metas), Counter()))}")
+
+    # ---- parts -----------------------------------------------------------------------
+    print("\n=== parts ===")
+    print(f"{'piece':<22}{'part1':>8}{'part2':>8}{'onsets':>8}{'no top':>8}{'lead ms':>9}")
+    tot_bad_shape = tot_bad_val = 0
+    for piece, items in sorted(by_piece.items()):
+        p1 = sum(1 for r, _ in items for n in r["notes"] if n[6] == 1)
+        p2 = sum(1 for r, _ in items for n in r["notes"] if n[6] == 2)
+        onsets = notop = 0
+        leads = []
+        for r, _ in items:
+            by_onset = {}
+            for n in r["notes"]:
+                by_onset.setdefault(n[0], []).append(n)
+                if len(n) != 7:
+                    tot_bad_shape += 1
+                if n[6] not in (1, 2):
+                    tot_bad_val += 1
+            for d, ns in by_onset.items():
+                onsets += 1
+                tops = [n for n in ns if n[6] == 1]
+                if not tops:
+                    notop += 1
+                elif len(ns) > 1:
+                    rest = [n[3] for n in ns if n[6] == 2]
+                    if rest:
+                        leads.append(statistics.median(rest) - tops[0][3])
+        print(
+            f"{piece:<22}{p1:>8}{p2:>8}{onsets:>8}{notop:>8}"
+            f"{statistics.median(leads):>9.1f}"
+        )
+    allleads = []
+    for r in recs:
+        by_onset = {}
+        for n in r["notes"]:
+            by_onset.setdefault(n[0], []).append(n)
+        for ns in by_onset.values():
+            tops = [n for n in ns if n[6] == 1]
+            rest = [n[3] for n in ns if n[6] == 2]
+            if tops and rest:
+                allleads.append(statistics.median(rest) - tops[0][3])
+    print(
+        f"corpus melody lead (median over onsets of median(part2 msOn) - part1 msOn): "
+        f"{statistics.median(allleads):.1f} ms over {len(allleads)} onsets"
+    )
+    print(f"notes not 7 elements: {tot_bad_shape}; part not in {{1,2}}: {tot_bad_val}")
+
+    # independent recomputation of the top-voice rule, straight from score dates
+    viol = missing = extra = 0
+    for r in recs:
+        by_onset = {}
+        for i, n in enumerate(r["notes"]):
+            by_onset.setdefault(n[0], []).append(i)
+        for d, idxs in by_onset.items():
+            sounding = [
+                n for n in r["notes"] if n[0] <= d < n[0] + max(n[1], 1)
+            ]
+            top = max(n[2] for n in sounding)
+            starts_top = [i for i in idxs if r["notes"][i][2] == top]
+            got = [i for i in idxs if r["notes"][i][6] == 1]
+            if starts_top and len(got) != 1:
+                viol += 1
+                missing += 1 if not got else 0
+                extra += 1 if len(got) > 1 else 0
+            elif not starts_top and got:
+                viol += 1
+                extra += 1
+    print(
+        f"top-voice rule recheck: {viol} onsets violate 'exactly one part-1 note iff a "
+        f"note starting there holds the top sounding pitch' ({missing} missing, {extra} extra)"
+    )
+
+    # windows must carry the parts they were sliced from, unchanged
+    if wins:
+        full_by_id = {r["id"]: r for r in recs}
+        w_bad = 0
+        for w in wins:
+            src = full_by_id[w["source_id"]]
+            off_d = int(w["window_start_beat"] * QUARTER_TICKS)
+            src_idx = Counter(
+                (n[0], n[1], n[2], n[5], n[6]) for n in src["notes"]
+            )
+            got = Counter(
+                (n[0] + off_d, n[1], n[2], n[5], n[6]) for n in w["notes"]
+            )
+            if got - src_idx:
+                w_bad += 1
+        print(f"windows whose notes/parts do not occur in their source record: {w_bad}")
 
     # ---- pedal -----------------------------------------------------------------------
     print("\n=== pedal ===")
