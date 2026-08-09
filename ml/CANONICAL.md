@@ -43,10 +43,13 @@ operational meaning of "most efficient and natural representation".
 §A is a self-consistency result: the generating hypothesis class necessarily wins on its
 own samples. It establishes that the normal form is internally well-posed and that the
 staircase rival is priced fairly — it does **not** establish that canonical MPM is the
-most efficient description of a *human* performance. The queued test for that
-(`LOG.md:120-124`) is the same staircase-oracle fit on the Vienna 4x22 corpus; it has not
-been run. Until it has, no claim in this document should be read as being about real
-performances.
+most efficient description of a *human* performance. The test for that is the same
+staircase-oracle fit on the Vienna 4x22 corpus, and it **has now been run**: see §14, which
+records the answer and the three decisions it forces. The short version is that on real
+playing the ordering reverses at equal description length — a piecewise-constant staircase
+is mildly *better* than the power-transition family — so §A remains a correct statement
+about sampler output and must not be quoted as one about humans. §14 D2 states the
+comparison carefully, because the two obvious framings give opposite-looking numbers.
 
 ---
 
