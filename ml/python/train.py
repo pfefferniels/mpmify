@@ -15,19 +15,24 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from dsl import (PAD, VOCAB, V1_VOCAB_SIZE, V2_VOCAB_SIZE, V3_VOCAB_SIZE,
-                 decode_tokens, decode_piece, decode_piece_v3)
-from evaluate import evaluate_piece, evaluate_piece_v2, evaluate_piece_v3
+from dsl import (PAD, V1_VOCAB_SIZE, V2_VOCAB_SIZE, V3_VOCAB_SIZE, V4_VOCAB_SIZE,
+                 decode_tokens, decode_piece, decode_piece_v3, decode_piece_v4)
+from evaluate import (evaluate_piece, evaluate_piece_v2, evaluate_piece_v3,
+                      evaluate_piece_v4)
 from model import TempoTransformer
-from dataset import N_FEATURES, N_FEATURES_V2, N_FEATURES_V31
+from dataset import (N_FEATURES, N_FEATURES_V2, N_FEATURES_V31, N_FEATURES_V4)
 
 EPOCHS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 RUN = sys.argv[2] if len(sys.argv) > 2 else "v1"
 MODE = sys.argv[3] if len(sys.argv) > 3 else "v1"
+V4 = MODE == "v4"
 V31 = MODE == "v31"
 V3 = MODE == "v3" or V31
 V2 = MODE == "v2" or V3
-BATCH = 64
+# v4 pieces are ~2.4x longer than v3.1's (median 121 notes vs 51) at a comparable target
+# length, and activation memory scales with batch x notes. BATCH is therefore per-mode and
+# was chosen by measurement, not by analogy -- see the 20-step smoke in ml/LOG.md.
+BATCH = 24 if V4 else 64
 LR = 3e-4
 WARMUP = 300
 EVAL_PIECES = 100
@@ -47,12 +52,17 @@ def log(msg):
     log_f.flush()
 
 
-SUFFIX = "_v31" if V31 else ("_v3" if V3 else ("_v2" if V2 else ""))
+SUFFIX = "_v4" if V4 else ("_v31" if V31 else ("_v3" if V3 else ("_v2" if V2 else "")))
 train = torch.load(f"../data/train{SUFFIX}.pt")
 val = torch.load(f"../data/val{SUFFIX}.pt")
 n_train = len(train["feats"])
-N_FEAT = N_FEATURES_V31 if V31 else (N_FEATURES_V2 if V2 else N_FEATURES)
-MAX_DECODE = 448 if V3 else (320 if V2 else 224)
+N_FEAT = (N_FEATURES_V4 if V4 else
+          (N_FEATURES_V31 if V31 else (N_FEATURES_V2 if V2 else N_FEATURES)))
+# v4's target is the tempo+dynamics+rubato+asynchrony subset of CANONICAL §11 (median 184
+# tokens, p90 250 on the pilot); articulation and movement are per-note heads, not tokens.
+# The packed set records the ceiling it was built at -- decoding shorter than the data was
+# packed truncates long targets with nothing in the metrics to show for it.
+MAX_DECODE = train.get("max_tgt") or (320 if V4 else (448 if V3 else (320 if V2 else 224)))
 
 # length-bucketed batches: sort by note count, batch contiguously, shuffle batch order
 order = sorted(range(n_train), key=lambda i: train["feats"][i].shape[0])
@@ -78,9 +88,9 @@ def make_batch(idxs):
 # explicit per-version vocab freeze — NEVER bare len(VOCAB) for old versions
 # (appending tokens for a new version must not desync resumable checkpoints)
 VOCAB_SIZES = {"v1": V1_VOCAB_SIZE, "v2": V2_VOCAB_SIZE, "v3": V3_VOCAB_SIZE,
-               "v4": len(VOCAB)}
-VERSION = "v3" if V3 else ("v2" if V2 else "v1")
-if V31:  # moderate capacity bump alongside the conditioning features
+               "v4": V4_VOCAB_SIZE}
+VERSION = "v4" if V4 else ("v3" if V3 else ("v2" if V2 else "v1"))
+if V31 or V4:  # moderate capacity bump alongside the conditioning features
     MODEL_CFG = {"d_model": 192, "nhead": 8, "enc_layers": 4, "dec_layers": 4, "ff": 768,
                  "n_features": N_FEAT, "vocab_size": VOCAB_SIZES[VERSION]}
 else:
@@ -141,7 +151,14 @@ def run_eval(n_pieces=EVAL_PIECES, decode_batch=50):
             if ids == val["tgts"][i].long().tolist():
                 exact += 1
             rec = {"notes": val["notes"][i].tolist(), "tempo": val["tempo"][i]}
-            if V3:
+            if V4:
+                pred_maps, errs = decode_piece_v4(ids, subset="training")
+                for k in ("dynamics", "articulation", "rubato", "movement",
+                          "asynchrony", "sustain_cc", "total_ticks"):
+                    if k in val:
+                        rec[k] = val[k][i]
+                metrics.append(evaluate_piece_v4(pred_maps, rec))
+            elif V3:
                 pt, pd, pa, pr, errs = decode_piece_v3(ids)
                 rec["dynamics"] = val["dynamics"][i]
                 rec["articulation"] = val["articulation"][i]
@@ -200,7 +217,17 @@ for epoch in range(start_epoch, EPOCHS):
     msg = f"EPOCH {epoch} DONE ({time.time()-t0:.0f}s)"
     if epoch % EVAL_EVERY == EVAL_EVERY - 1 or epoch == EPOCHS - 1:
         med = run_eval()
-        if V3:
+        if V4:
+            msg += (f" val: exact={med['exact']:.2f} "
+                    f"render_rmse={med['render_rmse']:.1f}ms (base {med['base_render_rmse']:.1f}ms) "
+                    f"vel_rmse={med['vel_rmse']:.2f} (base {med['base_vel_rmse']:.2f}) "
+                    f"cc_rmse={med['cc_rmse']:.2f} (base {med['base_cc_rmse']:.2f}) "
+                    f"cc64={med['cc64_agree']:.2f} (base {med['base_cc64_agree']:.2f}) "
+                    f"asyn_err={med['asyn_offset_err']:.1f}ms (base {med['base_asyn_offset_err']:.1f}ms) "
+                    f"boundary_f1={med['boundary_f1']:.2f} rubato_f1={med['rubato_f1']:.2f} "
+                    f"mdl_ratio={med['mdl_ratio']:.2f} nonfinite={med['n_nonfinite']:.1f} "
+                    f"n_pred={med['n_pred']} n_gt={med['n_gt']}")
+        elif V3:
             msg += (f" val: exact={med['exact']:.2f} "
                     f"render_rmse={med['render_rmse']:.1f}ms (base {med['base_render_rmse']:.1f}ms) "
                     f"vel_rmse={med['vel_rmse']:.2f} (base {med['base_vel_rmse']:.2f}) "
