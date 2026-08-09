@@ -258,6 +258,18 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+**espressivo E1/E2 FIXED and verified (2026-08-09 ~16:15)**: meico-ts main da24612
+(fix c77f4aa), dist rebuilt (also freshening the dist-stale TD3). 2365 tests green
+(13 new, 11 revert-sensitive + 2 controls); cross-renderer on a 40-piece all-maps
+pilot: 3169 differing values → 37, all within the derived ULP envelope (max 3.64e-12
+ms), velocities 2408→0; pow-free control bit-exact over 124,134 comparisons. PARITY
+entry with a driven control (probe-blindness demonstrated, then defeated by injecting
+inline modifiers/curvature into fixtures). Two doc-level amendments to the predecessor's
+work, one disproven-by-test (inline RELATIVE modifiers compound with a def's;
+absolute ones replace). espressivo is now a correct renderer for the full v4 map set —
+the java path remains only a throughput choice (~5x). MLign green-lit for their v1
+corpus; ornamentation campaign pinged for their rebase.
+
 **MPS datapoint from MLign (2026-08-09 ~15:45)**: their custom blocks over
 F.scaled_dot_product_attention train NORMALLY on MPS (3-epoch smoke green) — the
 torch-2.11 MPS hang is specific to nn.Transformer's module machinery, not attention.
