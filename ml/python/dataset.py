@@ -320,3 +320,50 @@ def collate(batch):
         x_mask[i, : x.shape[0]] = False
         y_pad[i, : y.shape[0]] = y
     return x_pad, x_mask, y_pad, list(idxs)
+
+
+def _self_test():
+    """Pin the pedal-state conventions. Run: ``python3 dataset.py --self-test``.
+
+    Every case below is a shape the real corpora actually contain, not a hypothetical --
+    the pedal lookup is one binary search away from looking correct while reading the wrong
+    value, and none of the surrounding gates would notice: a wrong pedal state is a
+    plausible number in a plausible range.
+    """
+    # The Vienna corpus opens a performance with the initial pedal gesture stamped at a
+    # single instant: Chopin_op10_no3 carries 315 events all at ms 0, ramping 3 -> 127. The
+    # state the excerpt starts in is the LAST of them. A sequential scan, or a sort that is
+    # not stable, reads one of the 314 intermediate values instead -- silently, and only on
+    # real data, because the synthetic generator never produces a burst this size.
+    burst = [[0.0, v] for v in (3, 40, 80, 127)]
+    assert sustain_state_lookup(burst)(0.0) == 127.0
+    assert sustain_state_lookup(burst)(5.0) == 127.0
+
+    # getMovementSegment emits each segment endpoint twice and a plateau three times
+    # (36.6 % duplicate timestamps on the synthetic pilot). Last one wins.
+    assert sustain_state_lookup([[0.0, 10], [10.0, 20], [10.0, 30]])(10.0) == 30.0
+
+    # Synthetic streams are not globally monotone (3 pieces on the pilot, max backstep
+    # 0.28 ms). Sorting must repair the order rather than the scan trusting it.
+    assert sustain_state_lookup([[0.0, 5], [10.28, 60], [10.0, 40]])(10.5) == 60.0
+
+    # A real window can open with the carried-in pedal state at a NEGATIVE timestamp
+    # (-1.04 ms in Chopin_op10_no3_p01_w1). A note at ms 0 must see it.
+    assert sustain_state_lookup([[-1.04, 64], [500.0, 0]])(0.0) == 64.0
+
+    # Before any event at all the pedal is up -- meico's own default.
+    assert sustain_state_lookup([[100.0, 64]])(0.0) == 0.0
+    assert sustain_state_lookup([])(0.0) == 0.0
+
+    # A 6-element note row means part 1; a 7-element row carries the part.
+    assert _v4_part([0, 720, 60, 0.0, 500.0, 80]) == 1
+    assert _v4_part([0, 720, 60, 0.0, 500.0, 80, 2]) == 2
+    print("dataset self-test: pedal-state conventions OK")
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    if "--self-test" in _sys.argv:
+        _self_test()
+    else:
+        print(__doc__)
