@@ -194,8 +194,73 @@ mode-collapsed at relDur≈0.57/velChange≈−13/intensity≈0.57, rubato hallu
 no-rubato pieces). Same shape as v2's dynamics at its midpoint. Decision: run to 24;
 if F1s still flat → v3.1 with larger model (capacity suspect at 2.2M for 4 maps).
 
-**v3 final + v3.1 decision (2026-08-09 ~04:30)**: v3 completed 24 epochs — tempo below
-baseline, velocity −55%, but rubato/artic F1 flat 0.00 throughout. Root-cause analysis:
+**Sibling campaign: MLign (2026-08-09 ~14:00)**: a third program (~/Projects/MLign)
+builds a learned score→performance aligner trained on synthetic espressivo renders —
+the missing front-end of OUR real-data track. Coordination established: they get
+provenance via facade PerformedNote.id (+ Java fork MIDI text events), our JSONL
+schema, and the PDMX pipeline traps; proposed division: **they own the performer-
+error/repeat/rolled-chord injection layer, we own the MPM map samplers, one shared
+generator** (factor after v4 readiness passes). Their aligner output format will be
+provenance-keyed compatible with our v5 ornament GT representation. Deal closed:
+robustness layer = pure fn (notes, msm, rng, config) → edited notes + typed edit-log
+(delete/insert/substitute/shift), edit-log doubles as alignment GT and as our
+unmatched-note training signal; their outputs parangonar-compatible + our JSONL mirror.
+Robustness layer v1 DELIVERED (~/Projects/MLign/src/robustness/, pure ESM, seeded
+sfc32, typed edit-log, provenance-carrying inserts; 8/8 invariant tests pass on our
+machine — invoke with the glob form on Node 23). ms-clock convention PINNED: editsToAlignment emits absolute facade ms (≥0 guaranteed);
+adapter gt.mjs:shiftToMatchedZero converts to our first-matched-onset=0 clock (tested).
+v5 integration recipe: editsToAlignment → shiftToMatchedZero → JSONL emit. Thread
+closed until v5 (pedal/CC op spec owed to them then).
+
+**Sibling campaign: MPM v3 ornamentation in meico-ts (2026-08-09 ~13:30)**: a new
+user-directed autonomous program (worktree ../meico-ts-orn, branch ornamentation-v3)
+implements spec-v3 discrete-note ornamentation — trills/turns/mordents become REAL
+generated notes with provenance (ornament.generated/ref), facade gains expandOrnaments.
+This removes the feasibility study's hard ceiling for v5. Implications journaled:
+(a) v5 ornament ground truth is espressivo-only (upstream Java unimplemented; PR#31
+defective — do not validate against it); (b) MPM has NO version marker — our exporter
+must pick a generation per document; (c) generated notes break the 1:1 score↔perf
+bijection — v5 input schema must carry performance-only notes with a generated flag
+(same machinery real-data insertions need — two birds); (d) stakeholder asks sent
+(provenance depth incl. role/index, determinism confirmation, W7/merge ETA).
+**All granted (ruling D10)**: generated notes will carry ornament.generated/ref/
+source/slot/pass — full ownership+role+repetition labels. Expansion is RNG-free
+(bit-deterministic); generated xml:ids are random per run → v5 supervision keys on
+provenance attrs + (part,date,pitch,slot), never generated ids. W7 facade ~1 day,
+merge to main 1-2 days — ahead of our v5 slot. Sampler contract: their DESIGN.md +
+research/github-v3-design.md §5/§6 (emit spec-strict, suffixed units).
+
+**meico-ts program COMPLETE (2026-08-09 ~13:15)**: certified by adversarial final
+audit, merged to main (d981c14). Everything v4 builds on is mainline: frozen facade,
+movement fixes, accentuation fix + regenerated ground truth. **TD3 gate CLEARED** —
+v4 dataset generation enables accentuation supervision (--with-accentuation on).
+Their session shut down; triples question journaled on both sides for a future session.
+
+**v3.1 epoch-11 inspection → v4 architecture decision (2026-08-09 ~11:30)**:
+conditioning features fixed value mode-collapse (relDur now 0.40-0.87 stdev 0.146,
+velChange -17..14 stdev 4.8) but articulation DATE accuracy is 18/196 (±1 beat) —
+the decoder cannot transcribe which-note-spiked into digit coordinates (pointer-vs-
+generation problem); rubato intensity still collapsed at 0.5, spans hallucinated on
+11/30. This is the study's Design-A-vs-B crossover, empirically. **v4 model = hybrid
+split**: note-anchored maps (articulation; later asynchrony/pedal state) via per-note
+encoder heads (binary presence + attribute regression; dates exact by construction);
+segment maps (tempo, dynamics, rubato, movement) via the DSL decoder. v3.1 runs its
+remaining epochs as the end-to-end comparison point.
+
+**espressivo green light + v4 wave launched (2026-08-09 ~10:15)**: Niels (via the
+conductor, confirmed): espressivo is frozen and ready — build on it now; only gate:
+accentuation supervision waits for their TD3 (which our meico 1d662105 accentuation
+fix just unblocked). v4 build teams running alongside v3.1 training: Team D
+(espressivo-based Node generator: v3 parity + movement/asynchrony/2-part scores +
+domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
+(exact Python ports: movement Bezier→CC sampling, asynchrony, PerfChainV4), Team F
+(CANONICAL.md v4: pedal/asynchrony normal form; pedal_fit.py on real Vienna CC
+streams; vienna_ceiling.py — the representation-ceiling measurement answering how
+much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
+
+**v3 final + v3.1 decision (2026-08-09 ~04:30)**: v3 completed 24 epochs. Final
+500-piece val: render 1009 ms (base 1146, −12%), velocity 15.9 (base 34.5, −54%),
+mdl_ratio 1.20 — but rubato/artic F1 flat 0.00 throughout. Root-cause analysis:
 NOT (only) capacity — v1/v2 succeeded exactly on maps whose signal was exposed as a
 direct input feature (local_log2_bpm, velocity); articulation/rubato had none.
 **v3.1 = conditioning features + moderate capacity** (d192/4+4/ff768 ≈ 4.2M):
