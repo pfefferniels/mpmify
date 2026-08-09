@@ -258,6 +258,13 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+**Ornamentation program MERGED (2026-08-09 ~22:45)**: meico-ts main@05147ed, 3064
+tests green, our E1/E2 pair pushed to origin with it. Everything v5 needs is mainline:
+discrete-note ornament rendering (trills/turns/mordents as real notes), provenance
+sextet + ornament.carved, expandOrnaments opt-out, PARITY §6 semantic ledger,
+DESIGN.md contract. **The feasibility study's hard ceiling on synthetic supervision is
+lifted** — v5 can sample note-generating ornaments with exact ownership labels.
+
 **Ornamentation W7 facade final (2026-08-09 ~18:30)**: PerformedNote gains
 ornamented/ornamentRef/Source/Slot/Pass/Anchor (anchor = principal's score id — bonus
 for principal-linkage supervision); expandOrnaments opt-out. Critical semantics for v5
