@@ -844,12 +844,19 @@ def decode_piece_v4(ids, subset="training", ppq=720, artic_part_sizes=None):
 
     tempo_map = _sanitize_tempo(tempo_map, ppq)
     dyn_map = _sanitize_dyn(dyn_map, ppq)
-    artic = _sanitize_artic(artic, ppq)
+    # Articulation is sanitised PER STREAM. `_sanitize_artic` sorts and dedupes by date,
+    # which is right inside one part-local map and wrong across the concatenation of
+    # several: a global sort interleaves the parts and the split can no longer recover
+    # which map a row came from.
+    if artic_part_sizes is not None:
+        artic = [row for part, rows in _artic_streams(_split_artic_rows(artic,
+                                                                       artic_part_sizes))
+                 for row in ([*r, part] for r in _sanitize_artic(rows, ppq))]
+    else:
+        artic = _sanitize_artic(artic, ppq)
     rubato = _sanitize_rubato(rub_raw, tempo_map, ppq)
     movement = _sanitize_movement(mov_raw, ppq)
     asynchrony = _sanitize_asyn(asyn_raw, ppq)
-    if artic_part_sizes is not None:
-        artic = _split_artic_rows(artic, artic_part_sizes)
     maps = {"tempo": tempo_map, "dynamics": dyn_map, "rubato": rubato,
             "articulation": artic, "movement": movement, "asynchrony": asynchrony}
     if subset != "full":
