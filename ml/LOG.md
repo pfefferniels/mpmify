@@ -478,10 +478,26 @@ on the same 100-piece file turns those 7817 differences into 0: the full map set
 the cleanest evidence so far that the derived-envelope gate discriminates logic divergence
 from libm noise rather than merely tolerating both.
 
+The post-fix pass then **reproduced on a second, independently generated pilot**: seed 4001,
+100 pieces, 11828 notes, 41044 position events, all eight `jsonl.*` field classes 0
+differing, 128 values inside the envelope against 88 on seed 4242. Same verdict, different
+data — so the full-map pass is a property of the fixed renderer rather than a lucky sample,
+which matters because the earlier ULP gate defect (`waves/v4` I1) was exactly a seed-lucky
+result quoted as a property.
+
+**Both regression directions on the A6 change are closed, and they are different checks.**
+`verify_v4.mjs v3proof` proves the part-local sampler did not disturb the v3-compat
+*generator* (12978 comparisons, 0 differing, bit level); `validate_v3.py` proves the
+`artic_targeting` split did not disturb the v3 *chain* (EXACT, 0/5129 onsets, offsets and
+velocities). Either could have broken without the other noticing.
+
 The smoke's step time is contention-dominated; min 3.01 s is the closer estimate of the
 uncontended cost. At 20k pieces and BATCH=24 (834 batches/epoch) that projects to roughly
-17 h for 24 epochs uncontended and ~40 h at the contended median — worth deciding on before
-step 9 rather than during it.
+17 h for 24 epochs uncontended and ~40 h at the contended median. Read that as an **upper
+bound**: the run ships at BATCH=48, i.e. 417 batches/epoch. No uncontended s/step exists yet
+for either batch size, and none will until the v3.1 and v0-syn jobs are off the machine —
+that single number is what step 9's sequencing actually needs, and neither of the two
+independent sweeps could measure it.
 
 **Hygiene.** `data/pilot_v4_espressivo.jsonl` — knowingly wrong velocities and note ends,
 under a name any `pilot_v4*` glob picked up — moved to `data/defective/`.
