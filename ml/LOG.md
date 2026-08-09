@@ -258,6 +258,26 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+**v4 wave landed + integration dispatched (2026-08-09 ~18:30)**: 10 agents, 0 errors;
+full reports + the 11-blocker readiness review preserved in ml/waves/v4/ (v3 wave in
+ml/waves/v3/). Headlines: Team D's generator ports v3 bit-exactly (89,639 comparisons,
+0 diff, exact java.util.Random port) and adds 2-part/asynchrony/movement/domain
+randomization — and its dual-renderer gate found **espressivo E1/E2** (articulation
+renders as identity; dynamics curvature/protraction never read — real on main; survived
+certification via a styleDef/default-curvature fixture blind spot; TD3 was only
+dist-stale). Decisions executed: B1 vocab freeze (V3=31, live v3.1 ckpt safe), B4 java
+renderer default, B3 part-local articulationMaps (rule A6), **B2 split revised by
+measurement**: v4 DSL training targets = tempo+dynamics+rubato+asynchrony (~183 tokens);
+articulation AND movement move to per-note heads/labels (full-DSL 768-token targets =
+9-10 GB activations, unaffordable; B3 makes date-keyed articulation labels wrong anyway).
+**H3 reversal**: accentuation stays OUT of v4 — TD3 cleared the technical gate but no
+identifiability band exists (aliases against articulation); my earlier enable call was
+wrong. bugs.md #8/#9 filed. Dispatched: v4-integrator agent (steps 3/5/6/7/8),
+espressivo-fixer agent (E1/E2 + regression tests + PARITY note, meico-ts main under
+ecosystem delegation), vienna-adapter (part column). MLign warned (v0 corpus degraded
+by E1, holding articulation sampling until fix ping); ornamentation campaign informed
+(no collision; merge race protocol agreed).
+
 **v3 final + v3.1 decision (2026-08-09 ~04:30)**: v3 completed 24 epochs. Final
 500-piece val: render 1009 ms (base 1146, −12%), velocity 15.9 (base 34.5, −54%),
 mdl_ratio 1.20 — but rubato/artic F1 flat 0.00 throughout. Root-cause analysis:
