@@ -49,9 +49,8 @@ import torch.nn as nn
 
 from dsl import PAD
 from eval_ckpt import run_eval as _run_eval
-from model_v2 import (HEAD_MODES, MODE_FEATURES, MODE_VOCAB, PEDAL_FEATURE_INDEX,
-                      build_model, describe, head_losses, load_run_config,
-                      resolve_model_cfg)
+from model_v2 import (HEAD_MODES, PEDAL_FEATURE_INDEX, build_model, describe,
+                      head_losses, load_run_config, resolve_model_cfg)
 
 #: `mode` -> packed-file suffix, and -> the grammar `eval_ckpt.run_eval` scores against
 #: (v3.1 evaluates as v3 and v4.1 as v4: they differ in their features, not in their DSL).
