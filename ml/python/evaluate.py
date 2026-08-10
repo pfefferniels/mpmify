@@ -199,6 +199,128 @@ from validate_v4 import _js_round, _record_parts  # noqa: E402,PLC2701
 #: alone under-reports a prediction that tracks the ramps but sits on the wrong side.
 CC64_THRESHOLD = 64
 
+#: The note head's decision threshold for "this note is articulated".
+ARTIC_THRESHOLD = 0.5
+
+#: ``dsl._sanitize_artic``'s admissible ranges. A head output is CLAMPED into them rather
+#: than dropped as the DSL path does: an out-of-range regression is still a positive
+#: detection, and dropping the row would silently convert a value error into a miss --
+#: the two failures need to stay distinguishable in the note-level P/R.
+RELDUR_RANGE = (0.05, 3.0)
+VELCHANGE_RANGE = (-60.0, 60.0)
+
+
+def _clamp(x, lo, hi):
+    return lo if x < lo else (hi if x > hi else x)
+
+
+def _v4_note_order(rec):
+    """The note order every per-note array is aligned to: ``dataset.piece_to_features_v4``'s.
+
+    Features, training labels and head predictions are all indexed by this order, so it is
+    read from the one place that defines it rather than re-spelled here.
+    """
+    from dataset import _v4_part  # noqa: PLC2701 -- same package, same convention
+    return sorted(rec["notes"], key=lambda n: (n[0], n[2], _v4_part(n)))
+
+
+def note_preds_to_articulation(rec, note_pred, threshold=ARTIC_THRESHOLD):
+    """Per-note head outputs -> a part-local ``articulationMap`` (CANONICAL A6, schema v4.1).
+
+    The head predicts an *effect on a note*; the renderer consumes a map of dated
+    instructions. The bridge is A6: an articulation dated on one of its own part's onsets
+    reaches exactly the notes at that onset. So each predicted-articulated note contributes
+    a row ``[date, relativeDuration, velocityChange, part]`` at its own date -- which makes
+    the date exact by construction, the whole point of moving articulation off the decoder.
+
+    Two notes of the same chord are one instruction, not two. meico applies **every**
+    element at a date to **every** note at it and composes them (relativeDuration
+    multiplies, velocityChange adds), so emitting one row per chord tone would cube a
+    3-note chord's relativeDuration. Rows are therefore keyed by ``(part, date)`` and the
+    predicted values averaged over the positive-predicted notes sharing that key -- the
+    ground truth is uniform within a key by construction, so this is exact on true labels
+    and an estimator only where the head disagrees with itself across a chord.
+
+    ``note_pred`` maps ``artic_present`` (probability or 0/1), ``rel_dur`` and
+    ``vel_change`` to per-note sequences in :func:`_v4_note_order`.
+    """
+    from dataset import _v4_part  # noqa: PLC2701
+
+    notes = _v4_note_order(rec)
+    present = note_pred["artic_present"]
+    acc = {}
+    for i, note in enumerate(notes):
+        if float(present[i]) < threshold:
+            continue
+        key = (_v4_part(note), note[0])
+        slot = acc.setdefault(key, [0, 0.0, 0.0])
+        slot[0] += 1
+        slot[1] += float(note_pred["rel_dur"][i])
+        slot[2] += float(note_pred["vel_change"][i])
+    # Part-major, date-ascending -- the generator's own row order (verified on val_v4), and
+    # the one `_split_articulation` needs: it buckets by part preserving order, and
+    # PerfChain refuses a per-part map that is not date-sorted (meico sorts on parse, so an
+    # unsorted map would render differently there than here).
+    return [[date, _clamp(s_rel / n, *RELDUR_RANGE), _clamp(s_vel / n, *VELCHANGE_RANGE),
+             part]
+            for (part, date), (n, s_rel, s_vel) in sorted(acc.items())]
+
+
+def _prf(tp, fp, fn):
+    """P/R/F1 with the empty cases pinned: predicting nothing where there is nothing is
+    agreement (1.0), not the 0.0 a bare ``tp/(tp+fp)`` guard would report."""
+    if tp == 0 and fp == 0 and fn == 0:
+        return 1.0, 1.0, 1.0
+    prec = tp / (tp + fp) if tp + fp else 0.0
+    rec = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
+    return prec, rec, f1
+
+
+def note_head_metrics(rec, note_pred, threshold=ARTIC_THRESHOLD):
+    """Note-level head accuracy against the labels ``preprocess.py`` packs for training.
+
+    Ground truth comes from :func:`dataset.piece_to_note_labels_v4` rather than a second
+    derivation here, so a label convention can only be wrong in one place -- in particular
+    the pedal state, which is a stable-sorted last-wins lookup into part 1's *unshifted*
+    ``sustain_cc`` read at ``note_ms - asynchrony_offset`` for a later part (CANONICAL M8).
+
+    ``artic_reldur_mae`` / ``artic_vel_mae`` are measured on the **true positives** -- the
+    notes the head both detected and that really are articulated, i.e. the ones whose
+    values actually reach the render. With no true positives they are NaN, which the epoch
+    aggregator drops rather than averages in.
+    """
+    from dataset import piece_to_note_labels_v4
+
+    gt = piece_to_note_labels_v4(rec)
+    n = len(gt["artic_present"])
+    tp = fp = fn = 0
+    se_rel = se_vel = 0.0
+    ae_pedal = 0.0
+    for i in range(n):
+        pred_pos = float(note_pred["artic_present"][i]) >= threshold
+        gt_pos = gt["artic_present"][i] >= 0.5
+        if pred_pos and gt_pos:
+            tp += 1
+            se_rel += abs(float(note_pred["rel_dur"][i]) - gt["relative_duration"][i])
+            se_vel += abs(float(note_pred["vel_change"][i]) - gt["velocity_change"][i])
+        elif pred_pos:
+            fp += 1
+        elif gt_pos:
+            fn += 1
+        ae_pedal += abs(float(note_pred["pedal_state"][i]) - gt["pedal_state"][i])
+    prec, recall, f1 = _prf(tp, fp, fn)
+    return {
+        "artic_note_prec": prec,
+        "artic_note_rec": recall,
+        "artic_note_f1": f1,
+        "artic_reldur_mae": se_rel / tp if tp else float("nan"),
+        "artic_vel_mae": se_vel / tp if tp else float("nan"),
+        "pedal_state_mae": ae_pedal / n if n else float("nan"),
+        "n_artic_pred": tp + fp,
+        "n_artic_gt": tp + fn,
+    }
+
 
 def _v4_record(rec, maps):
     """A record shaped like the generator's, with ``maps`` substituted for its own."""
@@ -333,7 +455,7 @@ def _asyn_offset_error(pred_asyn, gt_asyn, total_ticks, step=None):
                for i in range(n)) / n
 
 
-def evaluate_piece_v4(pred_maps, rec):
+def evaluate_piece_v4(pred_maps, rec, note_pred=None, artic_threshold=ARTIC_THRESHOLD):
     """Render-space evaluation of a v4 prediction through the exact two-part meico chain.
 
     ``pred_maps`` is the decoded map dict (``dsl.V4_MAP_ORDER`` keys); ``rec`` is the
@@ -342,12 +464,26 @@ def evaluate_piece_v4(pred_maps, rec):
     error metric -- that identity is the floor the whole evaluation rests on, and it is
     checked rather than assumed (``--gt-floor`` in the pilot gate).
 
+    ``note_pred`` is the per-note head output (:meth:`model.TempoTransformer.note_heads`,
+    as plain sequences in :func:`_v4_note_order`). When given, this **also**
+
+    * reports the note-level head metrics of :func:`note_head_metrics`, and
+    * assembles a part-local articulationMap from the predictions and renders *with* it,
+      so velocity and note-off error reflect the heads' contribution and ``mdl_ratio``
+      prices a prediction that actually contains an articulationMap.
+
+    Pedal is judged by ``pedal_state_mae`` only; reconstructing a movementMap from the
+    predicted states is a later pass, so ``cc_rmse`` still measures a prediction with no
+    movementMap in it.
+
     Non-finite renders are counted into ``n_nonfinite`` and excluded from the RMSEs instead
     of poisoning an epoch median.
     """
     from dsl import V4_MAP_ORDER
 
     pred = {k: list(pred_maps.get(k) or []) for k in V4_MAP_ORDER}
+    if note_pred is not None:
+        pred["articulation"] = note_preds_to_articulation(rec, note_pred, artic_threshold)
     if not pred["tempo"] or pred["tempo"][0][0] != 0:
         pred["tempo"] = [[0, 100.0, None, None]] + [t for t in pred["tempo"] if t[0] > 0]
     if not pred["dynamics"] or pred["dynamics"][0][0] != 0:
@@ -420,4 +556,6 @@ def evaluate_piece_v4(pred_maps, rec):
         out["mdl_ratio"] = dl_pred / dl_gt if dl_gt else float("nan")
     except (ValueError, KeyError):
         out["mdl_ratio"] = float("nan")
+    if note_pred is not None:
+        out.update(note_head_metrics(rec, note_pred, artic_threshold))
     return out
