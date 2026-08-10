@@ -22,6 +22,16 @@ from evaluate import (evaluate_piece, evaluate_piece_v2, evaluate_piece_v3,
 from model import TempoTransformer
 from dataset import (N_FEATURES, N_FEATURES_V2, N_FEATURES_V31, N_FEATURES_V4)
 
+# flags are stripped before positional parsing, so `train.py 24 v4 v4 --device cuda`
+# and `train.py --device cuda 24 v4 v4` both work and the positional contract is unchanged
+DEVICE_ARG = "cpu"
+if "--device" in sys.argv:
+    _i = sys.argv.index("--device")
+    DEVICE_ARG = sys.argv[_i + 1]
+    del sys.argv[_i : _i + 2]
+    if DEVICE_ARG not in ("cpu", "cuda", "auto"):
+        raise SystemExit(f"--device must be cpu|cuda|auto, got {DEVICE_ARG}")
+
 EPOCHS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 RUN = sys.argv[2] if len(sys.argv) > 2 else "v1"
 MODE = sys.argv[3] if len(sys.argv) > 3 else "v1"
@@ -40,8 +50,17 @@ WARMUP = 300
 EVAL_PIECES = 100
 EVAL_EVERY = 2
 
-torch.set_num_threads(4)
-device = torch.device("cpu")
+if DEVICE_ARG == "auto":
+    DEVICE_ARG = "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device(DEVICE_ARG)
+if device.type == "cpu":
+    # the local (M1) configuration — unchanged, so CPU runs stay comparable/bit-identical
+    torch.set_num_threads(4)
+else:
+    # TF32 on cuda only: ~order-of-magnitude matmul speedup on H100/A100; never enabled
+    # on cpu so the local reference path keeps exact fp32 semantics
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 run_dir = Path("../runs") / RUN
 run_dir.mkdir(parents=True, exist_ok=True)
 log_f = open(run_dir / "log.txt", "a")
@@ -99,6 +118,7 @@ else:
     MODEL_CFG = {"d_model": 160, "nhead": 8, "enc_layers": 3, "dec_layers": 3, "ff": 640,
                  "n_features": N_FEAT, "vocab_size": VOCAB_SIZES[VERSION]}
 model = TempoTransformer(dropout=0.1, **MODEL_CFG)
+model = model.to(device)
 opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01)
 crit = nn.CrossEntropyLoss(ignore_index=PAD)
 total_steps = EPOCHS * len(batches)
@@ -147,7 +167,7 @@ def run_eval(n_pieces=EVAL_PIECES, decode_batch=50):
         for j, f in enumerate(fs):
             x[j, : f.shape[0]] = f
             xm[j, : f.shape[0]] = False
-        out = model.greedy_decode(x, xm, max_len=MAX_DECODE)
+        out = model.greedy_decode(x.to(device), xm.to(device), max_len=MAX_DECODE).cpu()
         for j, i in enumerate(idxs):
             ids = [t for t in out[j].tolist() if t != PAD]
             if ids == val["tgts"][i].long().tolist():
@@ -203,6 +223,7 @@ for epoch in range(start_epoch, EPOCHS):
         for g in opt.param_groups:
             g["lr"] = lr_at(step)
         x, xm, y = make_batch(idxs)
+        x, xm, y = x.to(device), xm.to(device), y.to(device)
         logits = model(x, xm, y[:, :-1])
         loss = crit(logits.reshape(-1, logits.shape[-1]), y[:, 1:].reshape(-1))
         opt.zero_grad()
