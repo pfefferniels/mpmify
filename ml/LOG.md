@@ -269,6 +269,15 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**v1.1 voice-level contract SECURED (2026-08-11, espressivo b0cce27, branch
+layers-to-staffs)**: layersToStaffs() now RETURNS StaffProvenance — an ARRAY of
+per-mdiv maps ("11" → {origStaff:"1", origLayer:"1"}), index-aligned to getAllMdivs()
+with empty maps for score-less mdivs, substituted @n values (1000000-style) such that
+origStaff+origLayer reconstructs the key. Byte-neutral (4062 tests green). Caveat to
+check when we adopt: alignment of provenance[i] with the converter's MSM list is
+UNVERIFIED for score-less mdivs (our pilot is single-mdiv per file). Adoption boundary
+= the branch merge, which is already a corpus-regeneration boundary for us (slur fix).
+
 ## Wave 1 delivered (2026-08-11 ~01:00) — corpus/model/demo, 8/10 agents
 
 **CORPUS (gates green, fix-round unfinished)**: 30 real movements (Bach/Scarlatti/
