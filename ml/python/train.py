@@ -32,6 +32,12 @@ if "--device" in sys.argv:
     if DEVICE_ARG not in ("cpu", "cuda", "auto"):
         raise SystemExit(f"--device must be cpu|cuda|auto, got {DEVICE_ARG}")
 
+THREADS = 4
+if "--threads" in sys.argv:
+    _i = sys.argv.index("--threads")
+    THREADS = int(sys.argv[_i + 1])
+    del sys.argv[_i : _i + 2]
+
 EPOCHS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 RUN = sys.argv[2] if len(sys.argv) > 2 else "v1"
 MODE = sys.argv[3] if len(sys.argv) > 3 else "v1"
@@ -54,8 +60,8 @@ if DEVICE_ARG == "auto":
     DEVICE_ARG = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(DEVICE_ARG)
 if device.type == "cpu":
-    # the local (M1) configuration — unchanged, so CPU runs stay comparable/bit-identical
-    torch.set_num_threads(4)
+    # default 4 = the local (M1) configuration; cluster CPU nodes pass --threads N
+    torch.set_num_threads(THREADS)
 else:
     # TF32 on cuda only: ~order-of-magnitude matmul speedup on H100/A100; never enabled
     # on cpu so the local reference path keeps exact fp32 semantics
