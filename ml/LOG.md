@@ -269,6 +269,25 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+## Wave 1 delivered (2026-08-11 ~01:00) — corpus/model/demo, 8/10 agents
+
+**CORPUS (gates green, fix-round unfinished)**: 30 real movements (Bach/Scarlatti/
+Mozart/Haydn/Chopin/Scriabin), 58 windows / 12,708 notes, era-conditioned priors
+realized with musicological arguments (declined rubato lateStart latitude on
+identifiability grounds; A1 density rederived from its own justification; the
+closing-ritardando structure). Dual-renderer ULP gate: 232,468 comparisons, 0 out of
+envelope. Licensing tiered A/B/C with per-file sha256 manifest (C = internal-only).
+NEGATIVE RESULT: espressivo imprecision NOT seed-deterministic on real repertoire
+(shake layer; 19% same-seed identical) → distribution-parameter supervision only.
+SIX verify issues UNRESOLVED (fix agent died on the WEEKLY usage limit, resets Aug 16)
+— mostly report-honesty corrections + Bach license string + a tolerance slack; I fix
+directly next. **MODEL-V2**: SDPA hybrid, base+large configs, f14 exclusion, FIXED
+after verify (seed handling, resume guard hardened). **DEMO**: generator with
+bit-exact dump discipline, FIXED after verify (fail-closed selftest, leak caveat
+gating). Integration review never ran (limit) — I do it directly.
+**OPERATING MODE until Aug 16: no subagents — orchestrator works directly;
+cluster session status unknown until next contact.**
+
 **layers-to-staffs round 2 (2026-08-10 ~23:20)**: correction — renumbering is
 UNIVERSAL when the pass runs (single-layer staffs too: 1→"11"); no safe subset.
 fenby formally requested their byte-neutral option: layersToStaffs() RETURNS the
