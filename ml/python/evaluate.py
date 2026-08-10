@@ -208,13 +208,40 @@ def _v4_record(rec, maps):
 
 
 def _v4_render(rec, maps):
-    """(notes in record order, part-1 sustain points) or None if the chain refuses."""
+    """(notes in record order, part-1 sustain points) or None if the chain refuses.
+
+    "Record order" has to be taken literally, and used to not be. ``PerfChainV4.render()``
+    returns one ``PartPerf`` per part, so flattening it yields notes **part-major**, and the
+    caller zips that against ``rec["notes"]`` -- which is part-major only in the generator's
+    raw JSONL. ``preprocess.py --eval`` stores its note tensor sorted by ``(date, pitch,
+    part)``, because that is the order the features and the per-note labels are indexed in
+    (``dataset.piece_to_features_v4``). On a 2-part piece the two orders differ, so every
+    metric zipped from them compared part-1 renders against part-2 ground truth: fed the
+    **ground truth maps**, a preprocessed 2-part record scored render RMSE 8064 ms and
+    velocity RMSE 8.8 where the floor is exactly 0.0. Every v4 training metric measured
+    through `train.py`'s eval path carries that error; the pilot gate's `--gt-floor` check
+    did not see it because it reads the raw JSONL, where the two orders coincide.
+
+    So the rendered notes are re-keyed onto the record's own rows here. ``_record_parts``
+    partitions ``rec["notes"]`` by part preserving each part's internal order, which is what
+    makes "the j-th part-p row rendered as the j-th note of part p" exact rather than
+    approximate. A row with no rendered counterpart comes back as ``None`` and the caller
+    counts it as non-finite.
+    """
     try:
         gmaps, specs, _refs, _keys, _raw = _record_parts(_v4_record(rec, maps))
         parts = PerfChainV4(specs, global_maps=gmaps).render()
     except (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError):
         return None
-    notes = [n for p in parts for n in p.notes]
+    by_number = {p.number: p.notes for p in parts}
+    cursor = {}
+    notes = []
+    for row in rec["notes"]:
+        number = row[6] if len(row) > 6 else 1
+        k = cursor.get(number, 0)
+        cursor[number] = k + 1
+        seq = by_number.get(number) or []
+        notes.append(seq[k] if k < len(seq) else None)
     stream = parts[0].stream(kind="position", controller="sustain") if parts else None
     cc = [(p.ms, _js_round(p.value)) for p in stream.points] if stream else []
     return notes, cc
@@ -338,24 +365,31 @@ def evaluate_piece_v4(pred_maps, rec):
         rendered = _v4_render(rec, maps)
         if rendered is None:
             out[name + "render_rmse"] = float("nan")
+            out[name + "off_rmse"] = float("nan")
             out[name + "vel_rmse"] = float("nan")
             out[name + "cc_rmse"] = float("nan")
             out[name + "cc64_agree"] = float("nan")
             out[name + "n_nonfinite"] = len(notes)
             continue
         got_notes, got_cc = rendered
-        se_ms = se_v = n = bad = 0
+        se_ms = se_off = se_v = n = bad = 0
         for np_, note in zip(got_notes, notes):
             vel_gt = note[5] if len(note) > 5 else 100.0
-            if (np_.ms_on is None or not math.isfinite(np_.ms_on)
+            if (np_ is None or np_.ms_on is None or not math.isfinite(np_.ms_on)
+                    or np_.ms_off is None or not math.isfinite(np_.ms_off)
                     or np_.velocity is None or not math.isfinite(np_.velocity)):
                 bad += 1
                 continue
             se_ms += (np_.ms_on - note[3]) ** 2
+            se_off += (np_.ms_off - note[4]) ** 2
             se_v += (np_.velocity - vel_gt) ** 2
             n += 1
-        bad += abs(len(got_notes) - len(notes))
         out[name + "render_rmse"] = math.sqrt(se_ms / n) if n else float("nan")
+        # Note-OFF error is the only render-space metric articulation's relativeDuration can
+        # move: `ArticulationData.articulateNote` scales `duration.perf` and shifts velocity,
+        # and touches the onset not at all. Without it the articulation head's relDur output
+        # would be invisible to every number this evaluator reports.
+        out[name + "off_rmse"] = math.sqrt(se_off / n) if n else float("nan")
         out[name + "vel_rmse"] = math.sqrt(se_v / n) if n else float("nan")
         t_end = max((n[4] for n in notes), default=0.0)
         cc_rmse, cc64 = _cc_metrics(got_cc, gt_cc, t_end)
