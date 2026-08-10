@@ -160,6 +160,10 @@ The plan above is now a running autonomous program (`ml/` in this repo; journal:
 - **The pedal path is unblocked.** The three fork movementMap bugs are fixed and committed (`meico 1b3711f0`), verified by XML round-trip test; the parallel meico-ts team mirrored them with byte-for-byte fixture verification — v4 pedal supervision has two independently validated renderers, and Vienna 4x22 supplies genuine continuous half-pedalling ground truth (312k CC64 events).
 - **New meico findings filed**: NaN rendering when a rubato frame straddles a tempo transition (`bugs.md` #7); dangling transitions are inert; first-instruction 100 bpm quirk; pendingDurations asymmetries — all now canonical-form rules or sampler constraints.
 
+## Program status — 2026-08-10
+
+v3 lineage complete (v3.1 end-to-end baseline: render −24%, velocity −60%, rubato F1 0.5, articulation = the pointer problem). v4 hybrid built and GT-floor-proven (DSL decoder + per-note heads); training moved to bwUniCluster (24 epochs = 6 min on an H100, ~150×); device gate passed. Central empirical law thrice confirmed: a map learns exactly when its signal is an explicit input feature. Self-corrections: espressivo articulation-identity defect (ecosystem-wide fix), our evaluator part-mis-pairing (early v4 numbers voided + re-evaluated). Ornamentation merge lifted §6's hard ceiling for v5. Pending: two one-variable H100 runs (heads; asynchrony feature) — runbook in `ml/CLUSTER_QUEUE.md`. Full journal: `ml/LOG.md`.
+
 ## Corrections to project docs surfaced by the fact-check pass
 
 - The tempo-curve paper is **Berndt, "Musical Tempo Curves", ICMC 2011** (not 2010) — fix in `fitting.md`, MEMORY.md, and any future citations. The paper introduces two curve families; which parameterization meico implements has never been checked against it.
