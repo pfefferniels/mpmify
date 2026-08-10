@@ -269,6 +269,20 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**First cluster results — v4-h100 (2026-08-10 ~15:45)**: 24 epochs in SIX MINUTES
+(0.02-0.03 s/step, ~150x the M1). Numbers, read as phase-1-of-hybrid (DSL decoder only;
+per-note heads not yet in the model): render 9957 vs base 10486 ms (v4's widened domain
+inflates absolute scales — bpm 25-240 makes constant baselines catastrophic on slow
+pieces); cc_rmse == baseline (expected: no pedal head yet); soft spots = asynchrony
+worse than baseline (45.9 vs 33.6 ms) and rubato F1 0.00 (v3.1: 0.5), mdl_ratio 0.33
+(dropped productions). Queued: 96-epoch probe (v4-h100-e96) to separate undertraining
+from task hardness — 25 min on H100. Gate discipline held: H100 vs cpuref comparison
+pending (~midnight). Cluster CPU note: 96-core EPYC ≈ only 2x the M1 for torch CPU
+training — GPU migration was the right call, more cores was never the answer.
+NEXT CRITICAL PATH: implement the per-note heads (articulation presence/values, pedal
+state) in model.py + head-aware eval — the halves of the hybrid that make v4's maps
+actually predictable. With 6-min cycles, head iteration is now interactive-speed.
+
 **Training moves to bwUniCluster — local-training era ends (2026-08-10 ~15:30, Niels'
 directive via the cluster agent: local trainings starve the machine)**: 17:35 local v4
 auto-fire CANCELLED. New policy: trainings on the cluster; the Mac keeps rendering/
