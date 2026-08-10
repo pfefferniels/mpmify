@@ -269,6 +269,15 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**bwUniCluster 3.0 scoping (2026-08-10 ~14:30)**: Niels arranged HPC/GPU access; a
+scoping agent collected our training factsheet. Migration is trivial (torch-only dep,
+~20-line --device patch, 87 MB of packed tensors, battle-tested resume, no network).
+Strategic split proposed: v4 trains locally tonight; the cluster's first job = v4
+REPLICATION (migration correctness gate, metric parity expected, bit parity not —
+different BLAS) then the model-scale sweep the study sized (30-80M params) that this
+8 GB M1 forbids. Renderer-side bit-exactness proofs stay Mac-local; the cluster
+inherits label correctness through the packed tensors.
+
 **Expression-transform campaign merged (2026-08-10 ~09:30)**: meico-ts main@9974ba3
 (3992 tests). exaggerateMpm/spotlightMpm: 15-dimension parameter-space MPM transforms
 in correct scale spaces (log/logit/gain), deterministic, with R5a/R5b invariance
