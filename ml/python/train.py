@@ -208,7 +208,7 @@ def run_eval(n_pieces=EVAL_PIECES, decode_batch=50):
     return med
 
 
-log(f"device=cpu train={n_train} val={len(val['feats'])} "
+log(f"device={device.type} train={n_train} val={len(val['feats'])} "
     f"params={sum(p.numel() for p in model.parameters())/1e6:.2f}M "
     f"epochs={EPOCHS} batches/epoch={len(batches)}")
 
