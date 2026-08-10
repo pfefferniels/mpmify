@@ -269,6 +269,12 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**NAME (2026-08-10, Niels via naming session): the system is "fenby"** (always
+lowercase) — after Eric Fenby, Delius's amanuensis, who wrote down performances from
+dictation; the system writes them down as MPM. Supersedes my working title
+"interpres". Renames landed in the working tree by the naming agent; owning teams
+commit their own files. Demo-0 artifact republished under the new name.
+
 ## Vienna sim2real re-probe + five-run table (2026-08-10 ~21:00)
 
 **Vienna (v41 on 220 real windows, GT-free metrics)**: render median 1991 ms vs 404
