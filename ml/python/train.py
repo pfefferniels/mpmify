@@ -327,7 +327,11 @@ def run_eval(n_pieces=EVAL_PIECES, decode_batch=50):
 
 log(f"device={device.type} train={n_train} val={len(val['feats'])} "
     f"params={sum(p.numel() for p in model.parameters())/1e6:.2f}M "
-    f"epochs={EPOCHS} batches/epoch={len(batches)}")
+    f"epochs={EPOCHS} batches/epoch={len(batches)} "
+    # stated explicitly because the alternative failure is silent: a v4 pack without
+    # note_labels trains the decoder alone and still logs as a v4 run, so a heads run
+    # launched against the wrong pack would look like a heads result
+    f"heads={'on w=' + str(HEAD_W) if HEADS else ('OFF (no note_labels in the pack)' if V4 else 'n/a')}")
 
 for epoch in range(start_epoch, EPOCHS):
     model.train()
