@@ -330,6 +330,18 @@ kept**: it is the real-data half of the pos_frac parity already journaled above,
 emitted JSONL satisfies the invariant it claims — 88 records + 220 windows, 0 missing,
 0 with `total_ticks < max(date+dur)`, median slack 1.00 beat on the full records.
 
+**Heads phase 2 COMPLETE (2026-08-10 ~19:30, successor agent; main repaired at
+6b01399, head 30c9454)**: eval_ckpt.py = the single evaluator for epoch-end AND
+offline re-scoring (same code by construction); mdl split into subset/full; --max-steps
+truly checkpoint-free; train.py refuses import (accident happened twice). All
+acceptance green incl. GT-plumbing (assembled GT articulation strictly improves the
+render; preprocessed-path GT floor exactly 0.0). KEY SEQUENCING INSIGHT (successor's):
+mode v41 packs note_labels → a v41 run is AUTOMATICALLY a heads run — so the pair
+(v4-heads-h100 on 15-feat, v41-asyn-h100 on 16-feat) differs by exactly the offset
+feature; run both for one-variable attribution. Cluster still down → full package
+made durable in ml/CLUSTER_QUEUE.md (sync 30c9454, two runs with heads=on log-line
+gates, three re-evals). Program blocked ONLY on cluster revival.
+
 **Staging error + cluster outage (2026-08-10 ~19:00)**: my e814960 blanket-staged
 train.py and swept the heads successor's in-flight rework incl. an import of the
 then-UNCOMMITTED eval_ckpt.py — main's train.py briefly import-broken; successor
