@@ -258,6 +258,17 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+## Results v3.1 (completed 2026-08-10, 24 epochs; conditioning features + 4.2M model)
+
+Final 500-piece val: render 875 ms (base 1146, −24%),
+velocity 13.7 (base 34.5, −60%), boundary F1 0.50,
+**rubato F1 0.50** (vs 0.00 in v3 — the onset-residual feature worked once LR
+decayed), articulation F1 0.00 (confirmed unlearnable via digit-coordinate
+emission — the pointer problem), mdl_ratio 1.08, nonfinite 0. Survived TWO
+session interruptions and one overnight machine sleep on checkpoint resume.
+**This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
+articulation (per-note heads) and rubato span placement.
+
 **Expression-transform campaign merged (2026-08-10 ~09:30)**: meico-ts main@9974ba3
 (3992 tests). exaggerateMpm/spotlightMpm: 15-dimension parameter-space MPM transforms
 in correct scale spaces (log/logit/gain), deterministic, with R5a/R5b invariance
