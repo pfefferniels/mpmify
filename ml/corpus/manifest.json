@@ -1,0 +1,101 @@
+{
+  "schema": "interpres-corpus-manifest/1",
+  "name": "corpus_pilot",
+  "note": "Era-tagged real-repertoire PILOT (SYSTEM.md 2.1). Every source is pinned to a commit SHA; fetch_scores.mjs verifies the SHA and records a sha256 per file. Scores are NEVER committed: they land under ml/data/, which is gitignored.",
+  "sources": {
+    "bach-wtc": {
+      "repo": "humdrum-tools/bach-wtc",
+      "commit": "0b4f4d84b90b254615e7ac09730ec473c9611cb6",
+      "dir": "kern",
+      "work_license": "public domain (J.S. Bach, d. 1750)",
+      "encoding_license": "ALL RIGHTS RESERVED (no licence file; the files carry !!!YEC: Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities and !!!YEM: Rights to all derivative editions reserved)",
+      "tier": "C",
+      "redistributable": false,
+      "attribution": "Center for Computer Assisted Research in the Humanities; encoder Walter Hewlett; edition Bach Gesellschaft xiv"
+    },
+    "scarlatti": {
+      "repo": "craigsapp/scarlatti-keyboard-sonatas",
+      "commit": "567731b13020802a422bd5aa49347ee3dac3ea25",
+      "dir": "kern",
+      "work_license": "public domain (D. Scarlatti, d. 1757)",
+      "encoding_license": "CC-BY-NC-SA-4.0",
+      "tier": "B",
+      "redistributable": true,
+      "attribution": "Copyright (C) 2021 Craig Stuart Sapp; encoders Kelly Leistikow and Craig Stuart Sapp; source Longo ed., Ricordi 1906-1913"
+    },
+    "mozart": {
+      "repo": "craigsapp/mozart-piano-sonatas",
+      "commit": "0f1f49d914494f8461709b2a2642153bb240c6da",
+      "dir": "kern",
+      "work_license": "public domain (W.A. Mozart, d. 1791)",
+      "encoding_license": "CC-BY-NC-SA-4.0",
+      "tier": "B",
+      "redistributable": true,
+      "attribution": "Copyright (C) 2004-2018 Craig Stuart Sapp; source Alte Mozart-Ausgabe Bd. 20, Breitkopf & Haertel 1877-1883"
+    },
+    "haydn": {
+      "repo": "craigsapp/haydn-piano-sonatas",
+      "commit": "299abc8f11eed4982f9fcddf2fc519b7b50b6214",
+      "dir": "kern",
+      "work_license": "public domain (J. Haydn, d. 1809)",
+      "encoding_license": "CC-BY-NC-SA-4.0",
+      "tier": "B",
+      "redistributable": true,
+      "attribution": "Copyright (C) 2008-2021 Craig Stuart Sapp; source Universal Edition 1-4, vols. 1-4 (1901)"
+    },
+    "chopin-nifc": {
+      "repo": "pl-wnifc/humdrum-chopin-first-editions",
+      "commit": "95dfb105c1669c72d10b04088566154f12d3dc1c",
+      "dir": "kern",
+      "work_license": "public domain (F. Chopin, d. 1849)",
+      "encoding_license": "CC-BY-4.0",
+      "tier": "A",
+      "redistributable": true,
+      "attribution": "First Editions of Fryderyk Chopin's Music, Copyright 2017-2021 The Fryderyk Chopin Institute (https://nifc.pl), https://chopinscores.org"
+    },
+    "scriabin": {
+      "repo": "craigsapp/scriabin",
+      "commit": "7daa1136a4edfaf8d2bfadee973c33f3b76b6760",
+      "dir": "",
+      "work_license": "public domain (A. Scriabin, d. 1915)",
+      "encoding_license": "UNSTATED (no licence file, no !!!YEM record; treat as all rights reserved)",
+      "tier": "C",
+      "redistributable": false,
+      "attribution": "Mysterium corpus, encoder Bryan Jacob Bell (thesis, 2022); source Ausgewaehlte Klavierwerke, ed. Guenter Philipp (Edition Peters)"
+    }
+  },
+  "pieces": [
+    { "id": "baroque-bach-wtc1p01", "era": "baroque", "source": "bach-wtc", "file": "wtc1p01.krn", "composer": "Bach, Johann Sebastian", "work": "WTC I, Prelude 1 in C major, BWV 846" },
+    { "id": "baroque-bach-wtc1f02", "era": "baroque", "source": "bach-wtc", "file": "wtc1f02.krn", "composer": "Bach, Johann Sebastian", "work": "WTC I, Fugue 2 in C minor, BWV 847" },
+    { "id": "baroque-bach-wtc1p09", "era": "baroque", "source": "bach-wtc", "file": "wtc1p09.krn", "composer": "Bach, Johann Sebastian", "work": "WTC I, Prelude 9 in E major, BWV 854" },
+    { "id": "baroque-bach-wtc1p11", "era": "baroque", "source": "bach-wtc", "file": "wtc1p11.krn", "composer": "Bach, Johann Sebastian", "work": "WTC I, Prelude 11 in F major, BWV 856" },
+    { "id": "baroque-bach-wtc1f10", "era": "baroque", "source": "bach-wtc", "file": "wtc1f10.krn", "composer": "Bach, Johann Sebastian", "work": "WTC I, Fugue 10 in E minor, BWV 855" },
+    { "id": "baroque-scarlatti-L001K514", "era": "baroque", "source": "scarlatti", "file": "L001K514.krn", "composer": "Scarlatti, Domenico", "work": "Sonata in C major, K.514 (L.1)" },
+    { "id": "baroque-scarlatti-L002K384", "era": "baroque", "source": "scarlatti", "file": "L002K384.krn", "composer": "Scarlatti, Domenico", "work": "Sonata K.384 (L.2)" },
+    { "id": "baroque-scarlatti-L013K060", "era": "baroque", "source": "scarlatti", "file": "L013K060.krn", "composer": "Scarlatti, Domenico", "work": "Sonata K.60 (L.13)" },
+    { "id": "baroque-scarlatti-L053K075", "era": "baroque", "source": "scarlatti", "file": "L053K075.krn", "composer": "Scarlatti, Domenico", "work": "Sonata K.75 (L.53)" },
+    { "id": "baroque-scarlatti-L055K330", "era": "baroque", "source": "scarlatti", "file": "L055K330.krn", "composer": "Scarlatti, Domenico", "work": "Sonata K.330 (L.55)" },
+
+    { "id": "classical-mozart-k331-1a", "era": "classical", "source": "mozart", "file": "sonata11-1a.krn", "composer": "Mozart, Wolfgang Amadeus", "work": "Sonata K.331/i, Theme" },
+    { "id": "classical-mozart-k331-1b", "era": "classical", "source": "mozart", "file": "sonata11-1b.krn", "composer": "Mozart, Wolfgang Amadeus", "work": "Sonata K.331/i, Variation 1" },
+    { "id": "classical-mozart-k331-1c", "era": "classical", "source": "mozart", "file": "sonata11-1c.krn", "composer": "Mozart, Wolfgang Amadeus", "work": "Sonata K.331/i, Variation 2" },
+    { "id": "classical-mozart-k284-3a", "era": "classical", "source": "mozart", "file": "sonata06-3a.krn", "composer": "Mozart, Wolfgang Amadeus", "work": "Sonata K.284/iii, Theme" },
+    { "id": "classical-mozart-k284-3b", "era": "classical", "source": "mozart", "file": "sonata06-3b.krn", "composer": "Mozart, Wolfgang Amadeus", "work": "Sonata K.284/iii, Variation 1" },
+    { "id": "classical-haydn-hob45-3a", "era": "classical", "source": "haydn", "file": "sonata45-3a.krn", "composer": "Haydn, Joseph", "work": "Piano Sonata No. 45, movement 3 (a)" },
+    { "id": "classical-haydn-hob12-2", "era": "classical", "source": "haydn", "file": "sonata12-2.krn", "composer": "Haydn, Joseph", "work": "Piano Sonata No. 12 in A major, movement 2" },
+    { "id": "classical-haydn-hob12-3", "era": "classical", "source": "haydn", "file": "sonata12-3.krn", "composer": "Haydn, Joseph", "work": "Piano Sonata No. 12 in A major, movement 3" },
+    { "id": "classical-haydn-hob16-2", "era": "classical", "source": "haydn", "file": "sonata16-2.krn", "composer": "Haydn, Joseph", "work": "Piano Sonata No. 16, movement 2" },
+    { "id": "classical-haydn-hob51-3", "era": "classical", "source": "haydn", "file": "sonata51-3.krn", "composer": "Haydn, Joseph", "work": "Piano Sonata No. 51, movement 3" },
+
+    { "id": "romantic-chopin-op28-02", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-002.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 2 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op28-04", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-004.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 4 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op28-06", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-006.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 6 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op28-07", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-007.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 7 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op28-09", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-009.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 9 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op28-11", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-011.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 11 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op28-20", "era": "romantic", "source": "chopin-nifc", "file": "028-1-BH-020.krn", "composer": "Chopin, Fryderyk", "work": "Prelude op. 28 no. 20 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-chopin-op33-03", "era": "romantic", "source": "chopin-nifc", "file": "033-1-BH-003.krn", "composer": "Chopin, Fryderyk", "work": "Mazurka op. 33 no. 3 (Breitkopf & Haertel first ed.)" },
+    { "id": "romantic-scriabin-op11-01", "era": "romantic", "source": "scriabin", "file": "op11/scriabin-op11_no01.krn", "composer": "Scriabin, Alexander", "work": "Prelude op. 11 no. 1" },
+    { "id": "romantic-scriabin-op11-09", "era": "romantic", "source": "scriabin", "file": "op11/scriabin-op11_no09.krn", "composer": "Scriabin, Alexander", "work": "Prelude op. 11 no. 9" }
+  ]
+}
