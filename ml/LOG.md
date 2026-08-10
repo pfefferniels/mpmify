@@ -269,6 +269,31 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+## v4 VERDICT (2026-08-10 ~19:45): the hybrid works — completely
+
+Both 96-epoch runs, exit 0, ~22 min each, identical-condition pair, truthful evaluator:
+
+| metric | v4-heads (15f) | v41-asyn (16f) | baseline |
+|---|---|---|---|
+| render RMSE | **697.4 ms** | 771.6 ms | 3018.8 |
+| velocity RMSE | 6.61 | **6.28** | 34.90 |
+| asynchrony err | 43.5 ms | **5.6 ms** | 33.6 |
+| artic F1 (heads) | **1.00** (P 1.00 / R 1.00, 20/20) | 1.00 | — |
+| relDur / velCh / pedal MAE | 0.017 / 0.95 / 0.3cc | 0.015 / 0.95 / 0.3cc | — |
+| rubato F1 / boundary F1 | 1.00 / 0.67 | 1.00 / 0.67 | — |
+| mdl_sub / mdl_full | 1.01 / 0.64 | 0.97 / 0.64 | — |
+
+**Articulation: SOLVED by the per-note heads** (0.00 → 1.00; the pointer-problem
+diagnosis and the hybrid split both vindicated). **Asynchrony: SOLVED by the
+conditioning feature** (six times better than baseline; fourth confirmation of the
+central law). Evaluator fix visible: render baseline 10486 → 3019 ms — every
+pre-055f8ab render/velocity figure confirmed void. Caveats kept honest: the pair's
+render difference (697 vs 772) is single-seed noise until replicated; boundary F1
+0.67 keeps tempo segmentation as the remaining frontier; movementMap reconstruction
+from pedal states is a deferred fitting pass. REMAINING within v4: those three.
+NEXT: Vienna sim2real re-probe with the v41 model (domain randomization + heads vs
+v1's 2.9-9.0 s failure) once re-evals land.
+
 **v4 verdict runs LAUNCHED (2026-08-10 19:18)**: v4-heads-h100 (job 6247332) and
 v41-asyn-h100 (6247333), both gates `heads=on w=1.0` passed, separate H100 nodes two
 seconds apart — identical conditions for the one-variable pair. Cluster agent's
