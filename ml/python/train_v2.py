@@ -15,22 +15,30 @@ Flags:
   --limit N                use only the first N pieces of each split
   --batch N                overrides the config's train.batch (a CPU smoke of the `large`
                            config cannot hold the cluster's batch; the effective value is
-                           recorded in the checkpoint, so an override is never silent)
+                           recorded in the checkpoint AND guarded on resume, so an override
+                           is never silent)
+  --seed N                 overrides the config's train.seed (default 0)
   --max-steps N            stop after N optimiser steps; implies no checkpoint, no eval
                            (a smoke run must not overwrite a real run's checkpoint)
 
-Three things differ from `train.py`, all deliberate:
+Four things differ from `train.py`, all deliberate:
 
 * **It is a module with a `main()`.** `train.py`'s body *is* the run, so `import train`
   starts one -- which happened twice and rewrote a finished run's `final_val.json` (LOG.md).
   Here the import is inert and the tests can call the pieces.
-* **The config guard is strict.** `train.py` tolerates keys a pre-config checkpoint lacks;
-  every v2 checkpoint carries the full resolved config, so any difference on resume is a
-  real difference and aborts with a printed diff.
+* **The config guard is strict, and it covers the schedule.** `train.py` tolerates keys a
+  pre-config checkpoint lacks; every v2 checkpoint carries the full resolved model config
+  *and* the effective train config, and both are diffed on resume. Architecture-only
+  guarding is not enough: ``--batch`` changes ``len(batches)``, hence ``total_steps`` and
+  the ``step`` a resume restarts from, so resuming a run at a different batch size silently
+  relocates the cosine LR schedule -- a changed experiment reported under the old name.
 * **`heads: true` in the config is a gate, not a preference.** `train.py` derives the heads
   arm from the pack (`bool(train.get("note_labels"))`), so a run against a stale pack trains
   the decoder alone and still logs as a v4 run -- the exact failure `CLUSTER_QUEUE.md` gates
   on by eye. A config that asks for heads and meets a pack without labels aborts.
+* **The run is seeded** (``train.seed``, default 0), so it is reproducible from its record
+  and not only describable by it. `train.py` is unseeded; three runs of one v2 smoke command
+  gave three different step-1 losses before this.
 
 The evaluation loop is imported from `eval_ckpt.py` (never copied): epoch-end metrics and
 offline re-scoring must be the same code, or a re-evaluation proves nothing about the run.
@@ -49,18 +57,28 @@ import torch.nn as nn
 
 from dsl import PAD
 from eval_ckpt import run_eval as _run_eval
-from model_v2 import (HEAD_MODES, PEDAL_FEATURE_INDEX, build_model, describe,
-                      head_losses, load_run_config, resolve_model_cfg)
+from model_v2 import (HEAD_MODES, MODE_MAX_DECODE, MODEL_DEFAULTS, PEDAL_FEATURE_INDEX,
+                      build_model, defaulted_keys, describe, head_losses, load_run_config,
+                      resolve_model_cfg, seed_everything, verify_pedal_index)
 
 #: `mode` -> packed-file suffix, and -> the grammar `eval_ckpt.run_eval` scores against
 #: (v3.1 evaluates as v3 and v4.1 as v4: they differ in their features, not in their DSL).
 SUFFIX = {"v1": "", "v2": "_v2", "v3": "_v3", "v31": "_v31", "v4": "_v4", "v41": "_v41"}
 EVAL_MODE = {"v1": "v1", "v2": "v2", "v3": "v3", "v31": "v3", "v4": "v4", "v41": "v4"}
-DEFAULT_MAX_DECODE = {"v1": 224, "v2": 320, "v3": 448, "v31": 448, "v4": 512, "v41": 512}
+#: one table, defined in model_v2 and shared with eval_ckpt_v2 -- see MODE_MAX_DECODE there
+DEFAULT_MAX_DECODE = MODE_MAX_DECODE
 DEFAULT_TRAIN = {"epochs": 10, "batch": 48, "lr": 3e-4, "warmup": 300,
-                 "weight_decay": 0.01, "head_weight": 1.0, "clip": 1.0,
+                 "weight_decay": 0.01, "head_weight": 1.0, "clip": 1.0, "seed": 0,
                  "eval_pieces": 100, "eval_every": 2, "decode_batch": 50,
                  "final_eval_pieces": 500}
+#: Train keys a resume may NOT change: each one moves the optimisation itself. `batch` is in
+#: the list because it sets `len(batches)`, and therefore `total_steps` and the step a resume
+#: restarts at -- the cosine schedule would land somewhere the original run never visited.
+SCHEDULE_KEYS = ("epochs", "batch", "lr", "warmup", "weight_decay", "head_weight", "clip",
+                 "seed")
+#: Train keys a resume MAY change (they only affect how much is measured, never the weights).
+#: Changing one is logged, not refused.
+EVAL_KEYS = ("eval_pieces", "eval_every", "decode_batch", "final_eval_pieces")
 
 
 def peak_rss_gb():
@@ -90,6 +108,7 @@ def parse_args(argv):
         "data": take_flag(argv, "--data", default="../data"),
         "limit": take_flag(argv, "--limit", int),
         "batch": take_flag(argv, "--batch", int),
+        "seed": take_flag(argv, "--seed", int),
         "max_steps": take_flag(argv, "--max-steps", int),
     }
     if args["device"] not in ("cpu", "cuda", "auto"):
@@ -125,9 +144,15 @@ def resolve_heads(run_cfg, mode, pack):
 
 def check_pedal_leak(run_cfg, mode, cfg, heads):
     """f14 (`pedal_state`) is a head TARGET; leaving it in the input makes the pedal head
-    copy its own answer (LOG.md 2026-08-10). Excluded by default; the leak is opt-in."""
+    copy its own answer (LOG.md 2026-08-10). Excluded by default; the leak is opt-in.
+
+    The index itself is re-proved against `dataset.py` on every call rather than trusted from
+    a constant, so a re-preprocessed pack that moved the column aborts the run instead of
+    training a leaking model under a log line that says EXCLUDED.
+    """
     if not (heads and mode in HEAD_MODES):
         return "n/a"
+    verify_pedal_index(mode)
     if PEDAL_FEATURE_INDEX in cfg["exclude_features"]:
         return "EXCLUDED (leak fix)"
     if run_cfg.get("allow_pedal_leak"):
@@ -168,10 +193,49 @@ def make_batch(pack, idxs, n_feat, heads):
     return x, xm, y, lab
 
 
-def config_diff(prev, now):
-    keys = sorted(set(prev) | set(now))
+def effective_train_cfg(run_cfg, overrides=None):
+    """``DEFAULT_TRAIN`` < the config's ``train`` block < CLI overrides.
+
+    Resolved in one place and BEFORE anything reads it, so the checkpoint records what the
+    run used rather than what the file asked for -- and so the resume guard compares the two
+    effective schedules, not a file against a run.
+    """
+    tcfg = dict(DEFAULT_TRAIN)
+    tcfg.update({k: v for k, v in (run_cfg.get("train") or {}).items()
+                 if not str(k).startswith("_")})
+    for k in ("head_weight", "batch", "epochs", "seed"):
+        v = (overrides or {}).get(k)
+        if v is not None:
+            tcfg[k] = v
+    return tcfg
+
+
+def epoch_order(batches, seed, epoch):
+    """The batch order for one epoch: a pure function of ``(seed, epoch)``.
+
+    `train.py` seeds the global RNG with the epoch number and shuffles the list **in place**,
+    so its epoch-k order depends on every shuffle before it and a resumed run trains on an
+    order the uninterrupted run never used. Shuffling a copy with a local generator makes the
+    order replayable, which is what makes a resumed run the same run.
+    """
+    out = list(batches)
+    random.Random(int(seed) * 100003 + int(epoch)).shuffle(out)
+    return out
+
+
+def config_diff(prev, now, keys=None):
+    """``{key: (was, now)}`` over the union of both dicts, or over ``keys`` if given.
+
+    An absent key counts as a difference (``"<absent>"``): a checkpoint that never recorded
+    a setting cannot testify that the setting was the same.
+    """
+    ks = sorted(set(prev) | set(now)) if keys is None else list(keys)
     return {k: (prev.get(k, "<absent>"), now.get(k, "<absent>"))
-            for k in keys if prev.get(k, "<absent>") != now.get(k, "<absent>")}
+            for k in ks if prev.get(k, "<absent>") != now.get(k, "<absent>")}
+
+
+def fmt_diff(diff):
+    return "; ".join(f"{k}: ckpt={a!r} now={b!r}" for k, (a, b) in sorted(diff.items()))
 
 
 def main(argv):
@@ -187,20 +251,13 @@ def main(argv):
     if mode not in SUFFIX:
         raise SystemExit(f"ABORT: unknown mode {mode!r}; known: {sorted(SUFFIX)}")
 
-    tcfg = dict(DEFAULT_TRAIN)
-    tcfg.update({k: v for k, v in (run_cfg.get("train") or {}).items()
-                 if not str(k).startswith("_")})
     # CLI overrides are folded into the effective train config BEFORE anything reads it, so
     # what the checkpoint records is what the run actually used, not what the file asked for
-    if args["head_weight"] is not None:
-        tcfg["head_weight"] = args["head_weight"]
-    if args["batch"] is not None:
-        tcfg["batch"] = args["batch"]
-    if args["epochs"] is not None:
-        tcfg["epochs"] = args["epochs"]
+    tcfg = effective_train_cfg(run_cfg, args)
     epochs = int(tcfg["epochs"])
     run = args["run"] or run_cfg.get("name") or "v2"
     head_w = float(tcfg["head_weight"])
+    seed = int(tcfg["seed"])
     max_steps = args["max_steps"]
     log_every = 1 if max_steps else 100
 
@@ -251,6 +308,9 @@ def main(argv):
     order = sorted(range(n_train), key=lambda i: train["feats"][i].shape[0])
     batches = [order[i: i + batch] for i in range(0, n_train, batch)]
 
+    # before build_model: weight init is the first draw from the global RNG, so an unseeded
+    # run differs from its own record in the one place a record cannot capture
+    seed_everything(seed)
     model = build_model(model_cfg).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=float(tcfg["lr"]),
                             weight_decay=float(tcfg["weight_decay"]))
@@ -273,15 +333,36 @@ def main(argv):
         diff = config_diff(prev_cfg, model_cfg)
         if diff:
             raise SystemExit(
-                f"ABORT: {ck_path} exists but its config differs: "
-                + "; ".join(f"{k}: ckpt={a!r} now={b!r}" for k, (a, b) in diff.items())
+                f"ABORT: {ck_path} exists but its model config differs: " + fmt_diff(diff)
                 + ". Use a new run name or delete the checkpoint explicitly.")
+        # ... and the same rule for the schedule. Architecture-only guarding let a resume
+        # change batch/lr/warmup/epochs/seed without a word, and `batch` in particular moves
+        # `len(batches)` -> `total_steps` and `step = start_epoch * len(batches)`, i.e. the
+        # cosine schedule restarts at a point the original run never occupied.
+        prev_tcfg = dict(prev.get("train_config") or {})
+        if not prev_tcfg:
+            raise SystemExit(
+                f"ABORT: {ck_path} carries no `train_config`. It was written by a model_v2 "
+                f"build that guarded the architecture only, so this resume cannot prove it "
+                f"is continuing the same schedule. Use a new run name.")
+        sdiff = config_diff(prev_tcfg, tcfg, SCHEDULE_KEYS)
+        if sdiff:
+            raise SystemExit(
+                f"ABORT: {ck_path} exists but its training schedule differs: "
+                + fmt_diff(sdiff)
+                + ". These keys change the optimisation itself (batch also moves the LR "
+                  "schedule, via batches/epoch -> total_steps). Use a new run name.")
+        ediff = config_diff(prev_tcfg, tcfg, EVAL_KEYS)
         model.load_state_dict(prev["model"], strict=True)
         if "opt" in prev:
             opt.load_state_dict(prev["opt"])
         start_epoch = prev["epoch"] + 1
         step = start_epoch * len(batches)
-        log(f"resuming {run} from epoch {start_epoch}")
+        log(f"resuming {run} from epoch {start_epoch} (step {step}/{total_steps}, "
+            f"seed {seed}, batch {batch}: schedule verified against the checkpoint)")
+        if ediff:
+            log(f"NOTE: evaluation settings changed on resume (weights unaffected): "
+                f"{fmt_diff(ediff)}")
 
     lr, warmup, clip = float(tcfg["lr"]), int(tcfg["warmup"]), float(tcfg["clip"])
 
@@ -298,21 +379,32 @@ def main(argv):
     log(f"config={args['config']} name={run_cfg.get('name')} arch=model_v2 mode={mode} "
         f"| {describe(model_cfg, model)}")
     log(f"device={device.type} train={n_train} val={len(val['feats'])} epochs={epochs} "
-        f"batch={batch} batches/epoch={len(batches)} lr={lr} warmup={warmup} "
+        f"batch={batch} batches/epoch={len(batches)} lr={lr} warmup={warmup} seed={seed} "
         f"max_decode={max_decode} "
         f"heads={'on w=' + str(head_w) + ' [' + heads_why + ']' if heads else 'OFF [' + heads_why + ']'} "
         f"f14_pedal={pedal}")
+    # A default is legitimate; a silent default is not. Both blocks report what they took.
+    md = defaulted_keys(run_cfg.get("model"), MODEL_DEFAULTS)
+    td = defaulted_keys({k: v for k, v in (run_cfg.get("train") or {}).items()
+                         if not str(k).startswith("_")}, DEFAULT_TRAIN)
+    log(f"defaults taken: model{md or '{}'} train{td or '{}'}"
+        + (f" | cli overrides: "
+           + ", ".join(f"{k}={args[k]}" for k in ("epochs", "batch", "seed", "head_weight")
+                       if args[k] is not None)
+           if any(args[k] is not None
+                  for k in ("epochs", "batch", "seed", "head_weight")) else ""))
+    if pedal != "n/a":
+        log(f"pedal index: {verify_pedal_index(mode)}")
 
     stop = False
     for epoch in range(start_epoch, epochs):
         model.train()
-        random.seed(epoch)
-        random.shuffle(batches)
+        epoch_batches = epoch_order(batches, seed, epoch)
         t0 = time.time()
         tot_loss = tot_tok = 0
         comp_sum = [0.0] * 4
         comp_n = 0
-        for bi, idxs in enumerate(batches):
+        for bi, idxs in enumerate(epoch_batches):
             step += 1
             for g in opt.param_groups:
                 g["lr"] = lr_at(step)
@@ -367,7 +459,11 @@ def main(argv):
             torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
                         "epoch": epoch, "config": model_cfg, "arch": "model_v2",
                         "mode": mode, "head_weight": head_w, "run_config": run_cfg,
-                        "train_config": tcfg},
+                        "train_config": tcfg, "seed": seed,
+                        # the decode budget this run's epoch-end evals actually used, so an
+                        # offline re-score can reproduce them instead of re-deriving it from
+                        # a table (eval_ckpt.py's says 320 for v4 and has no v41 entry)
+                        "max_decode": int(max_decode)},
                        ck_path)
 
     if not max_steps:

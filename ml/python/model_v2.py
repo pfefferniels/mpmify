@@ -43,12 +43,24 @@ and the same v41 pack feeds a leaking and a non-leaking run — the ablation is 
 never inferred from a flag or a file name; ``resolve_model_cfg`` derives ``n_features`` and
 ``vocab_size`` from the mode and aborts if a config contradicts them, and unknown keys are an
 abort rather than a silent default (a typo'd key in a run config is a run that lies about
-what it was).
+what it was). The five keys that *define* the architecture are **required** in a run config
+file: a config that omits ``d_model`` and silently gets 192 is the same failure as a
+defaulted architecture, one level down. The remaining keys keep documented defaults and the
+run prints exactly which ones it took (``defaults: model[...] train[...]``), so a default is
+recorded, never silent.
+
+**5. The run is seeded, and the seed is part of the schedule.** ``train.seed`` (default 0)
+seeds weight init, dropout and batch order through :func:`seed_everything`; without it two
+runs of the same command are two different runs, and "reproducible from its own record" is
+only true of the architecture. Batch order is drawn from a *local* ``random.Random(seed,
+epoch)`` so it is a function of the epoch index alone and a resume replays the order the
+uninterrupted run would have used.
 """
 
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import torch
@@ -56,7 +68,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from dataset import (N_FEATURES, N_FEATURES_V2, N_FEATURES_V31, N_FEATURES_V4,
-                     N_FEATURES_V41)
+                     N_FEATURES_V41, piece_to_features_v4, piece_to_features_v41)
 from dsl import V1_VOCAB_SIZE, V2_VOCAB_SIZE, V3_VOCAB_SIZE, V4_VOCAB_SIZE
 # Imported, not re-implemented: the per-note heads and the sinusoidal table are exactly the
 # objects the v4 verdict runs used, so `base` differs from `model.py` in the encoder/decoder
@@ -65,14 +77,26 @@ from model import (NOTE_HEAD_KEYS, PEDAL_SCALE, VEL_CHANGE_SCALE, NoteHeads,
                    PositionalEncoding)
 
 __all__ = ["HybridTransformer", "PEDAL_FEATURE_INDEX", "MODE_FEATURES", "MODE_VOCAB",
+           "MODE_MAX_DECODE", "FEATURE_NAMES", "MODEL_DEFAULTS", "REQUIRED_MODEL_KEYS",
            "build_model", "resolve_model_cfg", "load_run_config", "head_losses",
-           "state_dict_from_v1", "param_count", "NOTE_HEAD_KEYS", "PEDAL_SCALE",
+           "state_dict_from_v1", "param_count", "verify_pedal_index", "seed_everything",
+           "defaulted_keys", "describe_exclusions", "NOTE_HEAD_KEYS", "PEDAL_SCALE",
            "VEL_CHANGE_SCALE"]
 
 #: Index of ``pedal_state`` in the per-note feature row. The same index in BOTH v4 layouts:
 #: `dataset.piece_to_features_v4` appends ``part`` (13) then ``pedal_state`` (14), and
 #: `piece_to_features_v41` appends ``cross_part_offset`` (15) after them.
+#:
+#: This constant is a claim about another module's output layout, so it is not left to a
+#: docstring: :func:`verify_pedal_index` *runs* the extractor and proves the column, and
+#: `train_v2.check_pedal_leak` calls it before every run. A re-preprocessed corpus that moves
+#: the column would otherwise reinstate the leak under a log line still reading "EXCLUDED".
 PEDAL_FEATURE_INDEX = 14
+
+#: Names for the feature indices the configs address by number, so a log line can say *which*
+#: column it dropped. Only the v4/v4.1 tail is named — the shared v3.1 head is documented in
+#: `dataset.piece_to_features_v31` and no config refers to it by index.
+FEATURE_NAMES = {13: "part", 14: "pedal_state", 15: "cross_part_offset"}
 
 #: Feature width per mode — the same table `train.py` spells inline, kept here so a config
 #: cannot disagree with the pack it will be trained on.
@@ -82,6 +106,12 @@ MODE_FEATURES = {"v1": N_FEATURES, "v2": N_FEATURES_V2, "v3": N_FEATURES_V2,
 #: version must not desync resumable checkpoints). v3.1 and v4.1 share their parent's grammar.
 MODE_VOCAB = {"v1": V1_VOCAB_SIZE, "v2": V2_VOCAB_SIZE, "v3": V3_VOCAB_SIZE,
               "v31": V3_VOCAB_SIZE, "v4": V4_VOCAB_SIZE, "v41": V4_VOCAB_SIZE}
+#: Decode budget per mode, used only when a pack predates ``max_tgt``. **One table for the
+#: whole v2 path**: `train_v2` (epoch-end eval) and `eval_ckpt_v2` (offline re-scoring) both
+#: import this, so the two cannot decode to different lengths under the same run name.
+#: `eval_ckpt.DEFAULT_MAX_DECODE` says 320 for v4 and has no v41 key at all; a v2 checkpoint
+#: is never scored against that table.
+MODE_MAX_DECODE = {"v1": 224, "v2": 320, "v3": 448, "v31": 448, "v4": 512, "v41": 512}
 #: Modes whose pack carries per-note labels (and therefore can run the heads).
 HEAD_MODES = ("v4", "v41")
 
@@ -91,9 +121,70 @@ MODEL_KEYS = {"d_model", "nhead", "enc_layers", "dec_layers", "ff", "dropout", "
               "activation", "exclude_features", "max_len", "heads", "n_features",
               "vocab_size"}
 TRAIN_KEYS = {"epochs", "batch", "lr", "warmup", "weight_decay", "head_weight", "clip",
-              "eval_pieces", "eval_every", "decode_batch", "final_eval_pieces"}
+              "seed", "eval_pieces", "eval_every", "decode_batch", "final_eval_pieces"}
+
+#: The five keys that DEFINE the architecture. A run config file must state them: silently
+#: defaulting `d_model` is the same defect as a defaulted architecture, one level down.
+#: (Enforced in :func:`load_run_config`, i.e. where configs enter from disk, not in
+#: :func:`resolve_model_cfg`, which also serves callers that build a kwargs dict directly.)
+REQUIRED_MODEL_KEYS = ("d_model", "nhead", "enc_layers", "dec_layers", "ff")
+#: Documented defaults for the keys a config may omit. Omission is legal but never silent:
+#: :func:`defaulted_keys` reports what was taken and `train_v2` prints it before step 1.
+MODEL_DEFAULTS = {"dropout": 0.1, "pos": "sinusoidal", "activation": "relu",
+                  "exclude_features": [], "max_len": 2048}
 
 ACTIVATIONS = {"relu": F.relu, "gelu": F.gelu}
+
+
+def seed_everything(seed):
+    """Seed python/torch RNGs. Returns the seed, so a caller can log what it applied.
+
+    Weight init, dropout and any shuffling downstream of the global RNG come from here.
+    Batch order deliberately does NOT: it is drawn per epoch from a local
+    ``random.Random`` in `train_v2`, so a resumed run replays the order the uninterrupted
+    run would have used instead of continuing from whatever global state a resume happens
+    to start in.
+    """
+    seed = int(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    return seed
+
+
+def verify_pedal_index(mode, index=PEDAL_FEATURE_INDEX):
+    """Prove that ``index`` is the ``pedal_state`` column of ``mode``'s feature row.
+
+    Not an assertion against a docstring — the extractor is *run* twice on the same two-note
+    record, once with an empty sustain stream and once with the pedal down from ms 0, and the
+    set of columns that move must be exactly ``{index}``. That catches both halves of the
+    risk: a layout change that moves ``pedal_state`` elsewhere (the set would not contain
+    ``index``) and one that spreads the pedal signal over more columns.
+
+    Returns a one-line evidence string; raises ``SystemExit`` if the claim is false.
+    """
+    if mode not in HEAD_MODES:
+        return f"n/a (mode {mode} has no pedal feature)"
+    fn = piece_to_features_v41 if mode == "v41" else piece_to_features_v4
+    rec = {"notes": [[0, 720, 60, 0.0, 500.0, 80], [720, 720, 62, 500.0, 1000.0, 80]],
+           "total_ticks": 1440}
+    up = fn(dict(rec, sustain_cc=[]))
+    down = fn(dict(rec, sustain_cc=[[0.0, 127.0]]))
+    width = len(up[0])
+    moved = sorted({j for a, b in zip(up, down) for j in range(width) if a[j] != b[j]})
+    if moved != [index]:
+        raise SystemExit(
+            f"ABORT: PEDAL_FEATURE_INDEX={index} is wrong for mode {mode}. Pressing the "
+            f"sustain pedal moves feature column(s) {moved} of {width}, not [{index}]. The "
+            f"pack layout changed under model_v2: every config's `exclude_features` and the "
+            f"'f14_pedal=EXCLUDED' log line are now lies. Fix PEDAL_FEATURE_INDEX and "
+            f"FEATURE_NAMES against dataset.py before training anything.")
+    if width != MODE_FEATURES[mode]:
+        raise SystemExit(f"ABORT: mode {mode} declares {MODE_FEATURES[mode]} features but "
+                         f"dataset.py produced {width}")
+    return (f"f{index} ({FEATURE_NAMES.get(index, '?')}) verified against dataset.py: "
+            f"pedal down moves columns {moved} of {width} and nothing else")
 
 
 # --------------------------------------------------------------------------------------
@@ -463,7 +554,37 @@ def load_run_config(path):
     _reject_unknown("train", cfg.get("train") or {}, TRAIN_KEYS)
     if cfg.get("arch", "model_v2") != "model_v2":
         raise SystemExit(f"ABORT: {path} declares arch={cfg['arch']!r}; this is model_v2")
+    block = cfg.get("model") or {}
+    absent = [k for k in REQUIRED_MODEL_KEYS if k not in block]
+    if absent:
+        raise SystemExit(
+            f"ABORT: {path} does not state {absent} in its `model` block. These five keys "
+            f"({list(REQUIRED_MODEL_KEYS)}) define the architecture and have no default: a "
+            f"config that omits d_model and quietly gets 192 is exactly the run-that-cannot-"
+            f"be-reproduced-from-its-record that --config was made mandatory to prevent.")
     return cfg
+
+
+def defaulted_keys(block, defaults):
+    """``{key: default}`` for every documented default this block did not state.
+
+    A default is legitimate; a *silent* default is not. `train_v2` prints the result before
+    the first optimiser step, so the run's own log records which values it inherited.
+    """
+    block = block or {}
+    return {k: v for k, v in defaults.items() if k not in block}
+
+
+def describe_exclusions(exclude):
+    """``'[14:pedal_state]'`` — an excluded column named, not just numbered.
+
+    The startup line used to say ``feat=16-1excl``, which is true of a run that dropped the
+    wrong column too.
+    """
+    ex = list(exclude or [])
+    if not ex:
+        return "[]"
+    return "[" + ",".join(f"{i}:{FEATURE_NAMES.get(i, '?')}" for i in ex) + "]"
 
 
 def resolve_model_cfg(run_cfg, mode, *, heads):
@@ -476,9 +597,12 @@ def resolve_model_cfg(run_cfg, mode, *, heads):
     if mode not in MODE_FEATURES:
         raise SystemExit(f"ABORT: unknown mode {mode!r}; known: {sorted(MODE_FEATURES)}")
     block = dict((run_cfg.get("model") or {}))
-    cfg = {"d_model": 192, "nhead": 8, "enc_layers": 4, "dec_layers": 4, "ff": 768,
-           "dropout": 0.1, "pos": "sinusoidal", "activation": "relu",
-           "exclude_features": [], "max_len": 2048}
+    # `load_run_config` requires the five architecture keys of a config *file*; these
+    # fallbacks serve direct callers (tests, notebooks) that pass a partial dict, and are
+    # the same values `model.py`'s signature carries.
+    cfg = {"d_model": 192, "nhead": 8, "enc_layers": 4, "dec_layers": 4, "ff": 768}
+    cfg.update({k: (list(v) if isinstance(v, list) else v)
+                for k, v in MODEL_DEFAULTS.items()})
     block.pop("heads", None)
     for k, v in block.items():
         if str(k).startswith("_"):      # '_'-prefixed keys are comments, never kwargs
@@ -509,8 +633,9 @@ def describe(cfg, model):
     ex = cfg.get("exclude_features") or []
     return (f"d{cfg['d_model']} {cfg['enc_layers']}+{cfg['dec_layers']} h{cfg['nhead']} "
             f"ff{cfg['ff']} {cfg['pos']}/{cfg['activation']} drop{cfg['dropout']} "
-            f"feat={cfg['n_features']}-{len(ex)}excl vocab={cfg['vocab_size']} "
-            f"heads={cfg['heads']} params={param_count(model)/1e6:.2f}M")
+            f"feat={cfg['n_features']}-excl{describe_exclusions(ex)} "
+            f"vocab={cfg['vocab_size']} heads={cfg['heads']} "
+            f"params={param_count(model)/1e6:.2f}M")
 
 
 # --------------------------------------------------------------------------------------

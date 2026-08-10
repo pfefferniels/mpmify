@@ -2,7 +2,19 @@
   "name": "v2-base",
   "arch": "model_v2",
   "mode": "v41",
-  "note": "Regression anchor. The v4-verdict architecture (d192 4+4 ff768, 4.28M) rebuilt on model_v2's SDPA blocks, on the 16-feature v4.1 pack. Differs from runs/v41-asyn-h100 in exactly two ways: the encoder/decoder internals (custom blocks, parameter-identical) and the f14 pedal-feature exclusion. Anything this run loses against v41-asyn-h100's 771.6 ms render / 6.28 vel / 5.6 ms asyn is a port defect, not a result.",
+  "note": "Regression anchor. The v4-verdict architecture (d192 4+4 ff768, 4.28M) rebuilt on model_v2's SDPA blocks, on the 16-feature v4.1 pack. Differs from runs/v41-asyn-h100 in exactly two ways: the encoder/decoder internals (custom blocks, parameter-identical) and the f14 pedal-feature exclusion. Anything this run loses against the gate below is a port defect, not a result.",
+  "_gate": {
+    "run": "v41-asyn-h100",
+    "source": "../runs/v41-asyn-h100/final_val.fixed.json",
+    "evaluator": "eval_ckpt.py (the truthful evaluator), epoch 95, n_pieces=1000",
+    "render_rmse": 635.4,
+    "vel_rmse": 5.63,
+    "asyn_offset_err": 7.25,
+    "artic_note_f1": 1.0,
+    "boundary_f1": 0.67,
+    "_provenance": "These are the TRUTHFUL RE-EVAL numbers, the ones LOG.md's five-run table adopts. The figures 771.6 ms / 6.28 vel / 5.6 ms asyn that this file used to name come from LOG.md's 19:45 v4-VERDICT table and are superseded by the re-eval of the same checkpoint on the same pack; a v2-base run landing near 700 ms reads as 'port clean' against those and as a port defect against the record. tests_model_v2.py check `gate` asserts every number here against the file at `source` whenever that file is present (ml/runs/ is gitignored, so it is present in the workspace and absent in a fresh clone).",
+    "_pedal": "pedal_state_mae is deliberately NOT a gate number. The v4 runs' 0.34 cc was largely the head copying feature f14; with the leak fixed the quantity is measured on something else and the two are not comparable. The untrained-model floor is ~28 cc."
+  },
   "model": {
     "d_model": 192,
     "nhead": 8,
@@ -17,7 +29,7 @@
     "heads": true,
     "_heads": "true, not \"auto\": a v41 pack without note_labels must abort, not silently train the decoder alone (CLUSTER_QUEUE.md gates this by eye today).",
     "exclude_features": [14],
-    "_exclude_features": "f14 = pedal_state, which is also the fourth per-note head target. Leaving it in makes the pedal head copy its own input (LOG.md 2026-08-10 Vienna re-probe: the 0.3cc/1.17cc pedal MAEs are largely self-copy). Removed from the input projection entirely, not zeroed.",
+    "_exclude_features": "f14 = pedal_state, which is also the fourth per-note head target. Leaving it in makes the pedal head copy its own input (LOG.md 2026-08-10 Vienna re-probe: the 0.3cc/1.17cc pedal MAEs are largely self-copy). Removed from the input projection entirely, not zeroed. The index is re-proved against dataset.py at startup (model_v2.verify_pedal_index), so a re-preprocessed pack that moved the column aborts instead of silently reinstating the leak.",
     "max_len": 2048
   },
   "train": {
@@ -28,10 +40,12 @@
     "weight_decay": 0.01,
     "head_weight": 1.0,
     "clip": 1.0,
+    "seed": 0,
     "eval_pieces": 100,
     "eval_every": 2,
     "decode_batch": 50,
     "final_eval_pieces": 500,
-    "_schedule": "Identical to the v4 verdict runs (96 epochs, batch 48, 3e-4 cosine after 300 warmup steps) so this run is comparable to them without a caveat."
+    "_schedule": "Identical to the v4 verdict runs (96 epochs, batch 48, 3e-4 cosine after 300 warmup steps), so a v2 run is comparable to them without a caveat. This block is identical key-for-key, comment included, in base.json and large.json, so large-vs-base is a pure scale comparison; tests_model_v2.py check `sizes` asserts the two blocks are equal and that the resolved model kwargs differ only in d_model, enc_layers, dec_layers and ff. If a 45M model diverges in its first 300 steps the remedy is a SECOND config with its own name, never an edit here: an edited config resubmitted under the same RUN is refused by the strict resume guard, which now covers the schedule as well as the architecture.",
+    "_seed": "seed 0 seeds weight init, dropout and batch order (model_v2.seed_everything; batch order is a pure function of (seed, epoch), so a resume replays the uninterrupted order). Without it a run is describable from its record but not reproducible from it. A replication is a second config with a different seed and a different name."
   }
 }

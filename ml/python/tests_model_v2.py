@@ -21,16 +21,31 @@ The checks are ordered by what they would let through if they were missing:
                  that drifts is a silent change of objective; the reference is lifted out of
                  train.py's source with `ast` so the comparison is against the shipped code.
 ``rope``         the rotary path is a genuine relative encoding, not just a tensor that runs.
-``config``       unknown keys, contradicted widths, a heads request against a label-free
-                 pack and an unguarded pedal leak all abort.
-``ckpt``         a checkpoint round-trips through `eval_ckpt_v2.load_checkpoint` and the
-                 resume guard rejects a changed config.
+``pedal_index``  the pedal column is 14 *in dataset.py's actual output*, re-derived by
+                 running the extractor, and the check has teeth (a wrong index aborts).
+                 Without this the exclusion is a docstring, and a re-preprocessed pack
+                 reinstates the leak under a log line that still says EXCLUDED.
+``config``       unknown keys, contradicted widths, a missing architecture key, a heads
+                 request against a label-free pack and an unguarded pedal leak all abort.
+``seed``         the run is reproducible from its own record: same seed -> identical weights
+                 and an identical first-step loss end to end; batch order is a pure function
+                 of (seed, epoch), so a resume replays the uninterrupted order.
+``resume``       the resume guard covers the SCHEDULE, not only the architecture -- proved by
+                 running `train_v2.main` against a written checkpoint, not by inspection.
+``ckpt``         a checkpoint round-trips through `eval_ckpt_v2.load_checkpoint`, the decode
+                 budget comes from the run's own record, and the config diff sees changes.
 ``decode``       `greedy_decode` keeps `model.py`'s contract (BOS, PAD after EOS).
-``sizes``        the two shipped configs are the sizes they claim to be.
+``sizes``        the two shipped configs are the sizes they claim to be, and differ in the
+                 four keys they claim to differ in and nothing else.
+``gate``         `base.json`'s port gate matches the truthful re-eval in the tree, not the
+                 superseded verdict-table figures.
 """
 
 import ast
+import contextlib
 import json
+import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -42,7 +57,7 @@ import model_v2 as m2
 from model import TempoTransformer
 from model_v2 import (PEDAL_FEATURE_INDEX, HybridTransformer, RotaryEmbedding, build_model,
                       head_losses, load_run_config, param_count, resolve_model_cfg,
-                      state_dict_from_v1)
+                      seed_everything, state_dict_from_v1, verify_pedal_index)
 
 CONFIGS = Path(__file__).with_name("configs")
 #: the v4 verdict architecture, on the 16-feature v4.1 pack
@@ -57,6 +72,54 @@ def _rand_batch(b=3, n=11, t=7, f=16, vocab=35, seed=0):
     xm[2, 8:] = True                      # one short piece, as the packer produces
     y = torch.randint(0, vocab, (b, t), generator=g)
     return x, xm, y
+
+
+def _tiny_pack(n_pieces=6, t=9, seed=0):
+    """A minimal v4.1-shaped pack: enough for `train_v2.main` to take real optimiser steps."""
+    g = torch.Generator().manual_seed(seed)
+    feats = [torch.randn(6 + i % 3, 16, generator=g) for i in range(n_pieces)]
+    tgts = []
+    for _ in feats:
+        y = torch.randint(3, 35, (t,), generator=g)
+        y[0], y[-1] = 1, 2                       # BOS ... EOS, as the packer writes them
+        tgts.append(y)
+    labels = [torch.rand(f.shape[0], 4, generator=g) for f in feats]
+    return {"feats": feats, "tgts": tgts, "note_labels": labels, "max_tgt": t, "v4": True}
+
+
+@contextlib.contextmanager
+def _sandbox():
+    """A throwaway cwd shaped like `ml/python` (so ``../runs`` and ``../data`` are its own),
+    carrying a tiny v4.1 pack. Lets a check run `train_v2.main` end to end without touching
+    the real runs directory."""
+    td = Path(tempfile.mkdtemp())
+    (td / "python").mkdir()
+    (td / "runs").mkdir()
+    (td / "data").mkdir()
+    torch.save(_tiny_pack(), td / "data" / "train_v41.pt")
+    torch.save(_tiny_pack(seed=1), td / "data" / "val_v41.pt")
+    old = os.getcwd()
+    os.chdir(td / "python")
+    try:
+        yield td
+    finally:
+        os.chdir(old)
+        shutil.rmtree(td, ignore_errors=True)
+
+
+def _smoke_argv(td, run, extra=()):
+    """`train_v2` CLI for a 1-step run inside the sandbox (absolute paths: cwd is temporary).
+
+    ``extra`` is flag/value pairs that REPLACE the defaults rather than being appended --
+    `take_flag` consumes the first occurrence, so a repeated flag would leave the second as
+    a stray positional.
+    """
+    flags = {"--config": str(CONFIGS / "base.json"), "--data": str(td / "data"),
+             "--batch": "2", "--max-steps": "1"}
+    it = iter(extra)
+    for k in it:
+        flags[k] = next(it)
+    return ["1", run, "v41", *[s for kv in flags.items() for s in kv]]
 
 
 # ---------------------------------------------------------------------------- equivalence
@@ -152,6 +215,40 @@ def check_leak():
     ok = resolve_model_cfg({"model": {"exclude_features": [14]}}, "v41", heads=True)
     assert check_pedal_leak({}, "v41", ok, True) == "EXCLUDED (leak fix)"
     print("  train_v2 aborts on an unguarded leak, allows it with allow_pedal_leak=true")
+
+
+# --------------------------------------------------------------------------- pedal index
+def check_pedal_index():
+    """f14 is the pedal column of `dataset.py`'s ACTUAL output, and the check has teeth.
+
+    `PEDAL_FEATURE_INDEX` is a claim about another module's layout. Asserting it from a
+    docstring is asserting it from a comment: if the corpus subsystem re-preprocesses to a
+    new layout, the index silently points at some other feature, the pedal column is back in
+    the input, and the startup line still reads ``f14_pedal=EXCLUDED``. So the extractor is
+    run twice on one record -- pedal up, pedal down -- and the columns that move must be
+    exactly [14].
+    """
+    for mode in ("v4", "v41"):
+        print(f"  {mode}: {verify_pedal_index(mode)}")
+    assert verify_pedal_index("v1") .startswith("n/a")
+
+    # teeth: a wrong index must abort, or the check proves nothing
+    for wrong in (13, 15):
+        try:
+            verify_pedal_index("v41", index=wrong)
+            raise AssertionError(f"verify_pedal_index accepted the wrong index {wrong}")
+        except SystemExit as e:
+            assert "is wrong for mode" in str(e), e
+    print("  control: indices 13 (part) and 15 (cross_part_offset) are both rejected")
+
+    from train_v2 import check_pedal_leak
+    cfg = resolve_model_cfg({"model": {"exclude_features": [PEDAL_FEATURE_INDEX]}},
+                            "v41", heads=True)
+    assert check_pedal_leak({}, "v41", cfg, True) == "EXCLUDED (leak fix)"
+    print("  train_v2.check_pedal_leak re-proves the index on every run before it trains")
+    assert m2.describe_exclusions([14]) == "[14:pedal_state]"
+    print(f"  the startup line names the column it drops: "
+          f"excl{m2.describe_exclusions([14])} (was 'feat=16-1excl')")
 
 
 # -------------------------------------------------------------------------------- masking
@@ -310,6 +407,21 @@ def check_config():
         print("  " + aborts(lambda: load_run_config(bad), "unknown key"))
         bad.write_text(json.dumps({"mode": "v41", "arch": "model.py"}))
         print("  " + aborts(lambda: load_run_config(bad), "declares arch"))
+        # an OMITTED key used to default in silence, which is the same defect as a defaulted
+        # architecture one level down: `{"model": {}}` built d192 4+4 ff768 without a word
+        bad.write_text(json.dumps({"mode": "v41", "model": {}}))
+        print("  " + aborts(lambda: load_run_config(bad), "does not state"))
+        full = {k: v for k, v in json.loads((CONFIGS / "base.json").read_text()).items()}
+        del full["model"]["ff"]
+        bad.write_text(json.dumps(full))
+        print("  " + aborts(lambda: load_run_config(bad), "['ff']"))
+    # the keys that DO default, default loudly: train_v2 prints exactly this dict
+    dk = m2.defaulted_keys({"d_model": 192}, m2.MODEL_DEFAULTS)
+    assert set(dk) == set(m2.MODEL_DEFAULTS), dk
+    assert m2.defaulted_keys(load_run_config(CONFIGS / "base.json")["model"],
+                             m2.MODEL_DEFAULTS) == {}
+    print(f"  documented defaults are reported, not silent: a bare model block takes "
+          f"{sorted(dk)}; base.json takes none")
     print("  " + aborts(
         lambda: resolve_model_cfg({"model": {"n_features": 15}}, "v41", heads=True),
         "but mode v41 is 16"))
@@ -341,10 +453,132 @@ def check_config():
     print("  a 15-feature model refuses a 16-feature batch")
 
 
+# ----------------------------------------------------------------------------------- seed
+def _first_loss(log_path):
+    """The step-1 ``loss`` and head components as WRITTEN -- string equality, not float."""
+    line = next(l for l in Path(log_path).read_text().splitlines() if " step 1/" in l)
+    return line.split("] ", 1)[1].split(" (")[0]
+
+
+def check_seed():
+    """Same seed -> the same run. Different seed -> a different one.
+
+    `--config` is mandatory because "a defaulted architecture is a run that cannot be
+    reproduced from its own record" -- but weight init was unseeded, so a v2 run could not be
+    reproduced from its record either. Three runs of one smoke command gave three different
+    step-1 losses (3.6389 / 3.6895 / 3.7150 in the record). This is that hole closed, and the
+    floor is exact: the two logs must agree character for character.
+    """
+    assert "seed" in m2.TRAIN_KEYS
+    from train_v2 import DEFAULT_TRAIN, effective_train_cfg, epoch_order, main
+    assert DEFAULT_TRAIN["seed"] == 0
+    for name in ("base", "large"):
+        assert load_run_config(CONFIGS / f"{name}.json")["train"]["seed"] == 0
+
+    seed_everything(3)
+    a = build_model(resolve_model_cfg({}, "v41", heads=True)).state_dict()
+    seed_everything(3)
+    b = build_model(resolve_model_cfg({}, "v41", heads=True)).state_dict()
+    seed_everything(4)
+    c = build_model(resolve_model_cfg({}, "v41", heads=True)).state_dict()
+    same = max(float((a[k] - b[k]).abs().max()) for k in a)
+    diff = max(float((a[k] - c[k]).abs().max()) for k in a)
+    print(f"  weight init: seed 3 twice -> max |diff| {same}; seed 3 vs 4 -> {diff:.3f}")
+    assert same == 0.0 and diff > 0.0
+
+    # batch order is a pure function of (seed, epoch): the property a resume needs
+    bs = [[i] for i in range(24)]
+    assert epoch_order(bs, 0, 5) == epoch_order(bs, 0, 5)
+    assert epoch_order(bs, 0, 5) != epoch_order(bs, 0, 6)
+    assert epoch_order(bs, 0, 5) != epoch_order(bs, 1, 5)
+    assert bs == [[i] for i in range(24)], "epoch_order mutated the canonical list"
+    out_of_order = [epoch_order(bs, 0, e) for e in (7, 5, 6)]
+    assert out_of_order[1] == epoch_order(bs, 0, 5)
+    print("  batch order: pure in (seed, epoch), independent of call history, non-mutating")
+
+    # ... and end to end: one step of the real trainer, twice, byte-identical logs
+    losses = []
+    for seed in ("0", "0", "1"):
+        with _sandbox() as td:
+            main(_smoke_argv(td, f"seed-{seed}", ("--seed", seed)))
+            losses.append(_first_loss(td / "runs" / f"seed-{seed}" / "log.txt"))
+    print(f"  train_v2 step 1, seed 0: {losses[0]!r}")
+    print(f"  train_v2 step 1, seed 0: {losses[1]!r}")
+    print(f"  train_v2 step 1, seed 1: {losses[2]!r}")
+    assert losses[0] == losses[1], "two runs of one seeded command differ"
+    assert losses[0] != losses[2], "control failed: the seed does not reach the run"
+
+
+# --------------------------------------------------------------------------------- resume
+def check_resume():
+    """The resume guard covers the schedule, not only the architecture.
+
+    It used to diff the resolved MODEL config alone, so resuming a run with a different
+    ``--batch`` was accepted silently -- and ``batch`` sets ``len(batches)``, hence
+    ``total_steps`` and ``step = start_epoch * len(batches)``: the cosine schedule restarts
+    somewhere the original run never was, under the original run's name. Proved by RUNNING
+    `train_v2.main` against a written checkpoint; an inspection of the source would pass
+    equally well if nothing called the guard.
+    """
+    from train_v2 import (EVAL_KEYS, SCHEDULE_KEYS, config_diff, effective_train_cfg, main)
+    run_cfg = load_run_config(CONFIGS / "base.json")
+    assert set(SCHEDULE_KEYS) & set(EVAL_KEYS) == set()
+    assert set(SCHEDULE_KEYS) | set(EVAL_KEYS) == m2.TRAIN_KEYS, "a train key is unguarded"
+    print(f"  every train key is classified: schedule={list(SCHEDULE_KEYS)} "
+          f"eval={list(EVAL_KEYS)}")
+
+    def write_ckpt(td, run, overrides):
+        cfg = resolve_model_cfg(run_cfg, "v41", heads=True)
+        tcfg = effective_train_cfg(run_cfg, dict({"epochs": 1, "batch": 2}, **overrides))
+        d = td / "runs" / run
+        d.mkdir(parents=True, exist_ok=True)
+        torch.save({"model": build_model(cfg).state_dict(), "epoch": 0, "config": cfg,
+                    "arch": "model_v2", "mode": "v41", "train_config": tcfg,
+                    "seed": tcfg["seed"], "max_decode": 9}, d / "ckpt.pt")
+        return d
+
+    def aborts(fn, needle):
+        try:
+            fn()
+        except SystemExit as e:
+            assert needle in str(e), f"wrong abort: {e}"
+            return str(e)[:150]
+        raise AssertionError(f"expected an abort mentioning {needle!r}")
+
+    with _sandbox() as td:
+        write_ckpt(td, "r-ok", {})
+        main(_smoke_argv(td, "r-ok"))
+        assert "resuming r-ok from epoch 1" in (td / "runs" / "r-ok" / "log.txt").read_text()
+        print("  matching schedule -> resumes")
+
+        write_ckpt(td, "r-batch", {})
+        print("  " + aborts(lambda: main(_smoke_argv(td, "r-batch", ("--batch", "3"))),
+                            "training schedule differs"))
+        write_ckpt(td, "r-seed", {})
+        print("  " + aborts(lambda: main(_smoke_argv(td, "r-seed", ("--seed", "7"))),
+                            "seed: ckpt=0 now=7"))
+        write_ckpt(td, "r-hw", {})
+        print("  " + aborts(lambda: main(_smoke_argv(td, "r-hw", ("--head-weight", "0.5"))),
+                            "head_weight"))
+
+        # a checkpoint from the architecture-only build cannot testify about its schedule
+        d = write_ckpt(td, "r-old", {})
+        ck = torch.load(d / "ckpt.pt", weights_only=False)
+        del ck["train_config"]
+        torch.save(ck, d / "ckpt.pt")
+        print("  " + aborts(lambda: main(_smoke_argv(td, "r-old")), "no `train_config`"))
+
+    # eval-only keys are reported, not refused: they change what is measured, not the weights
+    tc = effective_train_cfg(run_cfg)
+    assert config_diff(tc, dict(tc, eval_pieces=20), SCHEDULE_KEYS) == {}
+    assert config_diff(tc, dict(tc, eval_pieces=20), EVAL_KEYS) == {"eval_pieces": (100, 20)}
+    print("  eval_pieces/eval_every/decode_batch changes are logged on resume, not refused")
+
+
 # ----------------------------------------------------------------------------- checkpoints
 def check_ckpt():
     """A checkpoint round-trips through the eval adapter; the resume guard sees changes."""
-    from eval_ckpt_v2 import load_checkpoint
+    from eval_ckpt_v2 import load_checkpoint, resolve_max_decode
     from train_v2 import config_diff
 
     cfg = resolve_model_cfg(load_run_config(CONFIGS / "base.json"), "v41", heads=True)
@@ -352,14 +586,27 @@ def check_ckpt():
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "ckpt.pt"
         torch.save({"model": mdl.state_dict(), "epoch": 3, "config": cfg,
-                    "arch": "model_v2", "mode": "v41"}, p)
+                    "arch": "model_v2", "mode": "v41", "max_decode": 512, "seed": 0}, p)
         fake_val = {"feats": [torch.zeros(4, 16)], "v4": True}
-        got, got_cfg, epoch = load_checkpoint(p, fake_val, torch.device("cpu"))
-        assert epoch == 3 and got_cfg == cfg
+        got, got_cfg, epoch, rec = load_checkpoint(p, fake_val, torch.device("cpu"))
+        assert epoch == 3 and got_cfg == cfg and rec["max_decode"] == 512
         same = max(float((a - b).abs().max())
                    for a, b in zip(got.state_dict().values(), mdl.state_dict().values()))
         print(f"  round-trip through eval_ckpt_v2.load_checkpoint: max |weight diff| {same}")
         assert same == 0.0
+
+        # the decode budget is the RUN's, not a table's. eval_ckpt.py's table says 320 for
+        # v4 and has no v41 key; scoring a 512-budget run at 320 is not a re-score of it.
+        md, why, warn = resolve_max_decode(rec, fake_val, "v4")
+        assert (md, warn) == (512, None) and why.startswith("checkpoint")
+        md2, why2, _ = resolve_max_decode({}, dict(fake_val, max_tgt=444), "v4")
+        assert (md2, why2.split()[0]) == (444, "pack")
+        md3, why3, warn3 = resolve_max_decode({}, fake_val, "v4")
+        assert md3 == m2.MODE_MAX_DECODE["v4"] == 512 and "eval_ckpt.py" in warn3
+        _, _, warn4 = resolve_max_decode(rec, dict(fake_val, max_tgt=600), "v4")
+        assert warn4 and "truncat" not in warn4.lower() and "600" in warn4
+        print(f"  max_decode: ckpt 512 [{why.split('(')[0].strip()}] > pack max_tgt 444 > "
+              f"table {md3}; a pack needing 600 warns instead of silently rescaling")
 
         # a pack of the wrong width aborts instead of broadcasting
         try:
@@ -412,26 +659,97 @@ def check_decode():
 
 # ---------------------------------------------------------------------------------- sizes
 def check_sizes():
-    """The shipped configs are the sizes they claim."""
+    """The shipped configs are the sizes they claim, and differ only where they claim to.
+
+    ``large`` vs ``base`` is only a scale comparison if everything else is held fixed, so
+    the claim is asserted over THREE surfaces, not one: the resolved model kwargs (the four
+    architecture keys), the `train` block (equal key for key, comments included -- the report
+    once said "byte-identical" while the two `_schedule` strings differed), and the remaining
+    top-level keys.
+    """
     rows = []
     for name, lo, hi in (("base", 4.0e6, 4.6e6), ("large", 40e6, 50e6)):
         run = load_run_config(CONFIGS / f"{name}.json")
         cfg = resolve_model_cfg(run, run["mode"], heads=True)
         mdl = build_model(cfg)
         n = param_count(mdl)
-        rows.append((name, cfg, n))
+        rows.append((name, run, cfg, n))
         print(f"  {name:<6} {m2.describe(cfg, mdl)}")
         assert lo <= n <= hi, f"{name}: {n/1e6:.2f}M outside [{lo/1e6}, {hi/1e6}]M"
-    (bn, bc, b), (ln, lc, l) = rows
-    print(f"  large / base = {l/b:.1f}x parameters; the only config differences are "
-          + ", ".join(k for k in bc if bc[k] != lc[k]))
-    assert {k for k in bc if bc[k] != lc[k]} == {"d_model", "enc_layers", "dec_layers", "ff"}
+    (_, brun, bc, b), (_, lrun, lc, l) = rows
+
+    moved = {k for k in set(bc) | set(lc) if bc.get(k) != lc.get(k)}
+    assert moved == {"d_model", "enc_layers", "dec_layers", "ff"}, moved
+    print(f"  large / base = {l/b:.1f}x parameters; resolved model kwargs differ in "
+          + ", ".join(sorted(moved)) + " and nothing else")
+
+    tdiff = {k for k in set(brun["train"]) | set(lrun["train"])
+             if brun["train"].get(k) != lrun["train"].get(k)}
+    assert brun["train"] == lrun["train"], f"train blocks differ in {sorted(tdiff)}"
+    print(f"  train blocks: identical key for key, comments included "
+          f"({len(brun['train'])} keys incl. {sum(1 for k in brun['train'] if k[0]=='_')} "
+          f"comment key(s)) -- one variable")
+
+    top = {k for k in set(brun) | set(lrun)
+           if not k.startswith("_") and k not in ("name", "note", "model", "train")
+           and brun.get(k) != lrun.get(k)}
+    assert top == set(), f"top-level keys differ: {sorted(top)}"
+    mdiff = {k for k in set(brun["model"]) | set(lrun["model"])
+             if not k.startswith("_") and brun["model"].get(k) != lrun["model"].get(k)}
+    assert mdiff == moved, mdiff
+    print(f"  raw model blocks differ in {sorted(mdiff)}; arch/mode identical; only `name`, "
+          f"`note` and the '_'-prefixed comments are free to differ")
 
 
-CHECKS = {"equivalence": check_equivalence, "leak": check_leak, "causal": check_causal,
+# ----------------------------------------------------------------------------------- gate
+def check_gate():
+    """`base.json`'s port gate is the truthful re-eval, not the superseded verdict table.
+
+    The v4-VERDICT table (LOG.md 19:45) reported v41-asyn-h100 at 771.6 ms render / 6.28 vel
+    / 5.6 ms asyn. The truthful re-eval of the SAME checkpoint on the SAME pack -- the one
+    LOG.md's five-run table adopts -- is 635.4 / 5.63 / 7.25. A v2-base run landing near
+    700 ms reads as "port clean" against the first and as a port defect against the record,
+    which is the whole purpose of a gate inverted. This check asserts the config's numbers
+    against the file they came from, whenever that file is present (ml/runs/ is gitignored:
+    present in the cluster workspace, absent in a fresh clone).
+    """
+    raw = json.loads((CONFIGS / "base.json").read_text())
+    gate = raw["_gate"]
+    for stale in ("771.6", "6.28", "5.6 ms"):
+        assert stale not in raw["note"], f"base.json's note still cites {stale} as the gate"
+    print(f"  gate cites run {gate['run']} via {gate['evaluator']}")
+    assert "final_val.fixed.json" in gate["source"]
+
+    # `source` is written the way every other path in a run config is: relative to ml/python,
+    # the directory train_v2.py runs from
+    src = (CONFIGS.parent / gate["source"]).resolve()
+    if not src.exists():
+        print(f"  SKIP the numeric comparison: {src} is absent (ml/runs/ is gitignored). "
+              f"The config's declared values are "
+              + ", ".join(f"{k} {gate[k]}" for k in ("render_rmse", "vel_rmse",
+                                                     "asyn_offset_err", "artic_note_f1")))
+        return
+    got = json.loads(src.read_text())
+    meta = got.get("_meta", {})
+    print(f"  {src.name}: epoch {meta.get('epoch')} n_pieces {meta.get('n_pieces')} "
+          f"evaluator {meta.get('evaluator')}")
+    for k in ("render_rmse", "vel_rmse", "asyn_offset_err", "artic_note_f1", "boundary_f1"):
+        want, have = float(gate[k]), float(got[k])
+        # the config states the rounded figure the log and the report quote
+        tol = 0.5 * 10 ** -len(str(want).split(".")[1].rstrip("0") or "0")
+        print(f"    {k:<18} config {want:<8} file {have:<20.6f} |diff| {abs(want-have):.4f}")
+        assert abs(want - have) <= max(tol, 0.006), f"{k}: config {want} vs file {have}"
+    assert "pedal" not in {k.lower() for k in gate if not k.startswith("_")}
+    print("  pedal_state_mae is deliberately absent from the gate: the f14 fix changed what "
+          "it measures, so the v4 figure is not a target")
+
+
+CHECKS = {"equivalence": check_equivalence, "leak": check_leak,
+          "pedal_index": check_pedal_index, "causal": check_causal,
           "padding": check_padding, "loss": check_loss, "rope": check_rope,
-          "config": check_config, "ckpt": check_ckpt, "decode": check_decode,
-          "sizes": check_sizes}
+          "config": check_config, "seed": check_seed, "resume": check_resume,
+          "ckpt": check_ckpt, "decode": check_decode, "sizes": check_sizes,
+          "gate": check_gate}
 
 
 def main(argv):

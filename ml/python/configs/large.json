@@ -2,7 +2,7 @@
   "name": "v2-large",
   "arch": "model_v2",
   "mode": "v41",
-  "note": "Production scale (SYSTEM.md 2.2: 'start d512 / 6+6 / ~40M; epochs and params are NOT economized'). Differs from base.json ONLY in d_model, layer counts and ff — same data, same schedule, same features, same heads, same f14 exclusion — so large-vs-base is a clean scale comparison. If it diverges early, the fix is a second run with a longer warmup, not an edit to this file.",
+  "note": "Production scale (SYSTEM.md 2.2: 'start d512 / 6+6 / ~40M; epochs and params are NOT economized'). Differs from base.json ONLY in d_model, layer counts and ff — same data, same schedule, same seed, same features, same heads, same f14 exclusion — so large-vs-base is a clean scale comparison. Its `train` block is identical to base.json's key-for-key, comment included, and tests_model_v2.py check `sizes` asserts both halves of that claim. If it diverges early, the fix is a second config with a longer warmup and its own run name, not an edit to this file.",
   "model": {
     "d_model": 512,
     "nhead": 8,
@@ -26,10 +26,12 @@
     "weight_decay": 0.01,
     "head_weight": 1.0,
     "clip": 1.0,
+    "seed": 0,
     "eval_pieces": 100,
     "eval_every": 2,
     "decode_batch": 50,
     "final_eval_pieces": 500,
-    "_schedule": "Byte-identical to base.json's train block. A 45M model would usually get a lower LR and a longer warmup, but changing them here would make every difference from base attributable to two causes at once. The grad-norm clip at 1.0 is the safety net; watch the first 300 steps."
+    "_schedule": "Identical to the v4 verdict runs (96 epochs, batch 48, 3e-4 cosine after 300 warmup steps), so a v2 run is comparable to them without a caveat. This block is identical key-for-key, comment included, in base.json and large.json, so large-vs-base is a pure scale comparison; tests_model_v2.py check `sizes` asserts the two blocks are equal and that the resolved model kwargs differ only in d_model, enc_layers, dec_layers and ff. If a 45M model diverges in its first 300 steps the remedy is a SECOND config with its own name, never an edit here: an edited config resubmitted under the same RUN is refused by the strict resume guard, which now covers the schedule as well as the architecture.",
+    "_seed": "seed 0 seeds weight init, dropout and batch order (model_v2.seed_everything; batch order is a pure function of (seed, epoch), so a resume replays the uninterrupted order). Without it a run is describable from its record but not reproducible from it. A replication is a second config with a different seed and a different name."
   }
 }
