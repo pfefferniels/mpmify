@@ -269,6 +269,16 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Device gate PASSED and closed early; cpuref cancelled (2026-08-10 ~17:30, Niels +
+cluster agent)**: matched-epoch parity h100-vs-cpuref at epochs 1/3 — render 1.6%,
+vel 1.9-2.6% relative divergence (criterion: >5%), boundary_f1 identical. Adjudicated
+at epoch 3; the remaining 20 cpuref epochs were 7h of a 96-core node buying nothing.
+Design-length error co-owned (24-epoch twin specified where device-dispatch faults
+show in hundreds of steps or never). **Methodology note, program-wide: port gates =
+2-3 epoch curve comparisons (~1% of the compute, same assurance).** cpuref's log +
+epoch-4 ckpt preserved for the record. Pending: re-evaluate all checkpoints through
+eval_ckpt.py (fixed evaluator) when heads phase 2 ships.
+
 **Evaluator mis-pairing found — v4 render/vel metrics invalidated (2026-08-10 ~17:00,
 heads agent, fix 055f8ab)**: _v4_render flattened parts part-major and zipped against
 date-sorted GT — every v4 render/velocity number so far compared part-1 renders to
