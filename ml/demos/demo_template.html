@@ -1,19 +1,17 @@
-<!doctype html>
-<html lang="en">
-<head>
+<!-- fenby demo page. Same shape as demo-0.html: a title, an inline stylesheet and the
+     content — no <!doctype>/<html>/<head>/<body> wrapper, because these pages are published
+     as claude.ai artifacts, where the content is wrapped at publish time. The two <meta>
+     tags are for the local file:// copy (browsers honour both wherever they appear) and are
+     inert once wrapped. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{TITLE}}</title>
 <style>
 {{CSS}}
 </style>
-</head>
-<body>
 <div class="wrap">
   <p class="eyebrow">{{EYEBROW}}</p>
   <h1>{{H1}}</h1>
   {{LEDE}}
 {{BODY}}
 </div>
-</body>
-</html>
