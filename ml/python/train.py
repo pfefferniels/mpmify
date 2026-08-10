@@ -6,6 +6,7 @@ Expects data/train.pt and data/val.pt (see preprocess.py; val needs --eval).
 Flags (all stripped before the positionals are read, so order does not matter):
   --device cpu|cuda|auto   --threads N
   --head-weight W          weight of the v4 per-note head loss (default 1.0)
+  --data DIR               directory holding train<SUFFIX>.pt / val<SUFFIX>.pt (../data)
   --limit N                use only the first N pieces of each split
   --max-steps N            stop after N optimiser steps; implies no checkpoint, no eval
                            (a smoke run must not overwrite a real run's checkpoint)
@@ -66,6 +67,14 @@ if "--max-steps" in sys.argv:
     _i = sys.argv.index("--max-steps")
     MAX_STEPS = int(sys.argv[_i + 1])
     del sys.argv[_i : _i + 2]
+# Directory holding train{SUFFIX}.pt / val{SUFFIX}.pt. `--limit N` still loads the whole
+# pack before slicing it, which on an 8 GB machine is most of what a small smoke costs;
+# pointing at a small pack instead is the difference between seconds and hours under load.
+DATA_DIR = "../data"
+if "--data" in sys.argv:
+    _i = sys.argv.index("--data")
+    DATA_DIR = sys.argv[_i + 1]
+    del sys.argv[_i : _i + 2]
 #: a 20-step smoke never reaches step 100, and its whole point is watching the components move
 LOG_EVERY = 1 if MAX_STEPS else 100
 
@@ -111,8 +120,8 @@ def log(msg):
 
 
 SUFFIX = "_v4" if V4 else ("_v31" if V31 else ("_v3" if V3 else ("_v2" if V2 else "")))
-train = torch.load(f"../data/train{SUFFIX}.pt")
-val = torch.load(f"../data/val{SUFFIX}.pt")
+train = torch.load(f"{DATA_DIR}/train{SUFFIX}.pt")
+val = torch.load(f"{DATA_DIR}/val{SUFFIX}.pt")
 if LIMIT:
     for _split in (train, val):
         for _k, _v in _split.items():
