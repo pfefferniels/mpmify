@@ -269,6 +269,27 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+## Vienna sim2real re-probe + five-run table (2026-08-10 ~21:00)
+
+**Vienna (v41 on 220 real windows, GT-free metrics)**: render median 1991 ms vs 404
+baseline — still above baseline, but the gap HALVED on every piece vs v1
+(op10/3 8990→5286; op38 3959→1908; Mozart 3565→1936; Schubert 2889→1088);
+velocity 16.2 vs 34.4 base (model BEATS the real-data velocity baseline ~2x — first
+real-data win); 0 parse errors, DL 262 — well-formed MPM on real playing.
+Articulation head fires on ~195 notes/window (real playing is nowhere canonical-
+neutral — expected; thresholding/eras for v1.0). **CATCH (mine): pedal_state is both
+input feature f14 AND head target — the 0.3cc/1.17cc pedal MAEs are largely
+self-copy; plumbing-valid, not an ML result. v1.0 design correction: drop f14 when
+training the pedal head, or retarget the head to movement-curve parameters.**
+
+**Five-run like-for-like table (cluster agent, eval_ckpt.py, identical baselines
+verified)**: e96 render 502.5 / boundary 0.769 BEATS both heads runs (582.6/635.4,
+0.667) while heads win velocity (5.30/5.63 vs 8.26) + artic 1.00 + (v41) asynchrony
+7.25 vs 31.79 base. Honest framing adopted: heads trade some sequence-level accuracy
+for per-note wins — NOT "heads improved everything"; single-seed. The n_features
+guard correctly forced v41 onto its own pack (identical baselines prove matched
+targets). Full-set asynchrony 7.25/31.79 is the day's most robust result.
+
 **Truthful re-evals of the record (2026-08-10 ~20:30, eval_ckpt.py on val_v4.pt)**:
 v4-h100 render 1585.0 (was published 9956.6 — void), e96 **502.5 / vel 8.26 /
 boundary 0.769 / rubato 1.00** (the 24→96 gain was 3.2x, not the ~3% the broken
