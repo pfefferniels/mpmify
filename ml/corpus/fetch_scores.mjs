@@ -12,7 +12,22 @@
  *
  * Nothing here writes outside `--out`, which defaults under `ml/data/` — gitignored. That is
  * not a convenience: the pilot deliberately contains encodings whose licence RESERVES
- * derivative rights (see `SOURCES.md`, tier C), and the repository is public.
+ * derivative rights (see `README.md` §1, tier C), and the repository is public.
+ *
+ * ## Attribution is read from the file, not from the source record
+ *
+ * The manifest's per-source `attribution` / `encoding_license` describe a *repository*. The
+ * copyright of an encoding is asserted in the encoding, in Humdrum reference records — and on
+ * this pilot the two disagree: `humdrum-tools/bach-wtc` carries CCARH's
+ * `!!!YEC: Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities`
+ * on the three preludes and `!!!YEC: Copyright 1994, David Huron` with a differently worded
+ * `!!!YEM` on the two fugues. A release filter that quoted the source-level string would
+ * attribute two encodings to the wrong party. So every file's own `!!!YEC` / `!!!YEM` / `!!!ENC`
+ * / `!!!EED` / `!!!EEV` / `!!!YER` is copied into `fetched.json` verbatim, `attribution_source`
+ * says which record the attribution came from, and a source whose files disagree is printed
+ * rather than averaged. Where a file carries no `!!!YEC` at all (the NIFC Chopin editions, the
+ * Scriabin corpus) the manifest's repository-level statement is the only evidence there is —
+ * which is itself the fact worth recording.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -46,6 +61,44 @@ async function get(url) {
   return await res.text();
 }
 
+/**
+ * The rights- and attribution-bearing Humdrum reference records, in the order Humdrum defines
+ * them. Everything else in the file's header (`!!!OTL`, `!!!COM`, …) describes the *work*,
+ * which is public domain here and needs no record; these six describe the *encoding*, which
+ * is what the licence governs.
+ */
+const RIGHTS_RECORDS = {
+  YEC: 'copyright of the electronic edition',
+  YEM: 'copyright message / licence terms',
+  YER: 'date the electronic edition was released',
+  ENC: 'encoder',
+  EED: 'electronic editor',
+  EEV: 'electronic edition version',
+};
+
+/**
+ * `{YEC, YEM, …}` for one kern file — verbatim, first occurrence wins.
+ *
+ * First occurrence rather than last: several Sapp encodings repeat `!!!YEC` in a trailing
+ * block, and a duplicate is a restatement, not an amendment. A record present twice with two
+ * *different* values would be a genuine ambiguity — it does not occur on this pilot, and
+ * `distinct` in the summary below is what would show it.
+ */
+export function rightsRecords(text) {
+  const out = {};
+  for (const line of text.split('\n')) {
+    const m = /^!!!([A-Z]{3}[0-9]*):\s?(.*)$/.exec(line.trimEnd());
+    if (!m) continue;
+    const key = m[1].replace(/[0-9]+$/, ''); // EED2, EED3 … are further editors of the same kind
+    if (!(key in RIGHTS_RECORDS)) continue;
+    const value = m[2].trim();
+    if (!value.length) continue;
+    if (out[key] === undefined) out[key] = value;
+    else if (key === 'EED' && out[key] !== value) out[key] += `; ${value}`;
+  }
+  return out;
+}
+
 export async function main(argv) {
   const opt = parseArgs(argv);
   const manifest = JSON.parse(readFileSync(opt.manifest, 'utf8'));
@@ -76,6 +129,7 @@ export async function main(argv) {
       writeFileSync(local, text);
       fetched++;
     }
+    const rights = rightsRecords(text);
     records.push({
       id: p.id,
       era: p.era,
@@ -89,21 +143,71 @@ export async function main(argv) {
       encoding_license: src.encoding_license,
       tier: src.tier,
       redistributable: src.redistributable,
-      attribution: src.attribution,
+      // Repository-level statement, kept and labelled as such …
+      source_attribution: src.attribution,
+      // … and the file's own assertion, which is the one to quote. See the header.
+      file_rights_records: rights,
+      encoding_copyright: rights.YEC ?? null,
+      encoding_terms: rights.YEM ?? null,
+      encoder: rights.ENC ?? null,
+      attribution_source: rights.YEC ? 'file (!!!YEC)' : 'manifest (file carries no !!!YEC)',
+      attribution: rights.YEC ?? src.attribution,
     });
   }
+
+  // Per source: do its files agree about who holds the copyright? `bach-wtc` does not, which
+  // is the whole reason the per-file record exists. Printed, not resolved — resolving would
+  // mean choosing one of two conflicting assertions, which is not this script's call.
+  const bySource = {};
+  for (const r of records) {
+    const s = (bySource[r.source] ??= { files: 0, distinct_YEC: new Set(), distinct_YEM: new Set(), without_YEC: 0 });
+    s.files++;
+    if (r.encoding_copyright) s.distinct_YEC.add(r.encoding_copyright);
+    else s.without_YEC++;
+    if (r.encoding_terms) s.distinct_YEM.add(r.encoding_terms);
+  }
+  const attributionBySource = Object.fromEntries(
+    Object.entries(bySource).map(([k, v]) => [
+      k,
+      {
+        files: v.files,
+        files_without_YEC: v.without_YEC,
+        distinct_YEC: [...v.distinct_YEC],
+        distinct_YEM: [...v.distinct_YEM],
+        mixed: v.distinct_YEC.size > 1,
+      },
+    ]),
+  );
 
   const byEra = {};
   for (const r of records) byEra[r.era] = (byEra[r.era] ?? 0) + 1;
   writeFileSync(
     join(opt.out, 'fetched.json'),
-    JSON.stringify({ manifest: manifest.name, when: new Date().toISOString(), byEra, files: records }, null, 2) + '\n',
+    JSON.stringify(
+      {
+        manifest: manifest.name,
+        when: new Date().toISOString(),
+        byEra,
+        rights_record_keys: RIGHTS_RECORDS,
+        attribution_by_source: attributionBySource,
+        files: records,
+      },
+      null,
+      2,
+    ) + '\n',
   );
   process.stdout.write(
     `fetched ${fetched}, cached ${cached}, total ${records.length} — ` +
       Object.entries(byEra).map(([e, n]) => `${e} ${n}`).join(', ') +
       `\n-> ${join(opt.out, 'fetched.json')}\n`,
   );
+  for (const [name, a] of Object.entries(attributionBySource)) {
+    const tag = a.mixed ? 'MIXED ATTRIBUTION' : a.distinct_YEC.length ? 'per-file !!!YEC' : 'no !!!YEC in any file';
+    process.stdout.write(`  ${name.padEnd(14)} ${String(a.files).padStart(2)} files  ${tag}\n`);
+    for (const y of a.distinct_YEC) process.stdout.write(`      YEC  ${y}\n`);
+    if (a.files_without_YEC)
+      process.stdout.write(`      ${a.files_without_YEC} file(s) assert nothing; the manifest's repository-level licence is the only evidence\n`);
+  }
   return 0;
 }
 

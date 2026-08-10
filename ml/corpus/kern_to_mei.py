@@ -28,14 +28,20 @@ Three things about this step are not obvious and each has cost somebody a day:
    defect (a cross-octave accidental carry is in every output by construction); that limit is
    stated rather than papered over.
 
-3b. **``expandNever``.** Verovio resolves repeats/expansions *inline* — its MIDI and timemap
-   play the repeat, with fresh ``xml:id``s for the copies — while meico defers them to an MSM
-   ``<sequencingMap>`` of ``<goto>``s, and the two disagree about the result (on Chopin
-   op. 33/3 Verovio produces 717 note-ons where meico's own resolver produces 504). With
+3b. **``expandNever``, and the expansion probe that measures why.** Verovio resolves
+   repeats/expansions *inline* — its MIDI and timemap play the repeat, with fresh ``xml:id``s
+   for the copies — while meico defers them to an MSM ``<sequencingMap>`` of ``<goto>``s. The
+   two do not agree about the result, and the corpus therefore takes neither: with
    ``expandNever`` on, the MEI, the MIDI and the timemap all describe the score **as written,
-   once through** — 389 notes, 389 note-ons, 389 distinct ids on that same piece — which is
-   the only configuration in which the three are comparable at all. The corpus is therefore
-   the unexpanded score; resolving repeats consistently on both sides is v1.1 work.
+   once through**, which is the only configuration in which the three are comparable at all.
+
+   The disagreement used to be quoted from an uncommitted run ("717 note-ons against 504"),
+   which is a number nobody could re-derive. It is now **measured by this script**: every file
+   is converted twice, once with ``expandNever`` and once with Verovio's expansion on, and both
+   note-on counts go into ``mei/expansion_probe.json``. ``build_msm.mjs`` records the third
+   number — what ``Msm.resolveSequencingMaps()`` would produce — into ``msm/index.json`` as
+   ``resolvedNotes``. Whether the two expansions agree is then a table lookup, not a memory.
+   Resolving repeats consistently on both sides is v1.1 work.
 
 3. **Verovio talks.** Its log is a global side channel, not an exception: ``ExpansionMap``
    complaints, unresolved ``@plist`` targets and unsupported elements all arrive there. They
@@ -55,6 +61,57 @@ import time
 import verovio
 
 
+def _note_ons(midi_b64: str) -> int:
+    """Note-ons in a base64 SMF, counted without leaving this process.
+
+    A minimal SMF reader rather than a dependency: the only question asked of the bytes is how
+    many note-on events with velocity > 0 they contain, and the expansion probe has to ask it
+    of a MIDI file that is never written to disk.
+    """
+    data = base64.b64decode(midi_b64)
+    pos, count = 0, 0
+    if data[0:4] != b"MThd":
+        raise ValueError("not a standard MIDI file")
+    ntrk = int.from_bytes(data[10:12], "big")
+    pos = 8 + int.from_bytes(data[4:8], "big")
+    for _ in range(ntrk):
+        assert data[pos : pos + 4] == b"MTrk", "malformed track chunk"
+        end = pos + 8 + int.from_bytes(data[pos + 4 : pos + 8], "big")
+        pos += 8
+        status = 0
+        while pos < end:
+            while data[pos] & 0x80:  # variable-length delta time
+                pos += 1
+            pos += 1
+            b = data[pos]
+            if b & 0x80:
+                status = b
+                pos += 1
+            if status == 0xFF:  # meta
+                pos += 1
+                length = 0
+                while data[pos] & 0x80:
+                    length = (length << 7) | (data[pos] & 0x7F)
+                    pos += 1
+                length = (length << 7) | data[pos]
+                pos += 1 + length
+            elif status in (0xF0, 0xF7):  # sysex
+                length = 0
+                while data[pos] & 0x80:
+                    length = (length << 7) | (data[pos] & 0x7F)
+                    pos += 1
+                length = (length << 7) | data[pos]
+                pos += 1 + length
+            else:
+                high = status & 0xF0
+                nbytes = 1 if high in (0xC0, 0xD0) else 2
+                if high == 0x90 and data[pos + 1] > 0:
+                    count += 1
+                pos += nbytes
+        pos = end
+    return count
+
+
 def convert(data_dir: str, only: list[str] | None) -> int:
     fetched_path = os.path.join(data_dir, "fetched.json")
     if not os.path.exists(fetched_path):
@@ -72,6 +129,15 @@ def convert(data_dir: str, only: list[str] | None) -> int:
     verovio.enableLog(False)  # keep stderr clean; the log is read back per file instead
     tk = verovio.toolkit()
     version = tk.getVersion()
+    # A SECOND toolkit, identical but for `expandNever`, so the expansion disagreement is a
+    # measurement of this run rather than a remembered number. Two toolkits rather than one
+    # re-configured toolkit: `expandNever` is consumed at load time, so the option has to be
+    # set before `loadFile`, and keeping them separate makes it impossible to leak the probe's
+    # setting into the corpus conversion.
+    tk_expanded = verovio.toolkit()
+    tk_expanded.setOptions(
+        {"breaks": "none", "adjustPageHeight": True, "footer": "none", "header": "none", "expandNever": False}
+    )
     # Defaults that matter for a *data* conversion rather than an engraving:
     #  - breaks=none keeps the whole movement in one flow (page breaks are layout, and the
     #    page tree is what the CLI truncates);
@@ -105,6 +171,15 @@ def convert(data_dir: str, only: list[str] | None) -> int:
         with open(os.path.join(tmap_dir, rec["id"] + ".json"), "w") as f:
             json.dump(timemap, f)
 
+        # The expansion probe: the SAME file through the SAME parser with the repeats played.
+        # Its output is thrown away except for the two counts — nothing downstream ever sees an
+        # expanded document — and the counts are what make trap 7 checkable.
+        exp_note_ons, exp_mei_notes, exp_warnings = None, None, []
+        if tk_expanded.loadFile(src):
+            exp_note_ons = _note_ons(tk_expanded.renderToMIDI())
+            exp_mei_notes = tk_expanded.getMEI({"scoreBased": True, "pageNo": 0}).count("<note ")
+            exp_warnings = [ln for ln in tk_expanded.getLog().splitlines() if ln.strip()]
+
         warnings = [ln for ln in log.splitlines() if ln.strip()]
         entry = {
             "id": rec["id"],
@@ -113,8 +188,16 @@ def convert(data_dir: str, only: list[str] | None) -> int:
             "pages": pages,
             "mei_bytes": len(mei),
             "mei_note_elements": mei.count("<note "),
+            "midi_note_ons": _note_ons(midi_b64),
             "timemap_note_ons": sum(len(e.get("on", [])) for e in timemap),
+            "timemap_distinct_on_ids": len({i for e in timemap for i in e.get("on", [])}),
             "timemap_max_qstamp": max((e["qstamp"] for e in timemap), default=0),
+            "kern_repeat_barlines": sum(
+                1 for ln in open(src, encoding="utf8", errors="replace") if ":|" in ln or "|:" in ln
+            ),
+            "expanded_midi_note_ons": exp_note_ons,
+            "expanded_mei_note_elements": exp_mei_notes,
+            "expanded_warnings": exp_warnings[:10],
             "seconds": round(dt, 3),
             "warnings": warnings[:20],
             "n_warnings": len(warnings),
@@ -128,6 +211,9 @@ def convert(data_dir: str, only: list[str] | None) -> int:
     meta = {
         "verovio_version": version,
         "options": {"scoreBased": True, "pageNo": 0, "expandNever": True, "breaks": "none"},
+        "expansion_probe": "every file is ALSO converted with expandNever=False; only the two "
+        "counts are kept (expanded_midi_note_ons / expanded_mei_note_elements). Nothing "
+        "downstream consumes an expanded document.",
         "files": out,
     }
     with open(os.path.join(mei_dir, "convert.json"), "w") as f:
@@ -137,6 +223,16 @@ def convert(data_dir: str, only: list[str] | None) -> int:
         f"\nverovio {version}: {len(out) - len(bad)}/{len(out)} converted, "
         f"{sum(e.get('n_warnings', 0) for e in out)} warnings total -> {mei_dir}/convert.json\n"
     )
+    grew = [e for e in out if e.get("ok") and e.get("expanded_midi_note_ons") != e.get("midi_note_ons")]
+    sys.stdout.write(
+        f"expansion probe: Verovio's own expansion changes the note count on "
+        f"{len(grew)}/{len(out) - len(bad)} files\n"
+    )
+    for e in grew:
+        sys.stdout.write(
+            f"  {e['id']:34s} repeat barlines {e['kern_repeat_barlines']:2d}  "
+            f"note-ons {e['midi_note_ons']:5d} -> {e['expanded_midi_note_ons']:5d}\n"
+        )
     return 1 if bad else 0
 
 

@@ -29,6 +29,11 @@
  *   "piece_id"   the manifest id of the source movement
  *   "window"     0-based window index within that movement
  *   "window_ticks" [startTick, lengthTicks] in the source movement's own tick frame
+ *   "build"      the renderer builds that produced this line — see `provenance.mjs`. The
+ *                shared `renderer` field names a program; this names a *build*, including a
+ *                fingerprint of espressivo's `dist/` tree, which git does not track and which
+ *                moves independently of its commit. Carried per record rather than only in
+ *                the sidecar so that one line torn out of the file is still self-describing.
  *
  * and, in the imprecision variant, one more:
  *
@@ -38,8 +43,23 @@
  * That object is the **target** for this band. The per-note offsets are a *sample* from the
  * distribution; asking a model to reproduce them is asking it to reproduce a random number
  * generator. CANONICAL §13.4 and the study both put imprecision's supervision at the level of
- * distribution parameters, and the seed is recorded as provenance so a render can be repeated,
- * not as something to predict.
+ * distribution parameters.
+ *
+ * ## Reproducibility — which output, exactly
+ *
+ * The **base** file regenerates byte-identically: the score partition is seed-independent, the
+ * sampler is a seeded `JavaRandom`, and espressivo's render of a fixed (MSM, MPM) pair is
+ * deterministic. The run prints the sha256 of what it wrote and `repro_check.mjs` gates it.
+ *
+ * The **imprecision variant does not**, and the earlier version of this file implied it did by
+ * saying "the seed is recorded as provenance so a render can be repeated". It cannot be, on
+ * this repertoire: espressivo's shake layer breaks ties between events sharing a millisecond
+ * date with an *unseeded* `Math.random()` (`probe_imprecision.mjs`, README §5), and 75.6 % of
+ * the pilot's notes share such a date. Re-running this command reproduces the base file
+ * exactly and produces a *different* variant: 58/58 lines differ, ~62 % of onsets move, up to
+ * ~21 ms. The maps, the distribution parameters and the seed are stable — everything that is a
+ * training target — and only the rendered milliseconds move. The variant that is on disk is
+ * therefore the artefact; the command is not a recipe for it.
  *
  * ## Windows
  *
@@ -49,6 +69,7 @@
  * corpus at a new seed keeps the score partition fixed and changes one variable.
  */
 import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -61,6 +82,7 @@ import { ESPRESSIVO, JAVA_CP } from '../node/paths.mjs';
 import { readAugmentedMsm } from '../node/augmented_msm.mjs';
 import { buildMpm } from '../node/xml.mjs';
 import { PPQ, barGroupTicks, buildImprecisionTimingXml, sampleEraPerformance, ERA_RANGES } from './era_sampler.mjs';
+import { buildTag, corpusProvenance, verovioVersion } from './provenance.mjs';
 import { buildScoreMsm, parseMsm, windowScore } from './score_msm.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -268,12 +290,14 @@ export async function main(argv) {
 
   // ---- 4. emit ---------------------------------------------------------------------------
   const provenance = { renderer: opt.renderer, seed: opt.seed };
+  const build = corpusProvenance({ verovio: verovioVersion(opt.data) });
+  const buildStr = buildTag(build);
   /** `pieceToJsonl` + the corpus provenance fields, appended on the closing brace. */
   const line = (p, data, imp) => {
     const base = pieceToJsonl(p, data, false, provenance);
     const extra =
       `,"era":"${p.era}","piece_id":"${p.pieceId}","window":${p.window},` +
-      `"window_ticks":[${p.windowTicks[0]},${p.windowTicks[1]}]` +
+      `"window_ticks":[${p.windowTicks[0]},${p.windowTicks[1]}],"build":${JSON.stringify(buildStr)}` +
       (imp ? `,"imprecision":${JSON.stringify(p.imprecision)}` : '');
     return base.slice(0, -1) + extra + '}';
   };
@@ -284,8 +308,9 @@ export async function main(argv) {
       if (!sink.write(line(pieces[i], data[i], imp) + '\n')) await new Promise((r) => sink.once('drain', r));
     await new Promise((r) => sink.end(r));
   };
+  const impPath = opt.out.replace(/\.jsonl$/, '') + '.imprecision.jsonl';
   await write(opt.out, renders, false);
-  if (rendersImp) await write(opt.out.replace(/\.jsonl$/, '') + '.imprecision.jsonl', rendersImp, true);
+  if (rendersImp) await write(impPath, rendersImp, true);
 
   // ---- 5. report -------------------------------------------------------------------------
   const byEra = {};
@@ -295,13 +320,38 @@ export async function main(argv) {
     e.pieces.add(p.pieceId);
     e.notes += p.parts.reduce((s, q) => s + q.notes.length, 0);
   }
+  // Each output's sha256, with a per-file reproducibility claim spelled out next to it. The
+  // claim is not decoration: `repro_check.mjs` re-runs this command and holds the base file to
+  // `reproducible: true` as a gate, while `false` is what makes the variant's stored bytes —
+  // rather than this command line — the artefact. See the header.
+  const outputs = [
+    {
+      path: opt.out,
+      sha256: createHash('sha256').update(readFileSync(opt.out)).digest('hex'),
+      reproducible: true,
+      note: 'seeded sampler + deterministic render of a fixed (MSM, MPM) pair',
+    },
+  ];
+  if (rendersImp)
+    outputs.push({
+      path: impPath,
+      sha256: createHash('sha256').update(readFileSync(impPath)).digest('hex'),
+      reproducible: false,
+      note:
+        "espressivo's shake layer breaks same-millisecond ties with an unseeded Math.random(); " +
+        'maps, distribution parameters and seed are stable, rendered milliseconds are not. ' +
+        'Keep this file, not this command.',
+    });
   const summary = {
     out: opt.out,
     renderer: opt.renderer,
     seed: opt.seed,
+    build: buildStr,
+    provenance: build,
     windows: pieces.length,
     windowBeats: opt.windowBeats,
     skipped,
+    outputs,
     byEra: Object.fromEntries(
       Object.entries(byEra).map(([k, v]) => [k, { movements: v.pieces.size, windows: v.windows, notes: v.notes }]),
     ),
@@ -312,8 +362,15 @@ export async function main(argv) {
       .map(([e, v]) => `${e}: ${v.movements} movements, ${v.windows} windows, ${v.notes} notes\n`)
       .join('') +
       `total ${pieces.length} windows, ${skipped.length} skipped (< ${opt.minNotes} notes), ` +
-      `rendered by ${opt.renderer} in ${renderMs} ms -> ${opt.out}\n` +
-      (rendersImp ? `imprecision variant -> ${opt.out.replace(/\.jsonl$/, '')}.imprecision.jsonl\n` : ''),
+      `rendered by ${opt.renderer} in ${renderMs} ms\n` +
+      `build: ${buildStr}\n` +
+      outputs
+        .map(
+          (o) =>
+            `${o.reproducible ? 'REPRODUCIBLE    ' : 'NOT REPRODUCIBLE'} ${o.sha256.slice(0, 16)}… ${o.path}\n` +
+            (o.reproducible ? '' : `                 ${o.note}\n`),
+        )
+        .join(''),
   );
   if (!opt.dumpDir && workDir) rmSync(workDir, { recursive: true, force: true });
   return 0;

@@ -13,15 +13,17 @@
  *
  * The three decisions, each reversible and each recorded per piece in `msm/index.json`:
  *
- *  - **repeats ARE resolved**, by `Msm.resolveSequencingMaps()` (espressivo's port of meico's
- *    own resolver) before anything else. The alternative — dropping the `<sequencingMap>` and
- *    playing the piece once through — was tried first and rejected by measurement: Verovio's
- *    MIDI export *does* play the repeats, so an unresolved MSM disagrees with the independent
- *    realisation on a third of the pilot (`score_check.py` before the change: 692 MIDI notes
- *    against 359 MSM notes on the op. 33/3 mazurka). Resolving makes the two comparable and
- *    is the more realistic corpus anyway: a performance plays the repeat. The cost is that
- *    repeated notes carry meico's `meico_repetition_k_…` id suffixes — the same convention
- *    the nASAP adapter already joins on (`mpm-ml-research.md` §7).
+ *  - **repeats are NOT resolved.** `Msm.resolveSequencingMaps()` is called by `build_msm.mjs`
+ *    only to *measure* what it would produce (`resolvedNotes` in `msm/index.json`); its result
+ *    is discarded and the corpus is the score **as written, once through**. An earlier version
+ *    of this file resolved them and this paragraph said so; both are wrong, and the reason is
+ *    the other side of the pipeline: Verovio runs with `expandNever`, so its MEI, its MIDI and
+ *    its timemap all describe the unexpanded score. Resolving on the meico side alone would
+ *    (a) put the two realisations out of correspondence and turn `score_check.py` from a check
+ *    into noise, and (b) break `redateFromTimemap`, which joins on `xml:id` — the expansion
+ *    rewrites ids to `meico_repetition_k_…` and the timemap has never heard of them. Expanding
+ *    on *both* sides is coherent and is v1.1 work; expanding on one is not a corpus decision
+ *    but a defect. `hasGoto` marks the affected movements (16 of the pilot's 30).
  *  - **zero-duration notes are dropped.** meico's MEI importer gives a grace note
  *    `duration="0"`: it consumes no score time. Rendered, its note-off lands on its note-on,
  *    and every duration-derived quantity in the feature set (`log2` duration ratio, the
@@ -181,14 +183,21 @@ function median(a) {
 export function dropZeroDuration(parts) {
   let dropped = 0;
   const droppedByPart = {};
+  const droppedNotes = [];
   const out = parts.map((p) => {
     const keep = p.notes.filter((n) => n.dur > 0);
     const d = p.notes.length - keep.length;
     dropped += d;
     if (d) droppedByPart[p.number] = d;
+    // The identity of each dropped note, not just the count. Verovio plays these; the corpus
+    // does not, so they are the largest class of MIDI-only note-ons — and a *budget* ("at most
+    // this many surplus notes are grace notes") cannot tell a grace note from a defect that
+    // happens to fit under the budget. With the id, `score_check.py` looks the note up in the
+    // timemap and matches the surplus note-on exactly.
+    for (const n of p.notes) if (!(n.dur > 0)) droppedNotes.push({ id: n.id, pitch: n.pitch, part: p.number });
     return { ...p, notes: keep };
   });
-  return { parts: out, dropped, droppedByPart };
+  return { parts: out, dropped, droppedByPart, droppedNotes };
 }
 
 /** Median pitch and note count per part — the evidence behind any "part 1 is the melody" claim. */
@@ -209,9 +218,17 @@ export function partStats(parts) {
  * the *leading* voice must be part 1. In piano playing the melody leads (LOG.md: Vienna
  * measures a positive top-voice lead in 35/40 windows), and the melody is the upper staff.
  * The converter's numbering comes from the MEI staff order, which comes from the Humdrum
- * spine order, which is bottom-up — so on this corpus the numbers arrive inverted about as
- * often as not. The renumbering is by measured median pitch and is reported, so the claim
- * "part 1 is the upper voice" is checkable per piece rather than assumed from a file format.
+ * spine order, which is bottom-up. The renumbering is by measured median pitch and is
+ * reported, so the claim "part 1 is the upper voice" is checkable per piece rather than
+ * assumed from a file format.
+ *
+ * **On this pilot it never fires** — `registerReordered` is false on 30/30 pieces, because
+ * Verovio's kern importer already emits the upper staff first, so the bottom-up spine order
+ * never reaches the MSM. That makes this a safeguard the corpus does not exercise, which is
+ * exactly the kind of code that is wrong when it finally runs, so it is covered by
+ * `selftest.mjs` on a constructed inverted score instead. What the pilot *does* exercise is
+ * the resulting invariant: `verify_corpus.mjs` re-checks the register order on the emitted
+ * notes of every window.
  */
 export function orderPartsByRegister(parts) {
   const ranked = parts

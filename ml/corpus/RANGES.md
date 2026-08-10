@@ -127,12 +127,20 @@ detached, no over-legato — a harpsichord cannot hold a note past its key relea
 is articulation-forward but mixed. Romantic playing is legato-leaning, with articulation used
 sparingly and for accent.
 
-*Admissibility — and the one place a CANONICAL number is superseded by its own justification.*
-A1 sets ~15 % on the synthetic sampler, and justifies it by what it **leaves**: "≥ 5 clean
-dates per 4-beat segment", the unarticulated dates from which the dynamics and tempo curves
-are read. That justification is a function of note density, and real repertoire is 2–6× denser
-than the synthetic score (median 1.6 onset dates per beat there; Bach's WTC reaches 8). So the
-*budget* is the rule that carries over, not the 15 %:
+*Admissibility — and the one place this subsystem CHANGES A RULE IT DOES NOT OWN.* Everything
+else in this document varies a distribution *inside* a CANONICAL rule. This does not: A1 is
+normative and reads "articulation attaches to ~**15 %** of distinct onset dates", and the
+corpus realises up to **0.41** — 2.7× the rule as written. That is a relaxation of A1, it was
+made here unilaterally, and the argument for it is below; the decision belongs to whoever owns
+CANONICAL. It is filed, not assumed: `verify_corpus.mjs` leg 2 prints the realised density
+against A1's literal constant on every window and says in as many words that it is reporting
+rather than enforcing.
+
+The argument. A1 sets ~15 % on the synthetic sampler, and justifies it by what it **leaves**:
+"≥ 5 clean dates per 4-beat segment", the unarticulated dates from which the dynamics and
+tempo curves are read. That justification is a function of note density, and real repertoire
+is 2–6× denser than the synthetic score (median 1.6 onset dates per beat there; Bach's WTC
+reaches 8). So the *budget* is the rule that carries over, not the 15 %:
 
 ```
 maxDensity = 1 − 5 / (distinct onset dates per 4-beat window)

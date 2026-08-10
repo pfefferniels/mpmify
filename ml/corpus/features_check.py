@@ -24,6 +24,14 @@ What is checked, per record and per feature column:
   rather than about the encoder: real-repertoire maps reach longer dates and finer bar grids
   than the synthetic set, and a date that does not survive the digit tokeniser would be a
   label the decoder can never emit.
+
+  Exactly one difference is classified rather than failed — an articulation *date* off by no
+  more than half a ULP of ``%g``'s six significant digits, which is the encoder's own
+  precision and is computed per row by ``_g_halfulp_ticks``. The threshold used to be a flat
+  1.0 tick against a phenomenon of 0.024, and the run printed only how many rows it had
+  waived; a real date defect anywhere under a tick would have been absorbed and reported as
+  ``FEATURES_PASS``. The realised worst and the bound it was measured against are now both
+  printed, so the margin is visible instead of assumed.
 """
 
 from __future__ import annotations
@@ -56,6 +64,26 @@ def _diff(want, got):
             elif x != y:
                 out.append((i, j, float("inf")))
     return out
+
+
+#: significant digits Python's ``%g`` (and therefore ``dsl._num_tokens``) emits
+_G_SIGNIFICANT_DIGITS = 6
+
+
+def _g_halfulp_ticks(date_ticks: float, ppq: int = 720) -> float:
+    """The largest tick error ``%g``-formatting a beat date can produce, for THAT date.
+
+    ``dsl._num_tokens`` writes ``f"{x:g}"``. At 6 significant digits the representable grid
+    around a value ``b`` has spacing ``10**(floor(log10 b) - 5)`` beats, so round-tripping
+    costs at most half of that — converted back to ticks here. It grows with the date (a
+    64-beat window is bounded at 0.036 ticks; a 640-beat one would be at 0.36), which is
+    precisely why the bound is computed per row instead of being a constant.
+    """
+    beats = abs(date_ticks) / ppq
+    if beats == 0:
+        return 0.0
+    exponent = math.floor(math.log10(beats)) - (_G_SIGNIFICANT_DIGITS - 1)
+    return 0.5 * (10.0**exponent) * ppq
 
 
 def _norm(rows):
@@ -149,6 +177,8 @@ def main() -> int:
         dsl_fail = []
         lengths = []
         subtick = 0
+        subtick_max = 0.0
+        subtick_bound = 0.0
         for rec in recs:
             maps = {
                 "tempo": rec["tempo"],
@@ -186,24 +216,42 @@ def main() -> int:
                     if not diffs:
                         continue
                     # ONE class is classified rather than failed, and only this one: an
-                    # articulation *date* that misses by less than a tick. The DSL writes dates
-                    # as decimal BEATS, and a real tuplet onset is not a terminating decimal in
-                    # beats -- 30480 ticks is 42.333... -- so the digit tokeniser loses up to
-                    # 0.024 ticks on it. The synthetic sampler never met this because its whole
-                    # rhythm grid is dyadic. It is 3e-5 of a beat, i.e. 0.017 ms at 120 bpm,
+                    # articulation *date* that misses by no more than the ENCODER'S OWN
+                    # precision. `dsl._num_tokens` formats with `%g`, i.e. 6 significant
+                    # digits, and writes dates as decimal BEATS -- so a tuplet onset, which is
+                    # not a terminating decimal in beats (30480 ticks = 42.333...), comes back
+                    # within half a ULP of that format and no further. `_g_halfulp_ticks`
+                    # computes that bound from the date itself; on this corpus it is 0.036
+                    # ticks and the realised worst is 0.024. The previous threshold was a flat
+                    # 1.0 tick -- ~40x the phenomenon -- so a genuine date defect of up to
+                    # 0.999 ticks would have been waived and reported as FEATURES_PASS.
+                    #
+                    # The waived class is real but bounded: 5e-5 beats is 0.017 ms at 120 bpm,
                     # far below every observability floor in CANONICAL, and under A6's
                     # at-or-after targeting it still resolves to the same note. It also cannot
                     # reach training: articulation is a per-note head, not a token (LOG.md B2).
-                    residual = [d for d in diffs if not (key == "articulation" and d[1] == 0 and d[2] < 1.0)]
-                    subtick += len(diffs) - len(residual)
+                    residual = []
+                    for d in diffs:
+                        if key == "articulation" and d[1] == 0 and d[0] >= 0:
+                            bound = _g_halfulp_ticks(_norm(want)[d[0]][0])
+                            if d[2] <= bound:
+                                subtick += 1
+                                subtick_max = max(subtick_max, d[2])
+                                subtick_bound = max(subtick_bound, bound)
+                                continue
+                        residual.append(d)
                     if residual:
                         dsl_fail.append((rec.get("piece_id"), rec.get("window"), subset, key, residual[:3]))
                         break
         dsl_ok = not dsl_fail
         if subtick:
+            # Print the realised worst, not only the count: a threshold whose margin is never
+            # reported is a threshold nobody can tell has become slack.
             print(
-                f"DSL: {subtick} articulation dates re-decoded within one tick "
-                f"(decimal-beat quantisation of tuplet onsets; see the note in the source)"
+                f"DSL: {subtick} articulation dates re-decoded off by at most "
+                f"{subtick_max:.6g} ticks (%g 6-significant-digit half-ULP bound for these "
+                f"dates: {subtick_bound:.6g} ticks; margin {subtick_bound / max(subtick_max, 1e-12):.1f}x) "
+                f"— decimal-beat quantisation of tuplet onsets, see the note in the source"
             )
         by_subset = defaultdict(list)
         for s, n in lengths:

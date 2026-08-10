@@ -2,16 +2,18 @@
   "schema": "interpres-corpus-manifest/1",
   "name": "corpus_pilot",
   "note": "Era-tagged real-repertoire PILOT (SYSTEM.md 2.1). Every source is pinned to a commit SHA; fetch_scores.mjs verifies the SHA and records a sha256 per file. Scores are NEVER committed: they land under ml/data/, which is gitignored.",
+  "attribution_note": "The per-source `attribution` below describes a REPOSITORY and is NOT authoritative for any individual encoding. fetch_scores.mjs reads each file's own Humdrum reference records (!!!YEC, !!!YEM, !!!ENC, !!!EED, !!!EEV, !!!YER) into fetched.json; `attribution` there is the file's !!!YEC where it has one, and falls back to the source string only for encodings that assert nothing. Quote fetched.json, never this file. bach-wtc is the demonstration that the distinction is real (see its `attribution_varies_per_file`).",
   "sources": {
     "bach-wtc": {
       "repo": "humdrum-tools/bach-wtc",
       "commit": "0b4f4d84b90b254615e7ac09730ec473c9611cb6",
       "dir": "kern",
       "work_license": "public domain (J.S. Bach, d. 1750)",
-      "encoding_license": "ALL RIGHTS RESERVED (no licence file; the files carry !!!YEC: Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities and !!!YEM: Rights to all derivative editions reserved)",
+      "encoding_license": "ALL RIGHTS RESERVED (no licence file; every file reserves derivative rights, but under TWO different copyright holders — see attribution_varies_per_file)",
       "tier": "C",
       "redistributable": false,
-      "attribution": "Center for Computer Assisted Research in the Humanities; encoder Walter Hewlett; edition Bach Gesellschaft xiv"
+      "attribution": "SOURCE-LEVEL ONLY, NOT per file: humdrum-tools/bach-wtc, edition Bach Gesellschaft xiv. Use the per-file !!!YEC in fetched.json.",
+      "attribution_varies_per_file": "The three preludes (wtc1p01/p09/p11) carry '!!!ENC: Walter Hewlett' + '!!!YEC: Copyright (c) 1994, 2000 Center for Computer Assisted Research in the Humanities' + '!!!YEM: Rights to all derivative editions reserved'. The two fugues (wtc1f02/f10) carry NO !!!ENC and a different holder and wording: '!!!YEC: Copyright 1994, David Huron' + '!!!YEM: Rights to all derivative electronic formats reserved.'. Both are rights-reserved, so tier C / redistributable:false is unaffected; the attribution string is not."
     },
     "scarlatti": {
       "repo": "craigsapp/scarlatti-keyboard-sonatas",
@@ -51,7 +53,8 @@
       "encoding_license": "CC-BY-4.0",
       "tier": "A",
       "redistributable": true,
-      "attribution": "First Editions of Fryderyk Chopin's Music, Copyright 2017-2021 The Fryderyk Chopin Institute (https://nifc.pl), https://chopinscores.org"
+      "attribution": "First Editions of Fryderyk Chopin's Music, Copyright 2017-2021 The Fryderyk Chopin Institute (https://nifc.pl), https://chopinscores.org",
+      "file_level_rights": "NONE ASSERTED — all 8 files carry !!!ENC/!!!EED (individual encoders) but no !!!YEC and no !!!YEM. The CC BY 4.0 comes from the repository's LICENSE file, so this repository-level statement is the only evidence, and the attribution to quote is the Institute's, not the individual encoder's."
     },
     "scriabin": {
       "repo": "craigsapp/scriabin",
@@ -61,7 +64,8 @@
       "encoding_license": "UNSTATED (no licence file, no !!!YEM record; treat as all rights reserved)",
       "tier": "C",
       "redistributable": false,
-      "attribution": "Mysterium corpus, encoder Bryan Jacob Bell (thesis, 2022); source Ausgewaehlte Klavierwerke, ed. Guenter Philipp (Edition Peters)"
+      "attribution": "Mysterium corpus, encoder Bryan Jacob Bell (thesis, 2022); source Ausgewaehlte Klavierwerke, ed. Guenter Philipp (Edition Peters)",
+      "file_level_rights": "NONE ASSERTED — both files carry only !!!ENC: Bryan Jacob Bell; no !!!YEC, no !!!YEM, and no LICENSE in the repository. Absence of a grant is not a grant, which is why the tier is C."
     }
   },
   "pieces": [

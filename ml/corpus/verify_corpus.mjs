@@ -4,7 +4,12 @@
  *
  *   nice -n 15 node verify_corpus.mjs <corpus.jsonl> [--imprecision <variant.jsonl>]
  *
- * Three legs, in order of what they can prove:
+ * Legs, in order of what they can prove:
+ *
+ * 0. **`selftest.mjs`** — the score-side transforms on constructed inputs. It is here because
+ *    the corpus does not reach all of them: `orderPartsByRegister` never fires on the pilot
+ *    (`registerReordered` is false 30/30), and an untested safeguard is the one that is wrong
+ *    when it finally runs.
  *
  * 1. **`ml/node/verify_v4.mjs invariants`, run as a subprocess on the same file.** The
  *    canonical rules do not change because the score is real, so the check should not either:
@@ -12,11 +17,34 @@
  *    statement available — that this corpus is admissible to exactly the pipeline the other
  *    one is. It is spawned rather than reimplemented so the two can never drift.
  *
+ *    **What leg 1 does NOT attest**, because `INVARIANTS_PASS` is easy to over-read: that
+ *    suite contains no articulation-*density* check at all. It checks A2/A3's deadbands, A6's
+ *    part-locality and the row width; A1's "~15 % of distinct onset dates" is not among its
+ *    tests, in any form. So A1 is attested by leg 2 below and by nothing else in this pipeline.
+ *
  * 2. **Corpus-specific invariants** the synthetic suite has no reason to know about: the era
  *    tag and window provenance are present and consistent; every window is a whole number of
- *    beats; the articulation density actually realised stays under CANONICAL A1's
- *    clean-observation budget; an asynchronyMap appears only on a two-part window with part 2
- *    in the lower register (Y1/Y5); part 1 is the higher register.
+ *    beats; an asynchronyMap appears only on a two-part window (Y1); part 1 is the higher
+ *    register (Y5); and the articulation density realised stays under **the corpus's
+ *    re-derivation of A1**.
+ *
+ *    That re-derivation is a *change to a rule this subsystem does not own*, and it is called
+ *    one here rather than folded into the check. CANONICAL §4.A1 reads "articulation attaches
+ *    to ~15 % of distinct onset dates" and justifies the number by what it leaves: "≥5 clean
+ *    dates per 4-beat segment". Real repertoire is 2–6× denser than the synthetic score, so
+ *    the corpus keeps the justification and drops the constant —
+ *    `maxDensity = 1 − 5/(onset dates per 4-beat window)`, `RANGES.md` §3 — and the realised
+ *    baroque density reaches 0.41, i.e. **2.7× the rule as written**. The argument is in
+ *    `RANGES.md`; the decision belongs to whoever owns CANONICAL. Both numbers are therefore
+ *    printed side by side by leg 3, and this leg fails a window against the re-derived budget
+ *    while *reporting* how far it sits from A1's literal 15 %.
+ *
+ * 2b. **The imprecision variant carries the same interpretation.** All six canonical maps and
+ *    the sustain-CC trace must be byte-equal to the base record — the variant differs by one
+ *    added band and by nothing else, or it is not a controlled comparison. `sustain_cc` is the
+ *    interesting one: it is CANONICAL §9.9(3)'s prediction that the positionMap bypasses the
+ *    imprecision map, and an earlier version of this leg compared only `tempo` and `dynamics`,
+ *    so the claim it printed was broader than the check behind it.
  *
  * 3. **Realised era ranges**, printed per era. This is the deliverable's "report the ranges"
  *    and it is measured on the emitted file, not read back out of `ERA_RANGES` — a prior that
@@ -37,9 +65,13 @@ const q = (a, p) => (a.length ? a.slice().sort((x, y) => x - y)[Math.floor((a.le
 const fmt = (a, d = 2) =>
   a.length ? `${q(a, 0).toFixed(d)} / ${q(a, 0.5).toFixed(d)} / ${q(a, 1).toFixed(d)}` : '—';
 
+/** CANONICAL §4.A1's literal constant, kept here so the corpus's deviation from it is a number. */
+const A1_LITERAL_DENSITY = 0.15;
+
 function corpusInvariants(recs) {
   const bad = [];
   const fail = (r, m) => bad.length < 30 && bad.push(`${r.piece_id ?? r.id}#${r.window ?? '?'}: ${m}`);
+  const a1 = { overLiteral: 0, windows: 0, maxRealised: 0, maxRatio: 0, capBinding: 0 };
 
   for (const r of recs) {
     if (!['baroque', 'classical', 'romantic'].includes(r.era)) fail(r, `era tag "${r.era}"`);
@@ -79,6 +111,8 @@ function corpusInvariants(recs) {
     // is derived from the union of onset dates over all parts (see sampleArticulationEraMap).
     const pieceDates = new Set(r.notes.map((n) => n[0])).size;
     const cap = maxArticulationDensity(pieceDates, r.total_ticks);
+    const eraTarget = ERA_RANGES[r.era]?.articulation.density ?? A1_LITERAL_DENSITY;
+    if (cap < eraTarget) a1.capBinding++;
     for (const [p, n] of articByPart) {
       const dates = datesByPart.get(p)?.size ?? 0;
       const realised = dates ? n / dates : 1;
@@ -87,9 +121,16 @@ function corpusInvariants(recs) {
       const slack = 3 * Math.sqrt(Math.max(cap, 1e-9) * (1 - cap) / Math.max(dates, 1));
       if (realised > cap + slack + 1e-9)
         fail(r, `part ${p} articulation density ${realised.toFixed(3)} above the A1 budget ${cap.toFixed(3)} (+3σ ${slack.toFixed(3)})`);
+      // The other half of the A1 statement: how far the realised density sits from the rule as
+      // CANONICAL literally writes it. Counted, never failed — failing it would be this
+      // subsystem enforcing a decision it has only argued for (see the header, RANGES.md §3).
+      a1.windows++;
+      if (realised > A1_LITERAL_DENSITY + slack + 1e-9) a1.overLiteral++;
+      a1.maxRealised = Math.max(a1.maxRealised, realised);
+      a1.maxRatio = Math.max(a1.maxRatio, realised / A1_LITERAL_DENSITY);
     }
   }
-  return bad;
+  return { bad, a1 };
 }
 
 function eraStats(recs) {
@@ -182,7 +223,8 @@ function report(stats) {
       `  tempo bpm literals      ${fmt(s.bpm, 1)}   prior [${cfg.tempo.bpmLo}, ${cfg.tempo.bpmHi}]\n` +
       `  tempo instructions      ${fmt(s.tempoInstr, 0)}   transition share ${fmt(s.tempoTransFrac, 2)}  prior p=${cfg.tempo.transitionP}\n` +
       `  dynamics volume         ${fmt(s.volume, 1)}   transition share ${fmt(s.dynTransFrac, 2)}  prior p=${cfg.dynamics.transitionP}\n` +
-      `  articulation density    ${fmt(s.articDensity, 3)}   prior ${cfg.articulation.density} (capped by the A1 budget)\n` +
+      `  articulation density    ${fmt(s.articDensity, 3)}   era prior ${cfg.articulation.density}, capped by the ` +
+      `re-derived A1 budget; CANONICAL A1 literally says ${A1_LITERAL_DENSITY}\n` +
       `  articulation relDur     ${fmt(s.relDur, 2)}   prior [${cfg.articulation.relDur}]\n` +
       `  articulation velChange  ${fmt(s.velCh, 0)}   prior [${cfg.articulation.velChange}]\n` +
       `  rubato spans            ${s.rubatoSpans} over ${s.windows} windows (prior p=${cfg.rubato.p}), frames ${frames || '—'}\n` +
@@ -200,6 +242,18 @@ function main(argv) {
   const impPath = impIdx >= 0 ? resolve(argv[impIdx + 1]) : null;
   const recs = readFileSync(path, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 
+  process.stdout.write('--- leg 0: selftest.mjs (score-side transforms, on constructed inputs)\n');
+  let leg0 = 0;
+  let stOut = '';
+  try {
+    stOut = execFileSync('nice', ['-n', '15', 'node', join(HERE, 'selftest.mjs')], { encoding: 'utf8' });
+  } catch (e) {
+    stOut = (e.stdout ?? '') + (e.stderr ?? '');
+    leg0 = 1;
+  }
+  process.stdout.write(stOut.split('\n').filter((l) => !/^ {2}ok /.test(l)).join('\n'));
+  if (!/SELFTEST_PASS/.test(stOut)) leg0 = 1;
+
   process.stdout.write(`--- leg 1: ml/node/verify_v4.mjs invariants (the synthetic corpus's own suite)\n`);
   let leg1 = 0;
   let v4out = '';
@@ -214,10 +268,25 @@ function main(argv) {
   }
   process.stdout.write(v4out.split('\n').filter((l) => !/^ {4}/.test(l)).join('\n') + '\n');
   if (!/INVARIANTS_PASS/.test(v4out)) leg1 = 1;
+  // What that suite does not contain, checked rather than remembered: if an A1 density test
+  // ever lands in it, this line stops printing and leg 2's caveat can be retired.
+  const v4Source = readFileSync(join(HERE, '../node/verify_v4.mjs'), 'utf8');
+  process.stdout.write(
+    `  NOTE: leg 1 does not attest CANONICAL A1 — verify_v4.mjs contains ` +
+      `${/articulation[\s\S]{0,200}density|A1\b/.test(v4Source) ? 'a possible' : 'NO'} articulation-density test. ` +
+      `A1 is attested only by leg 2 below, against the corpus's re-derived budget (RANGES.md §3).\n`,
+  );
 
   process.stdout.write('--- leg 2: corpus-specific invariants\n');
-  const bad = corpusInvariants(recs);
+  const { bad, a1 } = corpusInvariants(recs);
   process.stdout.write(bad.length ? bad.map((b) => `  ${b}\n`).join('') : '  all corpus invariants hold\n');
+  process.stdout.write(
+    `  A1: ${a1.windows} part-windows checked against the re-derived budget; ` +
+      `${a1.capBinding} window(s) had the budget bind below the era prior; ` +
+      `max realised density ${a1.maxRealised.toFixed(3)} = ${a1.maxRatio.toFixed(1)}x A1's literal ` +
+      `${A1_LITERAL_DENSITY}; ${a1.overLiteral}/${a1.windows} exceed the literal 15 % ` +
+      `(reported, NOT failed — the re-derivation is a CANONICAL-owned decision this subsystem only argues for)\n`,
+  );
 
   let legImp = 0;
   if (impPath) {
@@ -227,8 +296,13 @@ function main(argv) {
       process.stdout.write(`  FAIL variant has ${imp.length} records, base has ${recs.length}\n`);
       legImp = 1;
     } else {
+      // Everything a model is trained on, not a sample of it. `sustain_cc` is deliberately in
+      // the list: it is CANONICAL §9.9(3)'s prediction that the positionMap bypasses the
+      // imprecision map, and it is the one field of these whose equality is *informative*.
+      const SAME = ['tempo', 'dynamics', 'rubato', 'asynchrony', 'articulation', 'movement', 'sustain_cc'];
       let moved = 0;
       let bothSameMaps = 0;
+      const fieldDiffs = new Map();
       for (let i = 0; i < imp.length; i++) {
         const a = recs[i];
         const b = imp[i];
@@ -237,16 +311,18 @@ function main(argv) {
           legImp = 1;
           break;
         }
-        // The maps must be the SAME interpretation — the variant differs by the added band and
-        // by nothing else, or it is not a controlled comparison.
-        if (JSON.stringify(a.tempo) === JSON.stringify(b.tempo) && JSON.stringify(a.dynamics) === JSON.stringify(b.dynamics))
-          bothSameMaps++;
+        const differing = SAME.filter((k) => JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null));
+        for (const k of differing) fieldDiffs.set(k, (fieldDiffs.get(k) ?? 0) + 1);
+        if (!differing.length) bothSameMaps++;
         moved += a.notes.filter((n, j) => !Object.is(n[3], b.notes[j][3])).length;
       }
       const total = recs.reduce((s, r) => s + r.notes.length, 0);
       process.stdout.write(
-        `  ${bothSameMaps}/${imp.length} records carry the identical canonical maps (the variant adds one band and nothing else)\n` +
-          `  ${moved}/${total} note onsets moved (${((100 * moved) / total).toFixed(1)} %) — the imprecision band's footprint\n`,
+        `  ${bothSameMaps}/${imp.length} records carry the identical interpretation across all of ` +
+          `${SAME.join(', ')}${fieldDiffs.size ? ` — differing: ${[...fieldDiffs].map(([k, n]) => `${k} on ${n}`).join(', ')}` : ''}\n` +
+          `  ${moved}/${total} note onsets differ from the base render (${((100 * moved) / total).toFixed(1)} %) — the band's\n` +
+          `    footprint IN THIS FILE. It is not a reproducible quantity: re-rendering the same seed\n` +
+          `    gives a different sample (README §5, repro_check.mjs). The targets above are reproducible; this is not.\n`,
       );
       if (bothSameMaps !== imp.length) legImp = 1;
     }
@@ -255,7 +331,7 @@ function main(argv) {
   process.stdout.write('--- leg 3: realised era ranges\n');
   process.stdout.write(report(eraStats(recs)));
 
-  const failed = leg1 || bad.length || legImp;
+  const failed = leg0 || leg1 || bad.length || legImp;
   process.stdout.write(`\n${failed ? 'CORPUS_VERIFY_FAIL' : 'CORPUS_VERIFY_PASS'}\n`);
   return failed ? 1 : 0;
 }

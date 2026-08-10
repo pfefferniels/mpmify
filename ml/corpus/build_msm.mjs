@@ -15,14 +15,33 @@
  * that no map in the v1.0 canonical form owns.
  *
  * The output of this step is `msm/<id>.msm` plus `msm/index.json`, which carries the era tag,
- * the part register statistics, the dropped-grace-note count and the time signature — i.e.
- * everything the generator needs without re-parsing the MSM.
+ * the part register statistics, the dropped-grace-note count, the time signature, the
+ * divergence measurements (`hasGoto`, `resolvedNotes`, `tremoloElements`) and the build
+ * provenance — i.e. everything the generator and every later claim need without re-parsing
+ * anything.
+ *
+ * ## The two ways the MEI and the MSM can hold different notes, measured rather than asserted
+ *
+ * Both are *score content* differences between meico's importer and Verovio's realisation of
+ * the same parse, and each earlier version of this file named the wrong one:
+ *
+ *  - **repeat structure.** meico writes `<goto>`s into the MSM's `<sequencingMap>` and leaves
+ *    them unexpanded; Verovio runs with `expandNever`, so neither side plays the repeat and
+ *    the corpus is the score once through. `resolvedNotes` records what meico's own
+ *    `resolveSequencingMaps()` *would* produce, so the size of the decision is on disk instead
+ *    of in a sentence.
+ *  - **notated tremolo.** A `<bTrem>` (measured tremolo: one written chord, played as repeated
+ *    attacks) is realised by Verovio's MIDI as the repeated attacks and by meico's importer as
+ *    the single written chord. `tremoloElements` counts them. This is the real cause of the
+ *    one large MIDI surplus on this pilot and it is *not* a repeat: the affected movement has
+ *    no repeat barline and no `<goto>` at all.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ESPRESSIVO } from '../node/paths.mjs';
+import { buildTag, corpusProvenance, verovioVersion } from './provenance.mjs';
 import {
   PPQ,
   buildScoreMsm,
@@ -89,24 +108,36 @@ export async function main(argv) {
       process.stderr.write(`NOTE ${rec.id}: ${movements.length} movements (mdivs); taking index 0\n`);
 
     // Repeat structure: measured, not resolved. `Msm.resolveSequencingMaps()` is available and
-    // was tried; it is NOT used, because the two implementations disagree about what the
-    // repeats are. On the pilot, meico expands the Scarlatti sonatas (660 -> 1256 notes) where
-    // Verovio's own MIDI does not (its ExpansionMap cannot resolve the `@plist` labels the
-    // Humdrum importer wrote), and Verovio expands Chopin op. 28/4 (421 -> 600) where meico
-    // writes no `<goto>` at all. Resolving on one side therefore *destroys* the cross-check
-    // rather than enabling it. The corpus is the score played once through, and `hasGoto`
-    // records which pieces carry a repeat structure that a v1.1 pass would have to resolve on
-    // both sides at once. It tests for `<goto>` and not for a non-empty `<sequencingMap>`,
-    // because the converter writes a `fine` marker into that map on EVERY piece — the first
-    // version of this flag read true 30/30 and said nothing.
+    // is called here ONLY to record what it would produce (`resolvedNotes`); its result is
+    // thrown away and the corpus is the score played once through. Two reasons, in this order:
+    // Verovio runs with `expandNever` (`kern_to_mei.py`), so its MEI, MIDI and timemap all
+    // describe the unexpanded score — resolving on the meico side alone would put the two
+    // realisations out of correspondence and destroy `score_check.py` rather than strengthen
+    // it; and `redateFromTimemap` joins on `xml:id`, which the expansion rewrites. `hasGoto`
+    // marks the pieces a v1.1 pass would have to resolve on BOTH sides at once. It tests for
+    // `<goto>` and not for a non-empty `<sequencingMap>`, because the converter writes a `fine`
+    // marker into that map on EVERY piece — the first version of this flag read true 30/30 and
+    // said nothing.
     const hasGoto = /<goto\b/.test(movements[0].msm);
-    void Msm; // imported to document what was deliberately not called; see above.
+    let resolvedNotes = null;
+    if (hasGoto) {
+      const probe = new Msm(movements[0].msm);
+      probe.resolveSequencingMaps();
+      resolvedNotes = (probe.toXML().match(/<note\b/g) ?? []).length;
+    }
+    // Notated tremolo: `<bTrem>`/`<fTrem>` is one written chord that sounds as repeated
+    // attacks. Verovio's MIDI realises the attacks; meico's importer imports the written
+    // chord. Counted here so the MIDI surplus `score_check.py` reports has a cause on record
+    // rather than an assumption — it was previously attributed to repeats, on a movement that
+    // has neither a repeat barline nor a `<goto>`.
+    const tremoloElements = (mei.match(/<[bf]Trem\b/g) ?? []).length;
     const raw = parseMsm(movements[0].msm);
     const zero = dropZeroDuration(raw.parts);
     const ts = zero.parts.find((p) => p.timeSignature)?.timeSignature ?? null;
     const measureTicks = ts ? (4 * PPQ * ts.numerator) / ts.denominator : 4 * PPQ;
     // Timing authority: Verovio's timemap, joined on xml:id. See `redateFromTimemap`.
     const timemap = JSON.parse(readFileSync(join(opt.data, 'timemap', `${rec.id}.json`), 'utf8'));
+    const timemapOnIds = timemap.flatMap((e) => e.on ?? []);
     const redated = redateFromTimemap(zero.parts, timemap);
     if (redated.missing.length)
       process.stderr.write(`NOTE ${rec.id}: ${redated.missing.length} note(s) absent from the timemap, dropped\n`);
@@ -134,7 +165,12 @@ export async function main(argv) {
       registerReordered: ordered.map((p) => p.number).join(',') !== raw.parts.map((p) => p.number).join(','),
       droppedZeroDuration: zero.dropped,
       droppedByPart: zero.droppedByPart,
+      droppedNotes: zero.droppedNotes,
       hasGoto,
+      resolvedNotes,
+      tremoloElements,
+      meiNoteElements: (mei.match(/<note\b/g) ?? []).length,
+      timemapOnIds: new Set(timemapOnIds).size,
       redatedNotes: redated.moved,
       redatedMaxShiftTicks: redated.maxShiftTicks,
       redatedDurationChanged: redated.durationChanged,
@@ -165,14 +201,30 @@ export async function main(argv) {
       (a, b) => order.indexOf(a.id) - order.indexOf(b.id),
     );
   }
-  writeFileSync(join(msmDir, 'index.json'), JSON.stringify({ ppq: PPQ, pieces: merged }, null, 2) + '\n');
+  // Which build produced these MSMs. espressivo's `dist/` is not in git and moves
+  // independently of its commit, so the commit alone would not identify it; see
+  // `provenance.mjs`. Recorded here rather than reconstructed later, because the only moment
+  // at which the build is knowable is while it is running.
+  const provenance = corpusProvenance({ verovio: verovioVersion(opt.data) });
+  writeFileSync(
+    join(msmDir, 'index.json'),
+    JSON.stringify({ ppq: PPQ, build: buildTag(provenance), provenance, pieces: merged }, null, 2) + '\n',
+  );
   const byEra = {};
   for (const p of index) byEra[p.era] = (byEra[p.era] ?? 0) + 1;
+  const withGoto = index.filter((p) => p.hasGoto);
+  const withTrem = index.filter((p) => p.tremoloElements);
   process.stdout.write(
     `\n${index.length} MSM written -> ${msmDir}  (` +
       Object.entries(byEra).map(([e, n]) => `${e} ${n}`).join(', ') +
       `); total notes ${index.reduce((s, p) => s + p.notes, 0)}, ` +
-      `grace notes dropped ${index.reduce((s, p) => s + p.droppedZeroDuration, 0)}\n`,
+      `grace notes dropped ${index.reduce((s, p) => s + p.droppedZeroDuration, 0)}\n` +
+      `repeat structure (<goto>): ${withGoto.length}/${index.length} pieces; resolving them would give ` +
+      `${withGoto.reduce((s, p) => s + p.resolvedNotes, 0)} notes instead of ${withGoto.reduce((s, p) => s + p.notes, 0)} — NOT resolved\n` +
+      `notated tremolo (<bTrem>/<fTrem>): ${withTrem.length}/${index.length} pieces` +
+      (withTrem.length ? ` (${withTrem.map((p) => `${p.id} ${p.tremoloElements}`).join(', ')})` : '') +
+      ` — imported as written chords, realised by Verovio as repeated attacks\n` +
+      `build: ${buildTag(provenance)}\n`,
   );
   return 0;
 }
