@@ -15,7 +15,6 @@ Flags (all stripped before the positionals are read, so order does not matter):
 import json
 import math
 import random
-import statistics
 import sys
 import time
 from pathlib import Path
@@ -23,12 +22,20 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from dsl import (PAD, V1_VOCAB_SIZE, V2_VOCAB_SIZE, V3_VOCAB_SIZE, V4_VOCAB_SIZE,
-                 decode_tokens, decode_piece, decode_piece_v3, decode_piece_v4)
-from evaluate import (evaluate_piece, evaluate_piece_v2, evaluate_piece_v3,
-                      evaluate_piece_v4)
+from dsl import PAD, V1_VOCAB_SIZE, V2_VOCAB_SIZE, V3_VOCAB_SIZE, V4_VOCAB_SIZE
+from eval_ckpt import run_eval as _run_eval
 from model import PEDAL_SCALE, VEL_CHANGE_SCALE, TempoTransformer
-from dataset import (N_FEATURES, N_FEATURES_V2, N_FEATURES_V31, N_FEATURES_V4)
+
+# This module's body IS the training run -- there is no main() -- so `import train`, which
+# reads like a syntax check, resumes the run named by its default positionals and rewrites
+# that run's final_val.json. It has now happened twice (runs/v1/log.txt carries both notes).
+# The reusable half lives in eval_ckpt.run_eval, so nothing legitimately imports this.
+if __name__ != "__main__":
+    raise ImportError(
+        "train.py is a script, not a module: importing it starts/resumes a training run. "
+        "For the evaluation loop import eval_ckpt.run_eval instead.")
+from dataset import (N_FEATURES, N_FEATURES_V2, N_FEATURES_V31, N_FEATURES_V4,
+                     N_FEATURES_V41)
 
 # flags are stripped before positional parsing, so `train.py 24 v4 v4 --device cuda`
 # and `train.py --device cuda 24 v4 v4` both work and the positional contract is unchanged
@@ -81,7 +88,8 @@ LOG_EVERY = 1 if MAX_STEPS else 100
 EPOCHS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 RUN = sys.argv[2] if len(sys.argv) > 2 else "v1"
 MODE = sys.argv[3] if len(sys.argv) > 3 else "v1"
-V4 = MODE == "v4"
+V41 = MODE == "v41"
+V4 = MODE == "v4" or V41
 V31 = MODE == "v31"
 V3 = MODE == "v3" or V31
 V2 = MODE == "v2" or V3
@@ -119,7 +127,7 @@ def log(msg):
     log_f.flush()
 
 
-SUFFIX = "_v4" if V4 else ("_v31" if V31 else ("_v3" if V3 else ("_v2" if V2 else "")))
+SUFFIX = "_v41" if V41 else ("_v4" if V4 else ("_v31" if V31 else ("_v3" if V3 else ("_v2" if V2 else ""))))
 train = torch.load(f"{DATA_DIR}/train{SUFFIX}.pt")
 val = torch.load(f"{DATA_DIR}/val{SUFFIX}.pt")
 if LIMIT:
@@ -132,8 +140,8 @@ n_train = len(train["feats"])
 # was preprocessed after they existed, so the arm is data-driven -- a v4 run on an older
 # pack trains the decoder alone, exactly as before.
 HEADS = V4 and bool(train.get("note_labels"))
-N_FEAT = (N_FEATURES_V4 if V4 else
-          (N_FEATURES_V31 if V31 else (N_FEATURES_V2 if V2 else N_FEATURES)))
+N_FEAT = (N_FEATURES_V41 if V41 else (N_FEATURES_V4 if V4 else
+          (N_FEATURES_V31 if V31 else (N_FEATURES_V2 if V2 else N_FEATURES))))
 # v4's target is the tempo+dynamics+rubato+asynchrony subset of CANONICAL §11 (median 184
 # tokens, p90 250 on the pilot); articulation and movement are per-note heads, not tokens.
 # The packed set records the ceiling it was built at -- decoding shorter than the data was
@@ -255,74 +263,17 @@ def lr_at(s):
     return LR * 0.5 * (1 + math.cos(math.pi * min(1.0, (s - WARMUP) / total_steps)))
 
 
-@torch.no_grad()
 def run_eval(n_pieces=EVAL_PIECES, decode_batch=50):
-    model.eval()
-    n = min(n_pieces, len(val["feats"]))
-    metrics = []
-    exact = 0
-    for lo in range(0, n, decode_batch):
-        idxs = range(lo, min(lo + decode_batch, n))
-        fs = [val["feats"][i] for i in idxs]
-        max_n = max(f.shape[0] for f in fs)
-        x = torch.zeros(len(fs), max_n, N_FEAT)
-        xm = torch.ones(len(fs), max_n, dtype=torch.bool)
-        for j, f in enumerate(fs):
-            x[j, : f.shape[0]] = f
-            xm[j, : f.shape[0]] = False
-        x, xm = x.to(device), xm.to(device)
-        out = model.greedy_decode(x, xm, max_len=MAX_DECODE).cpu()
-        # One extra encoder pass for the per-note bands. The heads are read here rather
-        # than inside greedy_decode so the decoder's own path stays untouched.
-        note_out = None
-        if HEADS:
-            h = model.note_heads(x, xm)
-            note_out = {"artic_present": torch.sigmoid(h["artic_logit"]).cpu(),
-                        "rel_dur": h["rel_dur"].cpu(),
-                        "vel_change": h["vel_change"].cpu(),
-                        "pedal_state": h["pedal_state"].cpu()}
-        for j, i in enumerate(idxs):
-            ids = [t for t in out[j].tolist() if t != PAD]
-            if ids == val["tgts"][i].long().tolist():
-                exact += 1
-            rec = {"notes": val["notes"][i].tolist(), "tempo": val["tempo"][i]}
-            if V4:
-                pred_maps, errs = decode_piece_v4(ids, subset="training")
-                for k in ("dynamics", "articulation", "rubato", "movement",
-                          "asynchrony", "sustain_cc", "total_ticks"):
-                    if k in val:
-                        rec[k] = val[k][i]
-                note_pred = None
-                if note_out is not None:
-                    n_notes = val["feats"][i].shape[0]
-                    note_pred = {k: v[j, :n_notes].tolist() for k, v in note_out.items()}
-                metrics.append(evaluate_piece_v4(pred_maps, rec, note_pred=note_pred))
-            elif V3:
-                pt, pd, pa, pr, errs = decode_piece_v3(ids)
-                rec["dynamics"] = val["dynamics"][i]
-                rec["articulation"] = val["articulation"][i]
-                rec["rubato"] = val["rubato"][i]
-                metrics.append(evaluate_piece_v3(pt, pd, pa, pr, rec))
-            elif V2:
-                pred_tempo, pred_dyn, errs = decode_piece(ids)
-                if not pred_tempo:
-                    pred_tempo = [[0, 100.0, None, None]]
-                rec["dynamics"] = val["dynamics"][i]
-                metrics.append(evaluate_piece_v2(pred_tempo, pred_dyn, rec))
-            else:
-                pred_map, errs = decode_tokens(ids)
-                if not pred_map:
-                    pred_map = [[0, 100.0, None, None]]
-                metrics.append(evaluate_piece(pred_map, rec))
-    import math as _math
-    med = {}
-    for k in metrics[0]:
-        vals = [m[k] for m in metrics
-                if isinstance(m[k], (int, float)) and _math.isfinite(m[k])]
-        med[k] = statistics.median(vals) if vals else float("nan")
-    med["exact"] = exact / len(metrics)
-    model.train()
-    return med
+    """Epoch-end metrics — the loop itself lives in `eval_ckpt.py` and is imported.
+
+    Deliberately not a copy: `eval_ckpt.py` re-scores saved checkpoints with the current
+    evaluator, and if it held a second implementation of this decode-and-score loop the two
+    could disagree — which would make a re-evaluation prove nothing about the run it was
+    meant to correct.
+    """
+    return _run_eval(model, val, mode=("v4" if V4 else ("v3" if V3 else ("v2" if V2 else "v1"))),
+                     n_feat=N_FEAT, max_decode=MAX_DECODE, heads=HEADS, device=device,
+                     n_pieces=n_pieces, decode_batch=decode_batch)
 
 
 log(f"device={device.type} train={n_train} val={len(val['feats'])} "
@@ -400,7 +351,8 @@ for epoch in range(start_epoch, EPOCHS):
                     f"cc64={med['cc64_agree']:.2f} (base {med['base_cc64_agree']:.2f}) "
                     f"asyn_err={med['asyn_offset_err']:.1f}ms (base {med['base_asyn_offset_err']:.1f}ms) "
                     f"boundary_f1={med['boundary_f1']:.2f} rubato_f1={med['rubato_f1']:.2f} "
-                    f"mdl_ratio={med['mdl_ratio']:.2f} nonfinite={med['n_nonfinite']:.1f} "
+                    f"mdl_sub={med['mdl_ratio_subset']:.2f} mdl_full={med['mdl_ratio_full']:.2f} "
+                    f"nonfinite={med['n_nonfinite']:.1f} "
                     f"n_pred={med['n_pred']} n_gt={med['n_gt']}")
             if HEADS:
                 msg += (f" | heads: artic_f1={med['artic_note_f1']:.2f} "
@@ -426,9 +378,14 @@ for epoch in range(start_epoch, EPOCHS):
                 msg += (f" | vel_rmse={med['vel_rmse']:.2f} (base {med['base_vel_rmse']:.2f}) "
                         f"dyn_f1={med['dyn_boundary_f1']:.2f}")
     log(msg)
-    torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
-                "epoch": epoch, "config": MODEL_CFG},
-               run_dir / "ckpt.pt")
+    # `--max-steps` promises "no checkpoint", and the `stop` break above only delivers that
+    # when the budget runs out mid-epoch. A 20-step smoke on a 5-batch pack completes four
+    # epochs first and wrote four checkpoints -- under the run name it was given, which for
+    # a real run's name is the silent overwrite the flag exists to prevent.
+    if not MAX_STEPS:
+        torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
+                    "epoch": epoch, "config": MODEL_CFG},
+                   run_dir / "ckpt.pt")
 
 if not MAX_STEPS:
     with open(run_dir / "final_val.json", "w") as f:

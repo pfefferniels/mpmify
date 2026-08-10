@@ -14,7 +14,8 @@ from dsl import encode_piece, encode_tempo_map
 
 src, dst = sys.argv[1], sys.argv[2]
 keep_eval = "--eval" in sys.argv
-v4 = "--v4" in sys.argv  # v4 targets (tempo+dynamics+rubato+asynchrony) + 15 features
+v41 = "--v41" in sys.argv  # v4 targets/labels + 16 features (cross-part offset)
+v4 = "--v4" in sys.argv or v41  # v4 targets (tempo+dynamics+rubato+asynchrony) + 15 features
 v31 = "--v31" in sys.argv  # v3 targets + conditioning features (13)
 v3 = "--v3" in sys.argv or v31
 v2 = "--v2" in sys.argv or v3
@@ -40,8 +41,9 @@ v2 = "--v2" in sys.argv or v3
 #: v4 raised 448 -> 512 on 2026-08-09: the first full 20k generation produced 6/20000
 #: pieces (0.03 %) above 448 (max 472) — the deliberate-raise path this guard exists for.
 MAX_TGT = {"v1": 224, "v2": 320, "v3": 448, "v4": 512}
+MAX_TGT["v41"] = MAX_TGT["v4"]
 MAX_NOTES = 320
-VERSION = "v4" if v4 else ("v3" if v3 else ("v2" if v2 else "v1"))
+VERSION = "v41" if v41 else ("v4" if v4 else ("v3" if v3 else ("v2" if v2 else "v1")))
 max_tgt = MAX_TGT[VERSION]
 
 feats, tgts, notes, tempi, dyns, artics, rubs = [], [], [], [], [], [], []
@@ -59,7 +61,11 @@ for line_no, line in enumerate(open(src)):
         tgt = encode_piece_v4({k: rec.get(k) or [] for k in
                                ("tempo", "dynamics", "rubato", "articulation",
                                 "movement", "asynchrony")}, subset="training")
-        f = piece_to_features_v4(rec)
+        if v41:
+            from dataset import piece_to_features_v41
+            f = piece_to_features_v41(rec)
+        else:
+            f = piece_to_features_v4(rec)
     elif v3:
         from dsl import encode_piece_v3
         tgt = encode_piece_v3(rec["tempo"], rec.get("dynamics", []),

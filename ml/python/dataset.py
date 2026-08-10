@@ -31,6 +31,7 @@ N_FEATURES = 9        # v1 (no velocity)
 N_FEATURES_V2 = 10    # + velocity/127
 N_FEATURES_V31 = 13   # + log2 duration-ratio, onset residual, velocity spike
 N_FEATURES_V4 = 15    # + part, pedal state
+N_FEATURES_V41 = 16   # + cross-part offset (asynchrony conditioning feature)
 
 
 def piece_to_features(rec, with_velocity=False):
@@ -389,3 +390,37 @@ if __name__ == "__main__":
         _self_test()
     else:
         print(__doc__)
+
+
+def piece_to_features_v41(rec):
+    """v4's 15 features + one asynchrony conditioning feature (the third instance of the
+    program's central lesson: a map learns exactly when its signal is an input feature).
+
+      15 cross_part_offset — windowed median, over score onsets within ±4 beats where BOTH
+                             parts play, of (part-2 performed onset − part-1 performed onset
+                             at the same score onset), in ms / 100, clamped ±1. Zero when
+                             either side has no data in the window. Part-scoped IOIs hide
+                             this offset by construction (wave-4 B5); this exposes it.
+    """
+    base = piece_to_features_v4(rec)
+    notes = sorted(rec["notes"], key=lambda n: (n[0], n[2], n[6] if len(n) > 6 else 1))
+    # earliest performed onset per (part, score-date): melody-lead within a chord is not
+    # asynchrony; the map shifts the whole part, so the first strike carries the signal
+    p1_on, p2_on = {}, {}
+    for n in notes:
+        d = n[0]
+        tgt = p1_on if (n[6] if len(n) > 6 else 1) == 1 else p2_on
+        if d not in tgt or n[3] < tgt[d]:
+            tgt[d] = n[3]
+    shared = sorted(set(p1_on) & set(p2_on))
+    offsets = [(d, p2_on[d] - p1_on[d]) for d in shared]
+    for i, n in enumerate(notes):
+        d = n[0]
+        window = [off for (sd, off) in offsets if abs(sd - d) <= 4 * PPQ]
+        if window:
+            window.sort()
+            med = window[len(window) // 2]
+            base[i].append(max(-1.0, min(1.0, med / 100.0)))
+        else:
+            base[i].append(0.0)
+    return base
