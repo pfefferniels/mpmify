@@ -269,6 +269,15 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**espressivo layers-to-staffs briefing (2026-08-10 ~23:00)**: their new opt-in
+Mei.layersToStaffs() splits keyboard layers into own parts with CONCATENATED numbering
+("11","12") — would break fenby's part∈{1,2}/melody=part-1 coding; constraint relayed:
+opt-in must stay off, integer-safe numbering needed before we adopt (v1.1+ interest:
+voice-level asynchrony is real, 12-28 ms measured). Their processSlur fix is safe for
+us (we discard MEI-derived MPM). NEW REQUIREMENT for corpus integration: pin espressivo
+at a recorded SHA in every corpus's metadata (conversion behavior must not drift
+mid-corpus) — enforce at wave-1 integration.
+
 **NAME (2026-08-10, Niels via naming session): the system is "fenby"** (always
 lowercase) — after Eric Fenby, Delius's amanuensis, who wrote down performances from
 dictation; the system writes them down as MPM. Supersedes my working title
