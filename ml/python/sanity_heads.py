@@ -10,6 +10,13 @@ a training curve, so they are checked apart:
     (what ``forward`` now does, so a heads run pays for one encoder pass and not two) is
     numerically identical to the fused call it replaced.
 
+``python3 sanity_heads.py labels [n_pieces]``
+    The *alignment* contract. ``preprocess.py`` packs the training labels from the raw JSONL
+    record (notes part-major); ``evaluate.py`` recomputes them from the preprocessed record
+    (notes date-major) to score the head. Those two have to agree row for row, or the model
+    is trained against one target and graded against another -- which is exactly the failure
+    that made ``_v4_render`` compare part 1 against part 2 for the whole v4 program.
+
 ``python3 sanity_heads.py assembly [n_pieces]``
     The *plumbing* contract, and the one worth having. Ground-truth note labels are pushed
     through the exact path a model's predictions take -- assemble a part-local
@@ -94,6 +101,40 @@ def check_model():
     print("MODEL_SANITY_PASS")
 
 
+def check_labels(path="../data/val_v4.pt", n=200):
+    """The packed training labels must equal the evaluator's recomputation, row for row."""
+    from dataset import piece_to_note_labels_v4
+
+    val = torch.load(path)
+    if not val.get("note_labels"):
+        raise SystemExit(f"{path} carries no note_labels -- preprocess it with --v4 again")
+    worst = worst_feat = 0.0
+    rows = 0
+    for i in range(min(n, len(val["feats"]))):
+        rec = {"notes": val["notes"][i].tolist()}
+        for k in MAPS + ("total_ticks", "sustain_cc"):
+            rec[k] = val[k][i]
+        gt = piece_to_note_labels_v4(rec)
+        packed = val["note_labels"][i]
+        got = torch.tensor([gt["artic_present"], gt["relative_duration"],
+                            gt["velocity_change"], gt["pedal_state"]]).T
+        assert got.shape == packed.shape, (i, got.shape, packed.shape)
+        # the packed side is float32; the recomputation is float64, so compare at float32
+        worst = max(worst, float((got.float() - packed).abs().max()))
+        rows += packed.shape[0]
+        # ... and the labels must sit on the same notes as the FEATURES: feature 14 is the
+        # same pedal state the encoder sees, /127. Only near-equal, not equal: the feature
+        # stores the quotient in float32 and multiplying it back is not the identity.
+        worst_feat = max(worst_feat,
+                         float((val["feats"][i][:, 14] * 127.0 - packed[:, 3]).abs().max()))
+    n_used = min(n, len(val["feats"]))
+    print(f"{n_used} pieces, {rows} note rows: max |packed - recomputed| = {worst:.3e}; "
+          f"max |feature 14 x127 - pedal label| = {worst_feat:.3e}")
+    assert worst == 0.0, "packed training labels differ from the evaluator's recomputation"
+    assert worst_feat < 1e-3, "pedal label and pedal feature are on different notes"
+    print("LABEL_ALIGNMENT_PASS")
+
+
 def check_assembly(path="../data/val_v4.pt", n=50):
     from dataset import piece_to_note_labels_v4
     from evaluate import evaluate_piece_v4, note_preds_to_articulation
@@ -154,6 +195,8 @@ if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "model"
     if what == "model":
         check_model()
+    elif what == "labels":
+        check_labels(n=int(sys.argv[2]) if len(sys.argv) > 2 else 200)
     elif what == "assembly":
         check_assembly(n=int(sys.argv[2]) if len(sys.argv) > 2 else 50)
     else:
