@@ -258,6 +258,16 @@ domain randomization per the Vienna findings, dual-renderer 0-diff gate), Team E
 streams; vienna_ceiling.py — the representation-ceiling measurement answering how
 much of the 2.9-9.0 s sim2real error any canonical tempo map could close).
 
+**Expression-transform campaign merged (2026-08-10 ~09:30)**: meico-ts main@9974ba3
+(3992 tests). exaggerateMpm/spotlightMpm: 15-dimension parameter-space MPM transforms
+in correct scale spaces (log/logit/gain), deterministic, with R5a/R5b invariance
+(symbolic note identity preserved = LABEL-SAFE augmentation) and per-dimension reports.
+Queued for our program: (a) v5 data augmentation — systematic interpretation variation
+over canonical samples (sampling ranges: expression/DESIGN.md §8; MLign's generator
+wiring is the reference consumer); (b) evaluation probe — single-dimension exaggeration
+of an EXTRACTED MpM + render diff isolates what each dimension of our model's output
+actually controls.
+
 **Ornamentation program MERGED (2026-08-09 ~22:45)**: meico-ts main@05147ed, 3064
 tests green, our E1/E2 pair pushed to origin with it. Everything v5 needs is mainline:
 discrete-note ornament rendering (trills/turns/mordents as real notes), provenance
