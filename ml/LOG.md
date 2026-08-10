@@ -269,6 +269,15 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Truthful re-evals of the record (2026-08-10 ~20:30, eval_ckpt.py on val_v4.pt)**:
+v4-h100 render 1585.0 (was published 9956.6 — void), e96 **502.5 / vel 8.26 /
+boundary 0.769 / rubato 1.00** (the 24→96 gain was 3.2x, not the ~3% the broken
+evaluator showed — the schedule conclusion was right for a reason we couldn't see;
+correct-conclusion-from-corrupted-evidence is luck, not method), cpuref 6375
+(labeled: epoch-4 fragment, record-completion only). Mixed-provenance caveat
+accepted: both heads ckpts being re-scored on the same pack for a five-run table.
+v41 ckpt pulled and byte-verified locally; **Vienna probe running**.
+
 ## v4 VERDICT (2026-08-10 ~19:45): the hybrid works — completely
 
 Both 96-epoch runs, exit 0, ~22 min each, identical-condition pair, truthful evaluator:
