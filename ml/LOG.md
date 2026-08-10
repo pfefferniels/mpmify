@@ -269,6 +269,17 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Training moves to bwUniCluster — local-training era ends (2026-08-10 ~15:30, Niels'
+directive via the cluster agent: local trainings starve the machine)**: 17:35 local v4
+auto-fire CANCELLED. New policy: trainings on the cluster; the Mac keeps rendering/
+data-generation/validation only. The replication gate improved in the move (cluster
+agent's design): v4-h100 (--device cuda) vs v4-cpuref (--device cpu --threads 32) on
+the SAME filesystem/torch/data isolates the device variable, instead of confounding
+BLAS+build+architecture as my Mac-vs-H100 gate would have. train.py gained --device
+(4453193/ac7f0c2) and --threads (4dddcfd); CPU path semantics unchanged. Gate: median
+final_val parity, >5% relative divergence on render/vel RMSE = investigate. MLign
+informed (caps relax; cluster pointer shared).
+
 **bwUniCluster 3.0 scoping (2026-08-10 ~14:30)**: Niels arranged HPC/GPU access; a
 scoping agent collected our training factsheet. Migration is trivial (torch-only dep,
 ~20-line --device patch, 87 MB of packed tensors, battle-tested resume, no network).
