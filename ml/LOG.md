@@ -278,6 +278,17 @@ check when we adopt: alignment of provenance[i] with the converter's MSM list is
 UNVERIFIED for score-less mdivs (our pilot is single-mdiv per file). Adoption boundary
 = the branch merge, which is already a corpus-regeneration boundary for us (slur fix).
 
+**Direct integration pass (2026-08-11 ~01:15, orchestrator — the review agent died
+on the weekly limit)**: corpus → preprocess → model_v2 verified end to end on REAL
+repertoire. One real finding: the note-axis cap bound, not the grammar — 7/58 real
+windows exceeded MAX_NOTES=320 (up to 424 notes) while their DSL targets stayed at
+37-275 tokens, i.e. real repertoire is denser than the synthetic sampler's. Raised
+MAX_NOTES to 512 with the reasoning in-code (dropping dense windows would bias the
+corpus toward exactly the sparse textures the model already handles). All 58 windows
+now pack (avg 219 notes / 122 tokens). Smoke on configs/base.json: 4.28M params,
+1.09 GB, all loss components live, and the log line proves the leak fix at runtime
+(`f14_pedal=EXCLUDED`, index verified against dataset.py's layout).
+
 ## Wave 1 delivered (2026-08-11 ~01:00) — corpus/model/demo, 8/10 agents
 
 **CORPUS (gates green, fix-round unfinished)**: 30 real movements (Bach/Scarlatti/

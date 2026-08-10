@@ -42,7 +42,14 @@ v2 = "--v2" in sys.argv or v3
 #: pieces (0.03 %) above 448 (max 472) — the deliberate-raise path this guard exists for.
 MAX_TGT = {"v1": 224, "v2": 320, "v3": 448, "v4": 512}
 MAX_TGT["v41"] = MAX_TGT["v4"]
-MAX_NOTES = 320
+#: Note-axis cap. 320 came from the synthetic sampler's density; REAL repertoire is
+#: denser (Chopin/Scriabin windows reach 424 notes at the same 24-64 beat span), and the
+#: first real corpus put 7/58 windows over it while their DSL targets stayed at 37-275
+#: tokens -- i.e. the binding axis is notes, not the grammar. Raised to 512 for the fenby
+#: corpora: the SDPA encoder is O(N^2) in notes but 512 is well inside an H100's budget at
+#: these model sizes, and dropping the densest windows would bias the corpus exactly toward
+#: the sparse textures the model already handles.
+MAX_NOTES = 512
 VERSION = "v41" if v41 else ("v4" if v4 else ("v3" if v3 else ("v2" if v2 else "v1")))
 max_tgt = MAX_TGT[VERSION]
 
