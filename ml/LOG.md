@@ -269,6 +269,16 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Staging error + cluster outage (2026-08-10 ~19:00)**: my e814960 blanket-staged
+train.py and swept the heads successor's in-flight rework incl. an import of the
+then-UNCOMMITTED eval_ckpt.py — main's train.py briefly import-broken; successor
+directed to land its files immediately (fix = its commit). Simultaneously the cluster
+agent's auth socket died (their predicted fragility; Niels away) — v41 submission
+deferred, both hold-messages timed out. STANDING ACTION: when the cluster session
+revives, FIRST send the corrected sync SHA, then the v41 run request stands unchanged.
+Lesson (mine): never blanket-stage a shared file while a build agent is active in it —
+stage by hunk or by explicitly-owned file list.
+
 **Device gate PASSED and closed early; cpuref cancelled (2026-08-10 ~17:30, Niels +
 cluster agent)**: matched-epoch parity h100-vs-cpuref at epochs 1/3 — render 1.6%,
 vel 1.9-2.6% relative divergence (criterion: >5%), boundary_f1 identical. Adjudicated
