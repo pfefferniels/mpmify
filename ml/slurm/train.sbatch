@@ -5,6 +5,11 @@
 #   sbatch --export=ALL,RUN=v4-h100,EPOCHS=24,MODE=v4 ml/slurm/train.sbatch
 #   sbatch -p dev_gpu_h100 -t 00:30:00 --export=ALL,RUN=smoke,EPOCHS=1 ml/slurm/train.sbatch
 #
+# CPU reference run (the other half of the replication gate) — override the GPU
+# directives on the command line, since #SBATCH lines cannot be conditional:
+#   sbatch -p cpu --gres=NONE -c 32 -t 12:00:00 \
+#          --export=ALL,RUN=v4-cpuref,DEVICE=cpu,THREADS=32 ml/slurm/train.sbatch
+#
 # train.py is positional (EPOCHS RUN MODE) with --device stripped before parsing,
 # and resolves data/checkpoints relative to ml/python — so we cd there.
 # Checkpoints land in ml/runs/<RUN>/ckpt.pt every epoch; a killed job resumes by
@@ -29,6 +34,10 @@ REPO="$WS/mpmify-ml"
 RUN="${RUN:-v4-h100}"
 EPOCHS="${EPOCHS:-24}"
 MODE="${MODE:-v4}"
+DEVICE="${DEVICE:-cuda}"
+# Only meaningful on cpu; train.py ignores --threads on cuda. 32 rather than the
+# node's full core count: torch CPU training saturates well below it.
+THREADS="${THREADS:-32}"
 
 module load devel/python/3.13.3-gnu-14.2
 PY="$HOME/venvs/ml-cu128/bin/python"
@@ -37,9 +46,13 @@ mkdir -p "$REPO/slurm-logs"
 cd "$REPO/python"
 
 echo "=== $(date -Is) job $SLURM_JOB_ID on $(hostname) ==="
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-echo "run=$RUN epochs=$EPOCHS mode=$MODE"
-
-srun "$PY" train.py "$EPOCHS" "$RUN" "$MODE" --device cuda
+echo "run=$RUN epochs=$EPOCHS mode=$MODE device=$DEVICE"
+if [ "$DEVICE" = "cuda" ]; then
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+    srun "$PY" train.py "$EPOCHS" "$RUN" "$MODE" --device cuda
+else
+    echo "cpu cores allocated: ${SLURM_CPUS_PER_TASK:-?}, threads=$THREADS"
+    srun "$PY" train.py "$EPOCHS" "$RUN" "$MODE" --device cpu --threads "$THREADS"
+fi
 
 echo "=== $(date -Is) done ==="

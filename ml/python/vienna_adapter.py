@@ -191,6 +191,22 @@ def parse_match(path, grace_dur_ticks, pedal_offsets, dedupe_pedal=False):
     for n, part in zip(notes, assign_parts(notes)):
         n.append(part)
 
+    # total_ticks is the NOTATED length -- "the sampled piece length, not wherever the
+    # last note ended" (preprocess.py). The real-data analogue is the end of the excerpt's
+    # last measure, which partitura reconstructs from the match file's measure:beat fields.
+    # It exceeds the last note-off in 3 of the 4 pieces (their final bar is not filled to
+    # the end), exactly the case the synthetic side models with a trailing rest.
+    end_q = None
+    try:
+        sp = score[0]
+        end_q = float(sp.quarter_map(sp.last_point.t))
+    except (AttributeError, IndexError, TypeError, ValueError):
+        pass
+    total_ticks = max(
+        int(round((end_q - q0) * QUARTER_TICKS)) if end_q is not None else 0,
+        max(n[0] + n[1] for n in notes),
+    )
+
     base = os.path.basename(path)[: -len(".match")]
     piece, pianist = base.rsplit("_p", 1)
     part0 = performance[0]
@@ -202,6 +218,7 @@ def parse_match(path, grace_dur_ticks, pedal_offsets, dedupe_pedal=False):
         "piece": piece,
         "pianist": "p" + pianist,
         "ppq": PPQ,
+        "total_ticks": total_ticks,
         "notes": notes,
         "n_insertions": labels.get("insertion", 0),
         "n_deletions": labels.get("deletion", 0),
@@ -226,6 +243,15 @@ def _emit(rec, sel, start, span, idx, tail):
     d0 = sel[0][0]
     t0 = min(n[3] for n in sel)
     t1 = max(n[4] for n in sel)
+    # a window is its own little piece, so its total_ticks is its notated span measured
+    # from its first note -- clamped to the piece end, and never shorter than its own
+    # sounding content (a note may sustain past the window boundary)
+    upper = (
+        rec["total_ticks"]
+        if tail
+        else min(int(round((start + span) * QUARTER_TICKS)), rec["total_ticks"])
+    )
+    w_total = max(upper - d0, max(n[0] + n[1] for n in sel) - d0)
     return {
         "id": f"{rec['id']}_w{idx}",
         "piece": rec["piece"],
@@ -235,6 +261,7 @@ def _emit(rec, sel, start, span, idx, tail):
         "window_start_beat": round(start, 3),
         "window_beats": span,
         "window_start_ms": round(t0, 6),  # window clock -> full-record clock
+        "total_ticks": w_total,
         "tail": tail,
         # parts come from the full record, not recomputed per window: a window cannot see
         # a note sustained in from before its start, so recomputing would relabel onsets
@@ -528,6 +555,26 @@ def main():
         f"{sum(m['n_grace'] for m in metas)}"
     )
     print(f"alignment labels: {dict(sum((Counter(m['labels']) for m in metas), Counter()))}")
+
+    # ---- total_ticks -------------------------------------------------------------------
+    print("\n=== total_ticks (notated length; synthetic parity) ===")
+    print(f"{'piece':<22}{'total':>9}{'last note-off':>15}{'slack beats':>13}")
+    for piece, items in sorted(by_piece.items()):
+        r = items[0][0]
+        last = max(n[0] + n[1] for n in r["notes"])
+        print(
+            f"{piece:<22}{r['total_ticks']:>9}{last:>15}"
+            f"{(r['total_ticks']-last)/QUARTER_TICKS:>13.2f}"
+        )
+    miss = sum(1 for r in recs + wins if not r.get("total_ticks"))
+    short = sum(
+        1 for r in recs + wins if r["total_ticks"] < max(n[0] + n[1] for n in r["notes"])
+    )
+    print(
+        f"records missing total_ticks: {miss}; "
+        f"records where total_ticks < max(date+dur): {short} "
+        f"(synthetic invariant is total_ticks >= max(date+dur))"
+    )
 
     # ---- parts -----------------------------------------------------------------------
     print("\n=== parts ===")
