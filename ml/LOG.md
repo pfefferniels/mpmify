@@ -269,6 +269,12 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**layers-to-staffs round 2 (2026-08-10 ~23:20)**: correction — renumbering is
+UNIVERSAL when the pass runs (single-layer staffs too: 1→"11"); no safe subset.
+fenby formally requested their byte-neutral option: layersToStaffs() RETURNS the
+newStaffN→{origStaff,origLayer} map (they raise it with Niels). Re-pin rule recorded:
+crossing the slur-fix merge with real-MEI corpora = corpus-regeneration boundary.
+
 **espressivo layers-to-staffs briefing (2026-08-10 ~23:00)**: their new opt-in
 Mei.layersToStaffs() splits keyboard layers into own parts with CONCATENATED numbering
 ("11","12") — would break fenby's part∈{1,2}/melody=part-1 coding; constraint relayed:
