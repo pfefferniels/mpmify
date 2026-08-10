@@ -269,6 +269,14 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**v4 verdict runs LAUNCHED (2026-08-10 19:18)**: v4-heads-h100 (job 6247332) and
+v41-asyn-h100 (6247333), both gates `heads=on w=1.0` passed, separate H100 nodes two
+seconds apart — identical conditions for the one-variable pair. Cluster agent's
+pre-submit verification: all four packs byte-matched to local sources, sync SHA
+ancestor-checked (not name-trusted), eval_ckpt.py present. Heads cost: 4.28M vs 4.21M
+params. Re-evals queued behind the runs; cpuref's will be labeled record-completion,
+not a model result. First heads signal to watch: artic_f1 leaving 0.00 (late epochs).
+
 **Heads phase 2 COMPLETE — the hybrid's per-note half is shippable (2026-08-10 ~19:30,
 heads successor agent, 6b01399)**. The model/train/eval wiring the predecessor built
 audited clean and was kept; two things were missing and one was wrong.
