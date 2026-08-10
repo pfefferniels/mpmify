@@ -469,7 +469,7 @@ def evaluate_piece_v4(pred_maps, rec, note_pred=None, artic_threshold=ARTIC_THRE
 
     * reports the note-level head metrics of :func:`note_head_metrics`, and
     * assembles a part-local articulationMap from the predictions and renders *with* it,
-      so velocity and note-off error reflect the heads' contribution and ``mdl_ratio``
+      so velocity and note-off error reflect the heads' contribution and ``mdl_ratio_full``
       prices a prediction that actually contains an articulationMap.
 
     Pedal is judged by ``pedal_state_mae`` only; reconstructing a movementMap from the
@@ -546,16 +546,33 @@ def evaluate_piece_v4(pred_maps, rec, note_pred=None, artic_threshold=ARTIC_THRE
                         else (1.0 if not pred_openers else 0.0))
     out["n_pred"] = len(pred["tempo"])
     out["n_gt"] = len(gt_maps["tempo"])
-    # MDL on the FULL DSL: the description length of a v4 performance is what CANONICAL §11
-    # prices, and the training target is a subset of it. Measuring the ratio on the subset
-    # would score the model against a representation nobody exports.
+    # MDL, priced twice, because one ratio cannot mean both things at once. The single
+    # `mdl_ratio` this replaces was full-vs-full, which on a phase-1 v4 model is not a
+    # quality measure at all: the prediction has no movementMap in it (median 408 of the
+    # GT's ~768 full tokens are movement) and, before the heads, no articulationMap either,
+    # so the ratio was pinned near a design constant -- v4-h100-e96 "settled" on 0.24 while
+    # its four trained maps were converging. The number moved when the architecture changed
+    # and not when the model got better, which is the opposite of what it is read for.
+    #
+    #   mdl_ratio_subset  the four maps the decoder is TRAINED on, both sides. This is the
+    #                     over-/under-segmentation signal: >1 over-explains, <1 drops
+    #                     productions. Healthy in [0.9, 1.2] (Team B's band).
+    #   mdl_ratio_full    what an exported MPM would cost against what the GT costs. Reads
+    #                     below 1 by construction until every map is predicted -- with the
+    #                     heads on it counts the assembled articulationMap, so it rises when
+    #                     a band moves from "not modelled" to "modelled", and that is the
+    #                     only thing it is evidence of.
     try:
         from dsl import encode_piece_v4
-        dl_pred = len(encode_piece_v4({**gt_maps, **pred}, subset="full"))
-        dl_gt = len(encode_piece_v4(gt_maps, subset="full"))
-        out["mdl_ratio"] = dl_pred / dl_gt if dl_gt else float("nan")
+        dl_sub_gt = len(encode_piece_v4(gt_maps, subset="training"))
+        dl_full_gt = len(encode_piece_v4(gt_maps, subset="full"))
+        out["mdl_ratio_subset"] = (len(encode_piece_v4(pred, subset="training")) / dl_sub_gt
+                                   if dl_sub_gt else float("nan"))
+        out["mdl_ratio_full"] = (len(encode_piece_v4(pred, subset="full")) / dl_full_gt
+                                 if dl_full_gt else float("nan"))
     except (ValueError, KeyError):
-        out["mdl_ratio"] = float("nan")
+        out["mdl_ratio_subset"] = float("nan")
+        out["mdl_ratio_full"] = float("nan")
     if note_pred is not None:
         out.update(note_head_metrics(rec, note_pred, artic_threshold))
     return out
