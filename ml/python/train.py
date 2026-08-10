@@ -382,7 +382,10 @@ for epoch in range(start_epoch, EPOCHS):
         log(f"SMOKE_COMPLETE after {step} steps ({time.time()-t0:.0f}s)")
         break
     msg = f"EPOCH {epoch} DONE ({time.time()-t0:.0f}s)"
-    if epoch % EVAL_EVERY == EVAL_EVERY - 1 or epoch == EPOCHS - 1:
+    # A smoke whose step budget crosses an epoch boundary would otherwise pay for a full
+    # 100-piece greedy-decode eval it is going to throw away -- minutes on a loaded CPU,
+    # and far longer than the training steps it was asked to run.
+    if not MAX_STEPS and (epoch % EVAL_EVERY == EVAL_EVERY - 1 or epoch == EPOCHS - 1):
         med = run_eval()
         if V4:
             msg += (f" val: exact={med['exact']:.2f} "
