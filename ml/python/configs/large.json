@@ -1,0 +1,35 @@
+{
+  "name": "v2-large",
+  "arch": "model_v2",
+  "mode": "v41",
+  "note": "Production scale (SYSTEM.md 2.2: 'start d512 / 6+6 / ~40M; epochs and params are NOT economized'). Differs from base.json ONLY in d_model, layer counts and ff — same data, same schedule, same features, same heads, same f14 exclusion — so large-vs-base is a clean scale comparison. If it diverges early, the fix is a second run with a longer warmup, not an edit to this file.",
+  "model": {
+    "d_model": 512,
+    "nhead": 8,
+    "enc_layers": 6,
+    "dec_layers": 6,
+    "ff": 2048,
+    "dropout": 0.1,
+    "pos": "sinusoidal",
+    "_pos": "sinusoidal here too: rope would be a second variable on top of the size change. Flip it in a third config once this run has a curve to compare against.",
+    "activation": "relu",
+    "heads": true,
+    "exclude_features": [14],
+    "_exclude_features": "f14 = pedal_state, also the fourth head target — see base.json.",
+    "max_len": 2048
+  },
+  "train": {
+    "epochs": 96,
+    "batch": 48,
+    "lr": 0.0003,
+    "warmup": 300,
+    "weight_decay": 0.01,
+    "head_weight": 1.0,
+    "clip": 1.0,
+    "eval_pieces": 100,
+    "eval_every": 2,
+    "decode_batch": 50,
+    "final_eval_pieces": 500,
+    "_schedule": "Byte-identical to base.json's train block. A 45M model would usually get a lower LR and a longer warmup, but changing them here would make every difference from base attributable to two causes at once. The grad-norm clip at 1.0 is the safety net; watch the first 300 steps."
+  }
+}

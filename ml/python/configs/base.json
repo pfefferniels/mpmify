@@ -1,0 +1,37 @@
+{
+  "name": "v2-base",
+  "arch": "model_v2",
+  "mode": "v41",
+  "note": "Regression anchor. The v4-verdict architecture (d192 4+4 ff768, 4.28M) rebuilt on model_v2's SDPA blocks, on the 16-feature v4.1 pack. Differs from runs/v41-asyn-h100 in exactly two ways: the encoder/decoder internals (custom blocks, parameter-identical) and the f14 pedal-feature exclusion. Anything this run loses against v41-asyn-h100's 771.6 ms render / 6.28 vel / 5.6 ms asyn is a port defect, not a result.",
+  "model": {
+    "d_model": 192,
+    "nhead": 8,
+    "enc_layers": 4,
+    "dec_layers": 4,
+    "ff": 768,
+    "dropout": 0.1,
+    "pos": "sinusoidal",
+    "_pos": "sinusoidal, not rope: this config's job is to reproduce the v4 architecture. RoPE is implemented and tested; flipping it here is the next one-variable ablation, not part of the anchor.",
+    "activation": "relu",
+    "_activation": "relu because nn.TransformerEncoderLayer defaults to relu and model.py never overrode it.",
+    "heads": true,
+    "_heads": "true, not \"auto\": a v41 pack without note_labels must abort, not silently train the decoder alone (CLUSTER_QUEUE.md gates this by eye today).",
+    "exclude_features": [14],
+    "_exclude_features": "f14 = pedal_state, which is also the fourth per-note head target. Leaving it in makes the pedal head copy its own input (LOG.md 2026-08-10 Vienna re-probe: the 0.3cc/1.17cc pedal MAEs are largely self-copy). Removed from the input projection entirely, not zeroed.",
+    "max_len": 2048
+  },
+  "train": {
+    "epochs": 96,
+    "batch": 48,
+    "lr": 0.0003,
+    "warmup": 300,
+    "weight_decay": 0.01,
+    "head_weight": 1.0,
+    "clip": 1.0,
+    "eval_pieces": 100,
+    "eval_every": 2,
+    "decode_batch": 50,
+    "final_eval_pieces": 500,
+    "_schedule": "Identical to the v4 verdict runs (96 epochs, batch 48, 3e-4 cosine after 300 warmup steps) so this run is comparable to them without a caveat."
+  }
+}
