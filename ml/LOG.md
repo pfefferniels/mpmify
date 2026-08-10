@@ -269,6 +269,18 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Evaluator mis-pairing found — v4 render/vel metrics invalidated (2026-08-10 ~17:00,
+heads agent, fix 055f8ab)**: _v4_render flattened parts part-major and zipped against
+date-sorted GT — every v4 render/velocity number so far compared part-1 renders to
+part-2 targets (GT floor read 8064 ms; after fix: exactly 0.0 over 30 pieces). The
+pilot gate missed it because the raw JSONL is part-major — only the preprocessed
+training path was wrong. SURVIVES: F1s, mdl, asyn_err, cc metrics (map/stream-space) —
+so schedule-was-binder and the asynchrony diagnosis stand. CORRECTED my own claim:
+the ~10s absolute scales were mostly THIS, not the widened bpm domain. h100-vs-cpuref
+stays valid as a device-parity gate (identical deterministic mis-measurement both
+sides); all three checkpoints get re-evaluated with eval_ckpt.py (scope-added to the
+heads agent). Lesson reinforced: GT-floor checks belong on EVERY data path, not one.
+
 **e96 probe adjudicated mid-flight (2026-08-10 ~16:30)**: schedule WAS the binder —
 rubato F1 0→1.00, boundary 0.71, n_pred==n_gt, mdl_ratio settled on the design
 constant 0.24 (metric normalization fix routed to the heads agent: subset-vs-subset
