@@ -799,3 +799,77 @@ and epoch budget carry over), and the memory headroom means the choice can be re
 upward without a new measurement. Re-measure s/step once the machine is quiet — the
 projection to a 24-epoch wall-clock is worth having before committing to a multi-day run,
 and no number taken under load average 20 can supply it.
+
+## Demo generator: the review pass (2026-08-10, after `d5f7e99`)
+
+The generator shipped in `d5f7e99` (checkpoint + record id → one self-contained page,
+`ml/demos/generate_demo.py`) went through an adversarial read. Ten findings, all real,
+all fixed here; three of them are the kind worth keeping in program memory because they
+are failure *shapes*, not typos.
+
+**A floor that cannot run is not a floor, and one that cannot fail is worse.** The MPM
+writer's proof was `--selftest`: rebuild all 100 `pilot_v4.jsonl` documents from their map
+rows, diff byte-for-byte against the `.mpm` files `ml/node/xml.mjs` wrote. On this machine
+it genuinely passed 100/100. But its loop did `if not ref_path.exists(): continue`, and
+`ml/.gitignore` ignores `data/` — so on any fresh clone the same command printed `0
+byte-exact, 0 mismatching` and exited 0. The advertised floor was vacuous everywhere except
+where it happened to be run. Fixed twice over: a missing reference is now a counted FAILURE,
+an empty fixture leg is a FAILURE, and only a run that actually compared documents can
+return true; and twelve reference documents are committed *in tree*
+(`ml/demos/fixtures/`, 164 KB) so the check runs on a bare clone. The twelve are the
+smallest set covering every writer branch the pilot data reaches (26 branch flags: map
+presence, transition vs constant, articulation row width and part, rubato span/neutral and
+loop, movement transition and default-valued curvature/protraction, part sets — two records
+suffice) plus the ten with the most instructions; `--rebuild-fixture` recomputes both from
+the generated data. Each fixture record keeps its maps verbatim but only one note row per
+part, which puts the writer's own claim under test: the reference was written from the full
+record, so a writer that reads anything but field 6 of a note would now fail. Probed in a
+simulated clone: fixture absent → FAIL(1); one reference deleted → FAIL(1); one reference
+byte perturbed → FAIL(1); `beatLength` 0.25→0.5 → 12/12 mismatch; dropping the M9
+default-omission rule → 2/12 mismatch (exactly the two records carrying default-valued
+movement attributes — the coverage selection earning itself).
+
+**A caveat gated on the wrong condition is a caveat that is absent where it matters.** The
+pedal-leak note fired on `metrics_gt.pedal_state_mae`, which exists only for records with
+ground-truth maps — so the *synthetic* page carried it and the *Vienna* page, which prints
+`pedal-state MAE 1.07` just the same, did not. The leak is not a property of synthetic data:
+input feature 14 is `sustain_state_lookup(rec['sustain_cc'])` at `ms_on − asynchrony offset`
+(`dataset.py:209,225`) and the pedal head's label is the identical call at the identical
+instant (`dataset.py:285-291`), so any record carrying `sustain_cc` — a Vienna window has
+725 events — leaks. Now gated on the number being printed at all, and worded as the
+feature-set property it is, naming the correction that exists (`model_v2`
+`exclude_features=[14]`, `9c216c0`) and that this checkpoint predates it.
+
+**A page dated `date.today()` is not reproducible from its inputs.** The committed HTML
+re-derived byte-identically only because the re-run happened on the generation date.
+`--date` is now an argument, the page prints in §Provenance the exact command that rebuilds
+it — and that command is *run* as a check: extracted from the rendered page, unescaped,
+executed, byte-compared. Same mechanism carries the new `--caveat`, the one thing on a demo
+that cannot come from the preds JSON: *why this record*. Both pages now state their own
+selection rule. demo-2's, re-derived from scratch here rather than quoted: of the first 20
+`val_v4` records meeting the filter, all 20 inferred, id 7 is **rank 11 of 20** by onset
+RMSE (932.86) — the upper of the two central values (869.61 / 932.86; true median 901.24),
+with ten records rendering better. "The median" was the wrong word for an even-sized set,
+and the honest statement is stronger.
+
+Also fixed: `--preds`-only regeneration printed the preds file as the page's `source`
+(inference now records `meta.source`, and the path is displayed repo-relative — a public
+page should not carry a home directory); `MAP_ORDER` was re-spelled instead of imported
+from `dsl.V4_MAP_ORDER`; the "every series carries a distinct dash" claim was blanket where
+only the gray↔crimson pair (the one in the 6–8 CVD ΔE band) is dash-separated and ink↔crimson
+is separated by colour alone at ΔE 18.4/16.5 — the docstring now says exactly that; the
+stylesheet's one deviation from demo-0 (`.wrap` 46rem→52rem) is documented in the file and
+its four dead rules are gone (`tr.gt` is now emitted instead of per-cell muted spans, which
+also shrinks the pages). `validate_palette.js` also prints `[FAIL] Lightness band` and
+`[FAIL] Chroma floor` on our tokens — an editorial mono+accent palette will always fail a
+categorical-palette check — and the earlier report quoted only the PASS lines; the full
+transcript belongs in any future palette claim.
+
+Everything re-verified after the changes: `--selftest` 112 documents byte-exact (12 fixture
++ 100 pilot), 0 mismatching, 0 missing; `infer_v4.py` without the new flags still
+byte-identical to the stored `vienna_windows.preds.json` rows; every metric string on both
+pages present at the page's own precision; polyline point counts equal the note counts
+(177/177/177, 171/171/171); XML element counts equal the map row counts; 0 attribute
+mismatches over 93 + 43 instructions parsed back with ElementTree; no dead CSS rule left;
+no external request; measured in Firefox at the narrowest window the OS allows (500 px):
+document overflow 0, every table inside an `overflow-x:auto` wrapper, nothing spilling.

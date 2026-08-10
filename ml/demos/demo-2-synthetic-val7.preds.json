@@ -27,7 +27,8 @@
    "ppq": 720,
    "total_ticks": 46080,
    "seed": 944001,
-   "renderer": "java"
+   "renderer": "java",
+   "source": "/Users/nielspfeffer/Projects/mpmify/ml/data/val_v4.jsonl"
   },
   "notes": [
    [

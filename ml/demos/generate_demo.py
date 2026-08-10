@@ -4,8 +4,10 @@
     python3 generate_demo.py --ckpt ../runs/v41-asyn-h100/ckpt.pt \
         --data ../data/vienna_infer_windows.jsonl --id Schubert_D783_no15_p01_w1 \
         --out demo-1-schubert.html
-    python3 generate_demo.py --preds preds.json --id 7 --out demo-2-synthetic.html
+    python3 generate_demo.py --preds preds.json --id 7 --date 2026-08-10 \
+        --out demo-2-synthetic.html
     python3 generate_demo.py --selftest          # XML emitter vs the generator's own .mpm
+    python3 generate_demo.py --rebuild-fixture   # refresh that check's in-tree references
 
 What the page contains (SYSTEM.md 2.4): the input performance, the emitted MPM as readable
 per-map instruction tables *and* as compiled MPM XML, an inline-SVG overlay of performed vs
@@ -26,11 +28,15 @@ prediction" are the same statement.
 The MPM writer is a port of `ml/node/xml.mjs::buildMpm` -- the generator's own writer, the
 one whose documents both renderers parse -- extended over the maps `dsl_to_mpm.py` does not
 cover (rubato, part-local articulation, asynchrony, movement).  It is not trusted because
-it looks right: `--selftest` rebuilds the MPM of all 100 `pilot_v4.jsonl` records from
-their JSONL maps and compares byte for byte against the `.mpm` files the Node generator
-wrote for those same records (`ml/data/debug_v4/piece*.mpm`).  Number formatting is
-imported from `dsl_to_mpm` (`_jd` = Java `Double.toString`, `_num` = `%.2f` stripped)
-rather than re-spelled.
+it looks right: `--selftest` rebuilds each reference record's MPM from its JSONL map rows
+and compares byte for byte against the `.mpm` file the Node generator wrote for it.  Two
+legs, both fail-closed -- a reference that is not there fails the check instead of being
+skipped, because a floor that cannot tell "passed" from "had nothing to compare" is not a
+floor.  Leg one is twelve records committed in `fixtures/` (`ml/.gitignore` ignores
+`data/`, so this is the only leg that runs on a bare clone); leg two is all 100 records of
+`ml/data/pilot_v4.jsonl` against `ml/data/debug_v4/piece*.mpm`, on a machine that has them.
+Number formatting is imported from `dsl_to_mpm` (`_jd` = Java `Double.toString`, `_num` =
+`%.2f` stripped) rather than re-spelled, and the map order from `dsl.V4_MAP_ORDER`.
 
 Scope of the emitted document: the model predicts tempo, dynamics, rubato and asynchrony
 through the DSL decoder and articulation through the per-note heads, so those five maps are
@@ -44,6 +50,7 @@ import html
 import json
 import math
 import re
+import shlex
 import sys
 from datetime import date
 from pathlib import Path
@@ -51,6 +58,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "python"))
 
+from dsl import V4_MAP_ORDER as MAP_ORDER  # noqa: E402 -- imported, never re-spelled
 from dsl_to_mpm import _jd, _num  # noqa: E402, PLC2701 -- the project's number formatters
 import dynamics_math  # noqa: E402
 import rubato_math  # noqa: E402
@@ -62,7 +70,6 @@ MOVEMENT_DEFAULT_CURVATURE = 0.4
 MOVEMENT_DEFAULT_PROTRACTION = 0.0
 #: `ml/node/generate_v4.mjs:354-356` -- the part stubs every v4 document has.
 PART_STUBS = {1: ("Piano", 0, 0), 2: ("Bass", 1, 0)}
-MAP_ORDER = ("tempo", "dynamics", "rubato", "articulation", "movement", "asynchrony")
 NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 
@@ -200,33 +207,196 @@ def maps_to_mpm_full(maps, notes=None, ppq=PPQ, name="perf"):
     return "".join(out)
 
 
-def selftest(pilot=None, debug_dir=None, limit=100):
-    """Rebuild every pilot record's MPM and diff it against the Node generator's own file."""
-    pilot = Path(pilot or HERE.parent / "data" / "pilot_v4.jsonl")
-    debug_dir = Path(debug_dir or HERE.parent / "data" / "debug_v4")
-    ok = bad = 0
+# ------------------------------------------------------------- floor 1: the MPM writer
+
+#: In-tree reference set for `--selftest`.  `ml/.gitignore` ignores `data/`, so the pilot
+#: records and the `.mpm` files the Node generator wrote for them exist only on the machine
+#: that generated them; a floor that can only run there is not a floor, and one that treats
+#: an absent reference as a skip reports a vacuous pass.  These twelve records and their
+#: twelve reference documents are therefore committed next to this file, and a missing
+#: reference is a FAILURE below, never a `continue`.
+FIXTURE_DIR = HERE / "fixtures"
+FIXTURE_JSONL = FIXTURE_DIR / "xml_selftest.jsonl"
+#: How the twelve were chosen, stated so the set is not a lucky sample: the smallest cover
+#: of every writer branch the pilot data reaches (greedy over 26 branch flags -- map
+#: presence, transition vs constant, articulation row width and part, rubato span/neutral
+#: and loop, movement transition and default-valued curvature/protraction, part sets), plus
+#: the ten records carrying the most instructions.  `--rebuild-fixture` recomputes both.
+#: Each fixture record keeps its maps verbatim and **one note row per part**: the writer
+#: reads field 6 of a note and nothing else, so the reduction is itself under test -- the
+#: reference was written by the Node generator from the *full* record.
+FIXTURE_NOTE_KEYS = ("id", "ppq", "total_ticks", "seed", "renderer")
+
+
+def _mpm_of(rec):
+    return maps_to_mpm_full({k: rec.get(k) or [] for k in MAP_ORDER},
+                            notes=rec["notes"], ppq=rec.get("ppq", PPQ))
+
+
+def _diff_report(name, got, ref):
+    j = next((k for k in range(min(len(got), len(ref))) if got[k] != ref[k]),
+             min(len(got), len(ref)))
+    print(f"  {name}: MISMATCH at char {j}\n    got {got[j:j + 90]!r}\n"
+          f"    ref {ref[j:j + 90]!r}")
+
+
+def _run_leg(label, cases):
+    """`cases`: (name, record, ref_path).  Returns (ok, bad, missing) and prints the leg."""
+    ok = bad = missing = 0
+    for name, rec, ref_path in cases:
+        if not Path(ref_path).exists():
+            missing += 1
+            print(f"  {name}: MISSING reference {ref_path}")
+            continue
+        got, ref = _mpm_of(rec), Path(ref_path).read_text()
+        if got == ref:
+            ok += 1
+        else:
+            bad += 1
+            _diff_report(name, got, ref)
+    print(f"  {label}: {ok} byte-exact, {bad} mismatching, {missing} missing")
+    return ok, bad, missing
+
+
+def _fixture_cases():
+    if not FIXTURE_JSONL.exists():
+        return None
+    cases = []
+    with open(FIXTURE_JSONL) as fh:
+        for line in fh:
+            rec = json.loads(line)
+            cases.append((rec["_ref"], rec, FIXTURE_DIR / "mpm" / rec["_ref"]))
+    return cases
+
+
+def _pilot_cases(pilot, debug_dir, limit):
+    pilot, debug_dir = Path(pilot), Path(debug_dir)
+    if not pilot.exists() or not debug_dir.is_dir():
+        return None
+    cases = []
     with open(pilot) as fh:
         for i, line in enumerate(fh):
             if i >= limit:
                 break
-            ref_path = debug_dir / f"piece{i}.mpm"
-            if not ref_path.exists():
-                continue
-            rec = json.loads(line)
-            got = maps_to_mpm_full({k: rec.get(k) or [] for k in MAP_ORDER},
-                                   notes=rec["notes"], ppq=rec.get("ppq", PPQ))
-            ref = ref_path.read_text()
-            if got == ref:
-                ok += 1
-            else:
-                bad += 1
-                j = next((k for k in range(min(len(got), len(ref))) if got[k] != ref[k]),
-                         min(len(got), len(ref)))
-                print(f"piece{i}: MISMATCH at char {j}\n  got {got[j:j + 90]!r}\n"
-                      f"  ref {ref[j:j + 90]!r}")
-    print(f"XML self-test: {ok} byte-exact, {bad} mismatching "
-          f"(reference: {debug_dir}/piece*.mpm written by ml/node/xml.mjs)")
-    return bad == 0
+            cases.append((f"piece{i}", json.loads(line), debug_dir / f"piece{i}.mpm"))
+    return cases
+
+
+def selftest(pilot=None, debug_dir=None, limit=100):
+    """Rebuild each record's MPM from its map rows and diff it against the Node generator's
+    own file, byte for byte.  Fail-closed on both legs: a missing reference fails, an empty
+    fixture leg fails, and only a run that actually compared documents can return True."""
+    pilot = pilot or HERE.parent / "data" / "pilot_v4.jsonl"
+    debug_dir = debug_dir or HERE.parent / "data" / "debug_v4"
+    print("XML self-test (reference: documents written by ml/node/xml.mjs::buildMpm)")
+    fixture = _fixture_cases()
+    if not fixture:
+        print(f"  fixture: MISSING -- {FIXTURE_JSONL} absent or empty; the in-tree floor "
+              f"cannot run (rebuild it with --rebuild-fixture on a machine that has "
+              f"{pilot} and {debug_dir})")
+        print("XML self-test: FAIL")
+        return False
+    ok, bad, missing = _run_leg(f"fixture, in tree ({FIXTURE_DIR.name}/)", fixture)
+    cases = _pilot_cases(pilot, debug_dir, limit)
+    if cases is None:
+        print(f"  pilot set: NOT ON THIS MACHINE ({debug_dir} absent) -- the in-tree "
+              f"fixture leg above is what gates this run")
+    else:
+        p_ok, p_bad, p_missing = _run_leg(f"pilot set ({debug_dir})", cases)
+        ok, bad, missing = ok + p_ok, bad + p_bad, missing + p_missing
+    good = bad == 0 and missing == 0 and ok >= len(fixture)
+    print(f"XML self-test: {'PASS' if good else 'FAIL'} -- {ok} documents byte-exact, "
+          f"{bad} mismatching, {missing} missing")
+    return good
+
+
+def rebuild_fixture(pilot=None, debug_dir=None, limit=100):
+    """Recompute the fixture selection and rewrite `fixtures/` from the pilot set.
+
+    Requires the generated data (`ml/data/pilot_v4.jsonl`, `ml/data/debug_v4/piece*.mpm`),
+    i.e. it runs on the generating machine; the point of the fixture is that *checking* does
+    not.  The reference documents are COPIED, never rewritten: they must stay the bytes the
+    Node generator emitted.
+    """
+    pilot = Path(pilot or HERE.parent / "data" / "pilot_v4.jsonl")
+    debug_dir = Path(debug_dir or HERE.parent / "data" / "debug_v4")
+    if not pilot.exists() or not debug_dir.is_dir():
+        raise SystemExit(f"--rebuild-fixture needs {pilot} and {debug_dir}")
+    by_id = {}
+    with open(pilot) as fh:
+        for i, line in enumerate(fh):
+            if i >= limit:
+                break
+            by_id[i] = json.loads(line)
+    flags = {i: _writer_branches(r) for i, r in by_id.items()}
+    universe = set().union(*flags.values())
+    chosen, covered = [], set()
+    while covered != universe:
+        i = max((i for i in by_id if i not in chosen),
+                key=lambda i: (len(flags[i] - covered), -i))
+        if not (flags[i] - covered):
+            break
+        chosen.append(i)
+        covered |= flags[i]
+    n_cover = len(chosen)
+    by_size = sorted(by_id, key=lambda i: (-sum(len(by_id[i].get(k) or []) for k in MAP_ORDER), i))
+    for i in by_size:
+        if len(chosen) >= n_cover + 10:
+            break
+        if i not in chosen:
+            chosen.append(i)
+    (FIXTURE_DIR / "mpm").mkdir(parents=True, exist_ok=True)
+    lines = []
+    for i in chosen:
+        rec = by_id[i]
+        keep = {k: rec[k] for k in FIXTURE_NOTE_KEYS if k in rec}
+        first_of_part = {}
+        for n in rec["notes"]:
+            first_of_part.setdefault(n[6] if len(n) > 6 else 1, n)
+        keep["notes"] = [first_of_part[p] for p in sorted(first_of_part)]
+        for k in MAP_ORDER:
+            if rec.get(k):
+                keep[k] = rec[k]
+        keep["_ref"] = f"piece{i}.mpm"
+        (FIXTURE_DIR / "mpm" / keep["_ref"]).write_bytes(
+            (debug_dir / f"piece{i}.mpm").read_bytes())
+        lines.append(json.dumps(keep, separators=(",", ":")))
+    FIXTURE_JSONL.write_text("\n".join(lines) + "\n")
+    print(f"fixture: {len(chosen)} records -> {FIXTURE_JSONL} "
+          f"({n_cover} covering all {len(universe)} writer branches, "
+          f"{len(chosen) - n_cover} largest by instruction count): {chosen}")
+    return selftest(pilot, debug_dir, limit)
+
+
+def _writer_branches(rec):
+    """Every branch of `maps_to_mpm_full` this record exercises (fixture selection only)."""
+    f = set()
+    for k in MAP_ORDER:
+        f.add(f"{'has' if rec.get(k) else 'empty'}:{k}")
+    for row in rec.get("tempo") or []:
+        f.add("tempo:transition" if len(row) > 2 and row[2] is not None else "tempo:constant")
+    for row in rec.get("dynamics") or []:
+        f.add("dyn:transition" if len(row) > 2 and row[2] is not None else "dyn:constant")
+    for row in rec.get("articulation") or []:
+        f.add(f"artic:width{len(row)}")
+        if len(row) > 3:
+            f.add(f"artic:part{row[3]}")
+    for row in rec.get("rubato") or []:
+        f.add("rubato:neutral" if row[2] == 1.0 else "rubato:span")
+        f.add(f"rubato:loop{bool(row[5]) if len(row) > 5 else None}")
+    for row in rec.get("movement") or []:
+        row = list(row) + [None] * 6
+        f.add("mv:transition" if row[2] is not None else "mv:constant")
+        f.add("mv:curv_default" if row[3] in (None, MOVEMENT_DEFAULT_CURVATURE)
+              else "mv:curv_written")
+        f.add("mv:prot_default" if row[4] in (None, MOVEMENT_DEFAULT_PROTRACTION)
+              else "mv:prot_written")
+        f.add(f"mv:ctrl_{row[5] or 'sustain'}")
+    if len(rec.get("asynchrony") or []) > 1:
+        f.add("asyn:multi")
+    f.add("parts:" + ",".join(str(p) for p in
+                              sorted({n[6] if len(n) > 6 else 1 for n in rec["notes"]})))
+    return f
 
 
 # --------------------------------------------------------------------------- small utils
@@ -267,15 +437,20 @@ def pitch_name(p):
     return f"{NOTE_NAMES[int(p) % 12]}{int(p) // 12 - 1}"
 
 
-def table(headers, rows, right=(), cls=""):
-    """headers: list of str; rows: list of list of already-escaped-or-numeric cells."""
+def table(headers, rows, right=(), cls="", row_cls=None):
+    """headers: list of str; rows: list of list of already-escaped-or-numeric cells.
+
+    `row_cls`: optional list parallel to `rows` of `<tr>` class names -- `"gt"` greys a
+    ground-truth row through the stylesheet instead of wrapping each of its cells in a span.
+    """
     th = "".join(f'<th class="{"num" if i in right else ""}">{esc(h)}</th>'
                  for i, h in enumerate(headers))
     body = []
-    for row in rows:
+    for j, row in enumerate(rows):
         cells = "".join(f'<td class="{"num" if i in right else ""}">{c}</td>'
                         for i, c in enumerate(row))
-        body.append(f"<tr>{cells}</tr>")
+        rc = (row_cls or [])[j] if row_cls and j < len(row_cls) else ""
+        body.append(f'<tr class="{rc}">{cells}</tr>' if rc else f"<tr>{cells}</tr>")
     return (f'<div class="tablewrap"><table class="{cls}"><tr>{th}</tr>'
             + "".join(body) + "</table></div>")
 
@@ -310,10 +485,17 @@ def line_chart(series, *, width=760, height=300, x_label="", y_label="", zero_li
     """Multi-series line chart as inline SVG (no script, no external anything).
 
     `series`: dicts with `name`, `points` [(x, y)], `color` (ink/accent/muted), optional
-    `dash`, `width`, `tip`.  Identity is carried by color AND dash AND a direct end label:
-    the page's palette is the program's editorial one (ink / crimson / gray), whose
-    gray-crimson pair sits in the 6-8 CVD band where the dataviz rule requires a second
-    encoding channel.
+    `dash`, `width`, `tip`.
+
+    Encoding, stated exactly rather than as a blanket claim.  The palette is the program's
+    editorial one (ink / crimson / gray).  Its **gray-crimson** pair is the one that lands
+    in the 6-8 CVD dE band (7.2 deutan on the dark tokens), where the dataviz rule requires
+    a second channel, so wherever those two share a chart the gray series is dashed and the
+    crimson is not; ground truth is likewise dashed against a solid prediction.  The
+    **ink-crimson** pair is separated by colour alone (dE 18.4 light / 16.5 dark, far above
+    the floor), plus stroke width, and needs no dash -- in the overlay chart both are solid.
+    Direct end labels are drawn only when `label_ends` (default on; `spark` turns them off,
+    where the legend swatch -- drawn with the series' own dash -- carries the identity).
     """
     series = [s for s in series if s.get("points")]
     if not series:
@@ -506,14 +688,15 @@ def instruction_tables(maps, gt_maps):
         if not pred_rows and not gt_rows:
             return ""
         head = headers if not gt_rows else ["", *headers]
-        body = []
+        body, row_cls = [], []
         for r in pred_rows:
             body.append(r if not gt_rows else ["predicted", *r])
+            row_cls.append("")
         for r in gt_rows:
-            body.append([f'<span class="muted">ground truth</span>',
-                         *[f'<span class="muted">{c}</span>' for c in r]])
+            body.append(["ground truth", *r])
+            row_cls.append("gt")
         shift = 0 if not gt_rows else 1
-        return table(head, body, right={i + shift for i in right})
+        return table(head, body, right={i + shift for i in right}, row_cls=row_cls)
 
     def tempo_row(r, _gt):
         d, bpm, to, mta = (list(r) + [None] * 4)[:4]
@@ -603,8 +786,8 @@ def input_section(row):
         for i, n in enumerate(first):
             rows.append([f"part {part}" if i == 0 else "", fnum(n[0] / ppq, 2),
                          fnum(n[1] / ppq, 2),
-                         f"<span class='nowrap'>{pitch_name(n[2])} "
-                         f"<span class='muted'>({int(n[2])})</span></span>",
+                         f'<span class="nowrap">{pitch_name(n[2])} '
+                         f'<span class="muted">({int(n[2])})</span></span>',
                          fnum(n[3], 1), fnum(n[4], 1),
                          fnum(n[5] if len(n) > 5 else 100.0, 1)])
     onsets = table(["", "score (beat)", "dur (beats)", "pitch", "performed on (ms)",
@@ -765,9 +948,15 @@ def metrics_section(row):
     return "".join(out)
 
 
-def caveats(row, xml_notes):
-    """The footer, written from this record's own numbers — not a fixed paragraph."""
-    items = []
+def caveats(row, xml_notes, author_notes=()):
+    """The footer, written from this record's own numbers — not a fixed paragraph.
+
+    `author_notes` (`--caveat`) are the one thing on the page that is not derived from the
+    preds JSON, because one thing about a demo cannot be: *why this record*.  They are
+    escaped, not HTML, and the command in §Provenance carries them verbatim, so the claim
+    "this page is reproducible from its inputs" still holds with them on it.
+    """
+    items = [f"<b>Why this record.</b> {esc(t)}" for t in (author_notes or ())]
     r, b = row["render_rmse"], row["base_render_rmse"]
     if r > b:
         items.append(f"<b>Timing is worse than the null here.</b> The predicted maps render "
@@ -800,10 +989,21 @@ def caveats(row, xml_notes):
         items.append("This is a <em>synthetic</em> record: its performance was rendered from a "
                      "known MPM, so the model is being asked to invert a process it was "
                      "trained on. Real-data behaviour is the Vienna probe, not this page.")
-    if row.get("metrics_gt", {}).get("pedal_state_mae") is not None:
-        items.append("The pedal head's state MAE is <b>contaminated on synthetic data</b> — "
-                     "the target leaks into input feature 14. It is a known v1.0 design "
-                     "correction, so read the pedal number as diagnostic only.")
+    if row.get("pedal_state_mae") is not None:
+        items.append("<b>The pedal-state MAE on this page is a leaked number.</b> Input "
+                     "feature 14 is the sustain state at the note's onset — "
+                     "<code>sustain_state_lookup(rec['sustain_cc'])</code> evaluated at "
+                     "<code>ms_on − asynchrony offset</code> — and the pedal head's own "
+                     "label is that same call at that same instant "
+                     "(<code>dataset.piece_to_features_v4</code> vs "
+                     "<code>piece_to_note_labels_v4</code>). The head can copy its input, so "
+                     "the MAE understates the difficulty by an unknown amount. This is a "
+                     "property of the feature set, not of synthetic data: it holds on real "
+                     "records too, since a Vienna window carries its own "
+                     "<code>sustain_cc</code>. The correction exists — <code>model_v2</code>'s "
+                     "<code>exclude_features=[14]</code> (commit <code>9c216c0</code>) drops "
+                     "the column from the input projection — but this page's checkpoint "
+                     "predates it. Read the pedal number as diagnostic only.")
     items.append("<b>No movementMap in the emitted document.</b> Pedal is predicted per note "
                  "as a state; turning states back into movement instructions is the v1.1 "
                  "reconstruction pass (SYSTEM.md §4). Ornaments and imprecision are likewise "
@@ -837,9 +1037,11 @@ def caveats(row, xml_notes):
     return f'<h2>Honest caveats</h2><ul class="footnote">{lis}</ul>'
 
 
-def provenance(row, source):
+def provenance(row, source, repro=None):
     """Every figure on the page, and the JSON key it came from."""
     rows = [
+        ["record / meta table", "<code>meta</code> (incl. <code>meta.source</code>, the "
+         "records file inference read)", "verbatim"],
         ["input tables, overlay x-axis", "<code>notes</code>", "verbatim"],
         ["performed curve", "<code>notes[i][3]</code>", "ms → s"],
         ["re-rendered curve, residual", "<code>render.pred_ms_on</code>",
@@ -852,7 +1054,9 @@ def provenance(row, source):
          "<code>note_pred</code>"],
         ["MPM XML", "<code>maps_rendered</code>",
          "this file's <code>maps_to_mpm_full</code> (byte-exact against "
-         "<code>ml/node/xml.mjs</code> on 100 pilot records)"],
+         "<code>ml/node/xml.mjs</code>: 12 reference documents in "
+         "<code>ml/demos/fixtures/</code> + the 100-record pilot set where present, "
+         "<code>--selftest</code>)"],
         ["tempo / dynamics sparklines", "<code>maps_rendered.tempo/.dynamics</code>",
          "<code>tempo_math.tempo_at</code>, <code>dynamics_math.dynamics_at</code>"],
         ["rubato sparkline", "<code>maps_rendered.rubato</code>",
@@ -866,6 +1070,15 @@ def provenance(row, source):
     if row.get("metrics_gt"):
         rows.append(["ground-truth metrics, GT curves", "<code>metrics_gt</code>, "
                      "<code>gt_maps</code>", "verbatim / same math as the predicted curves"])
+    rows.append(["dateline (the one figure that is not from the JSON)",
+                 "— <code>--date</code>", "printed in the command below"])
+    repro_block = ""
+    if repro:
+        repro_block = ('<h3>reproducing this file</h3>'
+                       f'<pre class="cmd">{esc(repro)}</pre>'
+                       '<p class="caption">Byte-for-byte, from the preds JSON alone — no '
+                       'checkpoint, no torch, no inference. <code>--date</code> is explicit '
+                       'because it is the only input the calendar would otherwise supply.</p>')
     return ('<h2>Provenance</h2>'
             f'<p>This page is a rendering of <code>{esc(Path(source).name)}</code> '
             f'(<code>infer_v4.py --dump-maps</code>) and of nothing else: the generator does '
@@ -874,12 +1087,20 @@ def provenance(row, source):
             f'result reproduces the evaluator\'s RMSEs bit for bit, so a number traceable to '
             f'this file is a number traceable to the evaluated prediction. Every figure and '
             f'its key:</p>'
-            + table(["on the page", "key in the preds JSON", "transform"], rows))
+            + table(["on the page", "key in the preds JSON", "transform"], rows)
+            + repro_block)
 
 
 # --------------------------------------------------------------------------- assembly
 
-def build_page(row, source, template, css, title=None):
+def build_page(row, source, template, css, title=None, page_date=None, repro=None,
+               author_notes=()):
+    """`page_date` is an argument, not `date.today()`: the eyebrow is the only part of the
+    page that is not a function of the preds JSON, and a page that changes bytes with the
+    calendar cannot be re-derived from its own inputs.  `--date` defaults to today for a
+    fresh page and is printed in §Provenance so a committed page states the value that
+    reproduces it."""
+    page_date = page_date or date.today()
     maps = row["maps_rendered"]
     xml = maps_to_mpm_full(maps, notes=row["notes"],
                            ppq=row.get("meta", {}).get("ppq", PPQ),
@@ -938,25 +1159,37 @@ def build_page(row, source, template, css, title=None):
         '<h3>compiled MPM</h3>',
         '<p class="caption">Written by this page\'s own port of the generator\'s MPM writer '
         '(<code>ml/node/xml.mjs</code>) — the writer whose documents both meico and '
-        'espressivo parse, checked byte-for-byte against its output on 100 pilot records. '
-        'One element per line for reading; the writer emits a single line, nothing else '
-        'differs.</p>',
+        'espressivo parse, checked byte-for-byte against its output by '
+        '<code>generate_demo.py --selftest</code>: twelve reference documents committed '
+        'beside the generator (<code>ml/demos/fixtures/</code>, so the check runs on a bare '
+        'clone) and, where the generated pilot set is present, all 100 of its records. A '
+        'missing reference fails that check rather than being skipped. One element per line '
+        'for reading; the writer emits a single line, nothing else differs.</p>',
         f'<pre class="xml">{esc(indent_xml(xml))}</pre>',
         overlay_section(row),
         decomposition_section(row),
         metrics_section(row),
-        caveats(row, xml_notes),
-        provenance(row, source),
+        caveats(row, xml_notes, author_notes),
+        provenance(row, source, repro),
     ]
     page = (template
             .replace("{{CSS}}", css)
             .replace("{{TITLE}}", esc(f"fenby · {h1}"))
             .replace("{{EYEBROW}}",
-                     f"fenby · demonstration · {date.today():%d %b %Y}")
+                     f"fenby · demonstration · {page_date:%d %b %Y}")
             .replace("{{H1}}", esc(h1))
             .replace("{{LEDE}}", lede)
             .replace("{{BODY}}", "\n".join(body)))
     return page
+
+
+def display_path(p):
+    """Repo-relative where the path is inside the tree.  A demo page is a public document:
+    an absolute path on it is both noise and the author's home directory."""
+    try:
+        return str(Path(p).resolve().relative_to(HERE.parent.parent))
+    except (ValueError, OSError):
+        return str(p)
 
 
 def load_preds(path, record_id):
@@ -989,14 +1222,25 @@ def main(argv=None):
     ap.add_argument("--id", help="record id to demonstrate")
     ap.add_argument("--out", help="output HTML path")
     ap.add_argument("--title", help="override the page headline")
+    ap.add_argument("--date", help="dateline as YYYY-MM-DD (default: today). Given "
+                                   "explicitly, the page is byte-reproducible on any day")
+    ap.add_argument("--caveat", action="append", metavar="TEXT",
+                    help="why this record was chosen; goes verbatim at the head of the "
+                         "caveats list and into the reproduction command (repeatable)")
     ap.add_argument("--selftest", action="store_true",
                     help="check the MPM writer byte-for-byte against ml/node/xml.mjs output")
+    ap.add_argument("--rebuild-fixture", action="store_true",
+                    help="recompute ml/demos/fixtures/ from the generated pilot set "
+                         "(needs ml/data/pilot_v4.jsonl and ml/data/debug_v4/)")
     args = ap.parse_args(argv)
 
+    if args.rebuild_fixture:
+        return 0 if rebuild_fixture() else 1
     if args.selftest:
         return 0 if selftest() else 1
     if not args.out:
         ap.error("--out is required")
+    page_date = date.fromisoformat(args.date) if args.date else date.today()
     preds = args.preds
     if not preds:
         if not (args.ckpt and args.data and args.id):
@@ -1004,9 +1248,17 @@ def main(argv=None):
         preds = str(Path(args.out).with_suffix(".preds.json"))
         run_inference(args.ckpt, args.data, args.id, preds)
     row = load_preds(preds, args.id)
-    row["_source"] = str(args.data or preds)
+    # The records file is read from the dump when it is there, so a page regenerated from
+    # the preds JSON alone states the same source as the page built by the inference run.
+    row["_source"] = display_path(row.get("meta", {}).get("source") or args.data or preds)
+    repro = shlex.join(["python3", "generate_demo.py", "--preds", Path(preds).name,
+                        "--id", str(row.get("id")), "--date", f"{page_date:%Y-%m-%d}",
+                        *[a for c in (args.caveat or []) for a in ("--caveat", c)],
+                        "--out", Path(args.out).name])
     page = build_page(row, preds, (HERE / "demo_template.html").read_text(),
-                      (HERE / "demo.css").read_text(), title=args.title)
+                      (HERE / "demo.css").read_text(), title=args.title,
+                      page_date=page_date, repro=repro,
+                      author_notes=args.caveat or ())
     if re.search(r"""(src|href)\s*=\s*["']https?:""", page):
         raise SystemExit("page contains an external reference — it must be self-contained")
     Path(args.out).write_text(page)

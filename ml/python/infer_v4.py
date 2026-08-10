@@ -28,6 +28,9 @@ reproduced from this file alone and nothing that is re-derived on the way there:
     render         pred/baseline rendered onsets, offsets and velocities in record note
                    order (`null` for a row the chain produced no note for), plus the
                    baseline's constant tempo map
+    meta           the record's provenance fields (`META_KEYS`) plus `source`, the records
+                   file this run read -- so a page rebuilt from the dump alone still names
+                   the data rather than the dump
     gt_maps        the record's own maps, when it has any (synthetic records only)
     metrics_gt     the FULL metric dict incl. the GT-comparative entries -- present only
                    when `gt_maps` is, so a Vienna dump cannot carry a meaningless F1
@@ -221,7 +224,10 @@ with torch.no_grad():
             row["model"] = {"ckpt": str(ckpt_path), "epoch": ckpt.get("epoch"),
                             "n_features": n_feat, "heads": bool(model.has_heads),
                             "n_params": sum(p.numel() for p in model.parameters())}
+            # The records file goes into the dump so a downstream artifact rebuilt from the
+            # dump alone still names the data it came from, instead of naming the dump.
             row["meta"] = {k: rec[k] for k in META_KEYS if k in rec}
+            row["meta"]["source"] = data_path
             row["notes"] = rec["notes"]
             row["maps"] = {k: maps.get(k) or [] for k in V4_MAP_ORDER}
             row["maps_rendered"] = maps_rendered

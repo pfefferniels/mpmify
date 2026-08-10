@@ -32,7 +32,8 @@
    "window_start_ms": 19278.125226,
    "tail": false,
    "ppq": 720,
-   "total_ticks": 34560
+   "total_ticks": 34560,
+   "source": "/Users/nielspfeffer/Projects/mpmify/ml/data/vienna_infer_windows.jsonl"
   },
   "notes": [
    [
