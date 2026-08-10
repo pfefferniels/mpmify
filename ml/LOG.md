@@ -269,6 +269,19 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**e96 probe adjudicated mid-flight (2026-08-10 ~16:30)**: schedule WAS the binder —
+rubato F1 0→1.00, boundary 0.71, n_pred==n_gt, mdl_ratio settled on the design
+constant 0.24 (metric normalization fix routed to the heads agent: subset-vs-subset
+for phase 1). Asynchrony is the one REAL defect and now has a clean signature: it
+WANDERS (45.9→43.6→47.6 across 24/53/65 epochs) — fitting noise on a target whose
+signal the part-scoped features hide by construction (B5's own tempo fix caused it).
+Expected-result note for the record: e96's final asynchrony number will be worse than
+baseline and that is not a failure of the run. FIX QUEUED (v4.1): conditioning feature
+= windowed median of (part-2 onset − interpolated part-1 onset) — the v3.1 lesson,
+third occurrence: every map learns exactly when its signal is an explicit input
+feature. Sequencing: heads land first (current features), then ONE v4.1 rev bundles
+heads + asynchrony feature + re-preprocess + a 96-epoch cluster run.
+
 **First cluster results — v4-h100 (2026-08-10 ~15:45)**: 24 epochs in SIX MINUTES
 (0.02-0.03 s/step, ~150x the M1). Numbers, read as phase-1-of-hybrid (DSL decoder only;
 per-note heads not yet in the model): render 9957 vs base 10486 ms (v4's widened domain
