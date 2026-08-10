@@ -269,6 +269,67 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Heads phase 2 COMPLETE — the hybrid's per-note half is shippable (2026-08-10 ~19:30,
+heads successor agent, 6b01399)**. The model/train/eval wiring the predecessor built
+audited clean and was kept; two things were missing and one was wrong.
+
+**Missing 1 — `eval_ckpt.py`, the deliverable that unblocks the re-evaluation.** A run's
+`final_val.json` is written by whatever evaluator was in the tree when it ran, so the v4
+mis-pairing froze wrong render/velocity numbers into three checkpoints that cannot be
+retrained to refresh them. `eval_ckpt.py --ckpt --data --out` re-scores a saved checkpoint
+over a whole val pack, **config-driven from the checkpoint's own `config`** (heads,
+vocab_size, n_features) so re-evaluating cannot instantiate a different architecture than
+was trained. Two mismatches ABORT rather than warn — feature width (a v3 ckpt on a v3.1
+pack is 10-vs-13, which torch broadcasts into nonsense) and vocab size; both fire, tested.
+The decode-and-score loop **moved out of `train.py` into it** and train.py imports it back:
+a second copy is exactly how an offline evaluator drifts from the training one, and a
+re-evaluation running different code would prove nothing about the run it corrects.
+
+**Missing 2 — `mdl_ratio` split into `mdl_ratio_subset` and `mdl_ratio_full`; the old
+ambiguous key is GONE.** The single key was full-vs-full, which on a phase-1 v4 model is
+not a quality measure at all: the prediction has no movementMap (a median 408 of the GT's
+~768 full tokens) and, pre-heads, no articulationMap, so it sat near a design constant —
+e96 "settled on 0.24" while its four trained maps were converging. It moved when the
+architecture changed and not when the model got better. Subset-vs-subset is the
+over-/under-segmentation signal on the maps actually trained; full-vs-full is what an
+exported MPM would cost. The 20-step smoke reads **mdl_sub 0.10 and mdl_full 2.81 on the
+same prediction** (drops productions AND over-explains via a hallucinated articulationMap)
+— one number could not have said both, which is the whole argument.
+
+**Wrong — `--max-steps` did not actually suppress checkpointing.** It documented "no
+checkpoint", and the mid-epoch break delivered that, but a budget that crosses an epoch
+boundary saved one per completed epoch: the predecessor's 20-step smoke on a 5-batch pack
+wrote three, under the run name it was given. Under a real run's name that is the silent
+overwrite the flag exists to prevent. Guarded; the re-run leaves `log.txt` and nothing else.
+
+**Also: `import train` starts a training run, and that has now happened twice** (this
+session's was mine: it resumed complete-v1 at epoch 10/10 and rewrote its final_val.json;
+ckpt untouched, both incidents noted in `runs/v1/log.txt`, authoritative v1 numbers are
+the epoch-9 line and the table above). train.py now raises ImportError when imported —
+nothing legitimately imports it now that the reusable half is `eval_ckpt.run_eval`.
+
+Acceptance, all on the **preprocessed** path (where the mis-pairing lived):
+
+| leg | result |
+|---|---|
+| `sanity_heads.py model` | MODEL_SANITY_PASS — split-vs-fused forward max abs diff **0.000e+00**, heads +8580 params |
+| `sanity_heads.py labels 200` | LABEL_ALIGNMENT_PASS — 25062 note rows, max abs(packed − recomputed) **0.0**, pedal-feature-vs-label **0.0** |
+| `sanity_heads.py assembly 50` | ASSEMBLY_SANITY_PASS — **GT floor exactly 0.0**; artic F1 1.0 by construction; assembled map identical to the GT articulationMap 50/50; off_rmse **0.0 vs 96.25** and vel_rmse **0.0 vs 5.41** against the no-articulation render, lower on 50/50 (render_rmse 0.0 both — articulation moves note-off and velocity, never onset) |
+| Sanity A: 20-step heads smoke | all four components finite and the two that carry signal falling — token CE 3.644→3.288, head BCE 0.7223→0.6933, relDur 0.3980→0.2904; velCh ~0.85 and pedal ~0.223 flat at 20 steps (expected: both are masked/normalised terms that move on the epoch scale). Peak RSS **3.24 GB** under a loaded machine (two agents training), vs 1.63 GB measured quiet — memory still not the binder |
+| Sanity: epoch-end eval through train.py | full v4+heads metric line renders incl. both MDL keys and the heads block; `final_val.json` written |
+| Regression: v1 mode | 20 steps, loss 3.213→2.918, no checkpoint written |
+| Regression: old checkpoints | v1/v2/v3/v3.1 all load and re-evaluate through `eval_ckpt.py`; a heads checkpoint round-trips the full head path (decode → assemble articulation → render) |
+
+Loss-component scales at init, for anyone reading a future curve: BCE ~0.72 (ln 2 = the
+right start for a 15 % positive rate), relDur ~0.40, velCh ~0.85, pedal ~0.223, token CE
+~3.6. Held-out judgement: velCh and pedal being flat over 20 steps is not evidence against
+the heads — 20 steps is 4 epochs of a 200-piece pack.
+
+`vienna_adapter.py`'s uncommitted `total_ticks` work (swept into ff3754d) was **audited and
+kept**: it is the real-data half of the pos_frac parity already journaled above, and its
+emitted JSONL satisfies the invariant it claims — 88 records + 220 windows, 0 missing,
+0 with `total_ticks < max(date+dur)`, median slack 1.00 beat on the full records.
+
 **Staging error + cluster outage (2026-08-10 ~19:00)**: my e814960 blanket-staged
 train.py and swept the heads successor's in-flight rework incl. an import of the
 then-UNCOMMITTED eval_ckpt.py — main's train.py briefly import-broken; successor
