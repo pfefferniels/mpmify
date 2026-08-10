@@ -269,6 +269,14 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Slur-boundary premise corrected (2026-08-11)**: I had told the espressivo team
+"our scores contain no slurs" — true of the synthetic sampler, FALSE of the wave-1
+real corpus (Chopin op.28: 8-15 slurs per movement). Re-checked in code: corpus/
+build_msm.mjs reads ONLY movements[0].msm and rebuilds a clean score MSM; the
+MEI-derived MPM half is never read, so processSlur cannot reach fenby data by any
+path. Conclusion unchanged, premise now verified rather than assumed. Standing ask to
+them: ping if processSlur ever affects the MSM rather than only the MPM.
+
 **v1.1 voice-level contract SECURED (2026-08-11, espressivo b0cce27, branch
 layers-to-staffs)**: layersToStaffs() now RETURNS StaffProvenance — an ARRAY of
 per-mdiv maps ("11" → {origStaff:"1", origLayer:"1"}), index-aligned to getAllMdivs()
