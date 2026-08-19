@@ -269,6 +269,21 @@ session interruptions and one overnight machine sleep on checkpoint resume.
 **This is the end-to-end (Design A) baseline the v4 hybrid must beat**, esp. on
 articulation (per-note heads) and rubato span placement.
 
+**Port gate PASSED, pilot run invalidated by a schedule trap (2026-08-11, cluster
+agent)**: train_v2/model_v2/SDPA run clean on H100 (96 epochs ~3 min, 0 nonfinite,
+`f14_pedal=EXCLUDED` confirmed at runtime, 4.28M params). BUT the run tells us nothing
+about repertoire: 58 pieces / batch 48 = 2 batches/epoch, so 96 epochs = 192 steps
+against warmup=300 — the LR ramp never finished, and the resulting numbers (render 95x
+baseline, 1 production where 4 were due) are a finding about the schedule, not about
+Bach. Their diagnosis, not mine — and exactly the failure class this program keeps
+naming: a metric that looks like evidence and isn't. FIXED: train_v2.py caps warmup at
+total_steps//10 whenever the run is shorter than 4x its warmup, and LOGS both numbers
+with the reason (a schedule that quietly rewrites itself is the other way to lose a
+day). Verified firing. s/step unmeasurable at this size — wave 2's real corpus supplies
+the sizing sample. espressivo pin for corpora: **main@b37abcf** (their measurement, not
+just my code-read, confirms the slur change touches MPM only: 16/16 MSMs byte-identical
+while exactly 2 MPMs diverged); StaffProvenance contract live at that SHA.
+
 **Slur-boundary premise corrected (2026-08-11)**: I had told the espressivo team
 "our scores contain no slurs" — true of the synthetic sampler, FALSE of the wave-1
 real corpus (Chopin op.28: 8-15 slurs per movement). Re-checked in code: corpus/

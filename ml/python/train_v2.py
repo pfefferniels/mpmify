@@ -366,6 +366,21 @@ def main(argv):
 
     lr, warmup, clip = float(tcfg["lr"]), int(tcfg["warmup"]), float(tcfg["clip"])
 
+    # Scale-awareness, from a run invalidated by its absence: the fenby pilot (58 pieces,
+    # batch 48) had 2 batches/epoch, so 96 epochs = 192 optimiser steps against warmup=300 --
+    # the ramp never finished, the model trained its whole life near zero LR, and its metrics
+    # (render 95x baseline, one production where four were due) read as a finding about real
+    # repertoire when they were a finding about the schedule. A warmup longer than the run is
+    # never what anyone meant, and small shards make it easy to hit by accident, so cap it
+    # and SAY SO -- a schedule that quietly rewrites itself is the other way to lose a day.
+    if total_steps < 4 * warmup:
+        capped = max(1, total_steps // 10)
+        log(f"WARMUP CAPPED: config warmup={warmup} exceeds a quarter of this run's "
+            f"{total_steps} total steps ({len(batches)} batches/epoch x {epochs} epochs); "
+            f"using warmup={capped}. A run shorter than 4x its warmup never leaves the ramp "
+            f"-- see LOG.md 2026-08-11 (fenby-corpus-pilot).")
+        warmup = capped
+
     def lr_at(s):
         if s < warmup:
             return lr * s / warmup
