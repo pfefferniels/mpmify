@@ -1,7 +1,7 @@
 import { MPM } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
-import { TranslatePhyiscalTimeToTicks } from "../tempo"
+import { TranslatePhysicalTimeToTicks } from "../tempo"
 
 export type InsertPedalOptions =
     TransformationOptions
@@ -23,7 +23,7 @@ export type InsertPedalOptions =
  */
 export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     name = 'InsertPedal'
-    requires = [TranslatePhyiscalTimeToTicks]
+    requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: InsertPedalOptions) {
         super()

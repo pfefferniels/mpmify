@@ -201,7 +201,6 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             })
 
             sortedByOnset.forEach(note => {
-                console.log('changing', note['xml:id'], 'onset from', note['midi.onset'], 'to', newOnset)
                 note['midi.onset'] = newOnset
             })
         }

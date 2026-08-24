@@ -3,6 +3,7 @@ import { MPM, Scope, Tempo } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { TempoWithEndDate, getTempoAt } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
+import { hashSeed, Random, seededRandom } from "../../utils/random";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -308,6 +309,10 @@ function fitSegments(
 ): TempoWithEndDate[] {
     if (segments.length === 0) return [];
 
+    // Seeded from the request, not from a clock: the same segments always anneal the same way,
+    // so re-running the chain cannot drift and a desk's preview matches what gets inserted.
+    const random = seededRandom(hashSeed(JSON.stringify({ segments, silentOnsets })));
+
     const chainSegments = normalizeChainedSegments(segments);
     if (chainSegments.length === 0) return [];
 
@@ -366,7 +371,8 @@ function fitSegments(
             shapes[k] = optimizeShape(
                 segOnsets[k], tau[k], tau[k + 1],
                 segLengthBeats[k],
-                iter > 0 ? prevShapes[k] : undefined
+                iter > 0 ? prevShapes[k] : undefined,
+                random
             );
         }
         regularizeTurningPairs(shapes, tau);
@@ -689,7 +695,8 @@ function optimizeShape(
     segOnsets: SegmentOnset[],
     tau0: number, tau1: number,
     segLengthBeats: number,
-    hint?: number
+    hint: number | undefined,
+    random: Random
 ): number {
     if (Math.abs(tau0 - tau1) < 0.01) return 0.5;
 
@@ -745,7 +752,7 @@ function optimizeShape(
 
     for (let i = 0; i < 500; i++) {
         const neighborIm = clamp(
-            currentIm + (Math.random() - 0.5) * 0.15,
+            currentIm + (random() - 0.5) * 0.15,
             0.02, 0.98
         );
         const neighborError = objective(neighborIm);
@@ -755,7 +762,7 @@ function optimizeShape(
             bestVal = neighborError;
         }
 
-        if (Math.exp((currentError - neighborError) / temperature) > Math.random()) {
+        if (Math.exp((currentError - neighborError) / temperature) > random()) {
             currentIm = neighborIm;
             currentError = neighborError;
         }

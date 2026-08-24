@@ -103,8 +103,6 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                 conflictList.push(...this.findConflicts(msm.allNotes, cluster))
             }
 
-            console.log('conflict list:', conflictList)
-
             for (let i = 0; i < points.length; i++) {
                 if (conflictList.includes(articulations[i])) continue
                 if (points[i].label === -1) continue

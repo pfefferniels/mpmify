@@ -2,6 +2,8 @@ import { Transformer, TransformerConstructor } from "./Transformer";
 
 const registry = new Map<string, TransformerConstructor>();
 const order: string[] = [];
+/** Retired names, mapped to the name that replaced them. */
+const aliases = new Map<string, string>();
 
 export interface RegisterOptions {
     after?: string;
@@ -47,10 +49,22 @@ export function registerTransformer(
 }
 
 /**
- * Create a transformer instance by name. Returns `null` if not registered.
+ * Record that `formerName` used to mean `currentName`.
+ *
+ * A transformer's name is what gets written into a saved work file, so renaming the class would
+ * otherwise orphan every file that already names it. The alias is read-only history: the
+ * reconstructed instance carries the *current* name, so nothing downstream has to know.
+ */
+export function registerAlias(formerName: string, currentName: string): void {
+    aliases.set(formerName, currentName);
+}
+
+/**
+ * Create a transformer instance by name, following a rename if the name is a retired one.
+ * Returns `null` if not registered.
  */
 export function createTransformer(name: string): Transformer | null {
-    const Constructor = registry.get(name);
+    const Constructor = registry.get(name) ?? registry.get(aliases.get(name) ?? '');
     if (!Constructor) {
         return null;
     }
@@ -65,7 +79,7 @@ export function getTransformerOrder(): readonly string[] {
 }
 
 /**
- * Check if a transformer name is registered.
+ * Check if a transformer name is registered under its current name.
  */
 export function isRegistered(name: string): boolean {
     return registry.has(name);
@@ -77,4 +91,5 @@ export function isRegistered(name: string): boolean {
 export function clearRegistry(): void {
     registry.clear();
     order.length = 0;
+    aliases.clear();
 }

@@ -2,7 +2,7 @@ import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mp
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
-import { TranslatePhyiscalTimeToTicks } from "../tempo";
+import { TranslatePhysicalTimeToTicks } from "../tempo";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
@@ -13,7 +13,7 @@ interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
  */
 export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArticulationOptions> {
     name = 'MakeDefaultArticulation'
-    requires = [TranslatePhyiscalTimeToTicks]
+    requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: MakeDefaultArticulationOptions) {
         super()

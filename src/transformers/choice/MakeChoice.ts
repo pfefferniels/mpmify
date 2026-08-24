@@ -84,7 +84,6 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
             }
 
             // keep only the prototype note and remove all source variants
-            console.log('Removing variants', notes, 'keeping', prototype);
             for (const note of notes) {
                 msm.allNotes.splice(msm.allNotes.indexOf(note), 1);
             }

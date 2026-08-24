@@ -91,7 +91,6 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
 
                 const should = volumeAtDate(corresp, note.date)
                 note.absoluteVelocityChange = note["midi.velocity"] - should
-                // console.log('absoluteVelocityChange', note["xml:id"], note["midi.velocity"], should, note.absoluteVelocityChange);
             }
         }
     }

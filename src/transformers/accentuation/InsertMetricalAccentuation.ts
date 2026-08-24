@@ -194,8 +194,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
         this.removeAccentuationDistortion(newPattern, msm, mpm, this.options.scope)
 
-        console.log('getting styles', this.options.scope)
-
         if (mpm.getStyles('accentuationPattern', this.options.scope).length === 0) {
             mpm.insertStyle({
                 "name.ref": DEFAULT_STYLE_NAME,

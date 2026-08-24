@@ -6,7 +6,7 @@ interface TempoWithEndDate extends Tempo {
     endDate: number
 }
 
-export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptions {
+export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
     /**
      * Defines whether physical modifiers which are already present in the MPM
      * (e.g. because of a previous <ornamentation> or <asynchrony> interpolation)
@@ -25,11 +25,11 @@ export interface TranslatePhyiscalTimeToTicksOptions extends TransformationOptio
 /**
  * Interpolates the global tempo and inserts it into the MPM
  */
-export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslatePhyiscalTimeToTicksOptions> {
-    name = 'TranslatePhyiscalTimeToTicks'
+export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslatePhysicalTimeToTicksOptions> {
+    name = 'TranslatePhysicalTimeToTicks'
     requires = []
 
-    constructor(options?: TranslatePhyiscalTimeToTicksOptions) {
+    constructor(options?: TranslatePhysicalTimeToTicksOptions) {
         super()
 
         // set the default options
@@ -70,7 +70,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 currentMs = note["midi.onset"] * 1000
             }
         }
-        console.log('no tempo found for', ms, 'amongst', tempos)
+        console.warn('no tempo found for', ms, 'ms amongst', tempos.length, 'tempo instructions')
     }
 
     private ticksToMs(ticks: number, tempos: Tempo[], msm: MSM) {
@@ -117,15 +117,12 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
                 }
 
                 const ornamentMs = this.ticksToMs(ornament.date, tempos, msm)
-                console.log('ornamentMs', ornamentMs)
 
                 const frameStartMs = ornamentMs + ornament["frame.start"]
                 const frameEndMs = frameStartMs + ornament.frameLength
 
                 const frameStartTicks = this.msToTicks(frameStartMs, tempos, msm)
                 const frameEndTicks = this.msToTicks(frameEndMs, tempos, msm)
-
-                console.log('ornament.date', ornament.date, 'frameStartTicks', frameStartTicks, 'frameEndTicks', frameEndTicks)
 
                 ornament["frame.start"] = frameStartTicks - ornament.date
                 ornament['frameLength'] = frameEndTicks - frameStartTicks
@@ -282,7 +279,6 @@ const isTransition = (tempo: Tempo) => {
 }
 
 const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
-    // console.log('approximating date for', targetMilliseconds, 'within tempo instruction', effectiveTempoInstruction["xml:id"])
     if (!isTransition(effectiveTempoInstruction)) {
         return (
             +effectiveTempoInstruction.date +
@@ -290,17 +286,12 @@ const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: 
         )
     }
 
-    // console.log('initial=', initialGuess)
-
     let guess = initialGuess;
     let guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     for (let i = 0; i < 1000 && Math.abs(guessedMilliseconds - targetMilliseconds) > tolerance; i++) {
         guess += 0.1 * (targetMilliseconds - guessedMilliseconds)
         guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
     }
-
-    // console.log('after=', guess)
-
 
     return Math.round(guess);
 }

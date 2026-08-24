@@ -99,7 +99,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                         const def = this.asDef(ornament)
 
                         if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
-                            console.log('strange ornament', ornament)
+                            console.warn('skipping ornament with a NaN frame', ornament["xml:id"])
                         }
                         else {
                             mpm.insertDefinition(def, scope)
@@ -128,7 +128,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                             const def = this.asDef(ornament)
 
                             if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
-                                console.log('strange ornament', ornament)
+                                console.warn('skipping ornament with a NaN frame', ornament["xml:id"])
                             }
                             else {
                                 mpm.insertDefinition(def, scope)
@@ -213,7 +213,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         }
 
         if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
-            console.log('strange ornament', ornament)
+            console.warn('building an ornamentDef from an ornament with a NaN frame', ornament["xml:id"])
         }
 
         const defName = `def_${v4()}`

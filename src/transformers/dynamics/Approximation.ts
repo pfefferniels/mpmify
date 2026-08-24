@@ -1,6 +1,7 @@
 import { v4 } from "uuid"
 import { DynamicsWithEndDate } from "./InsertDynamicsInstructions"
 import { Movement } from "../../mpm"
+import { hashSeed, Random, seededRandom } from "../../utils/random"
 
 export type DynamicsPoints = {
     date: number
@@ -113,14 +114,14 @@ const computeError = (instruction: DynamicsWithEndDate, points: DynamicsPoints[]
     return sum
 }
 
-const generateNeighbour = (prev: DynamicsWithEndDate) => {
+const generateNeighbour = (prev: DynamicsWithEndDate, random: Random) => {
     // Define the magnitude of the maximum possible change
     const maxProtractionChange = 0.05;
     const maxCurvatureChange = 0.05;
 
     // Generate random changes within the defined range
-    const newProtraction = prev.protraction + (Math.random() * 2 - 1) * maxProtractionChange;
-    const newCurvature = prev.curvature + (Math.random() * 2 - 1) * maxCurvatureChange;
+    const newProtraction = prev.protraction + (random() * 2 - 1) * maxProtractionChange;
+    const newCurvature = prev.curvature + (random() * 2 - 1) * maxCurvatureChange;
 
     // Ensure the new values are within valid bounds
     const validProtraction = Math.max(Math.min(newProtraction, 1.0), -1.0);
@@ -135,7 +136,7 @@ const generateNeighbour = (prev: DynamicsWithEndDate) => {
 
 export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDate | undefined => {
     if (points.length === 0) {
-        console.log('approximateDynamics requires at least one point')
+        console.warn('approximateDynamics requires at least one point')
         return
     }
     else if (points.length === 1) {
@@ -173,6 +174,10 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
         curvature: 0.5
     }
 
+    // Seeded from the points, not from a clock: the same curve is fitted the same way every
+    // time the chain is re-run.
+    const random = seededRandom(hashSeed(JSON.stringify(points)));
+
     const maxIterations = 5000;
     const maxError = 5;
     let error = computeError(initial, points);
@@ -183,7 +188,7 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
     const coolingRate = 0.99; // Cooling rate
 
     for (let i = 0; i < maxIterations && error > maxError; i++) {
-        const neighbor = generateNeighbour(attempt);
+        const neighbor = generateNeighbour(attempt, random);
         const neighborError = computeError(neighbor, points);
 
         if (neighborError < bestError) {
@@ -192,7 +197,7 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
         }
 
         const acceptanceProbability = Math.exp((error - neighborError) / temperature);
-        if (neighborError < error || Math.random() < acceptanceProbability) {
+        if (neighborError < error || random() < acceptanceProbability) {
             attempt = neighbor;
             error = neighborError;
         }

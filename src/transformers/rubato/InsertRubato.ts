@@ -2,7 +2,7 @@ import { MPM, Rubato } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp, DefinedProperty } from "../../utils/utils"
-import { TranslatePhyiscalTimeToTicks } from "../tempo"
+import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
 
 const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
@@ -32,8 +32,6 @@ const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
     let lowerBound = rubato.date;
     let upperBound = rubato.date + rubato.frameLength;
 
-    console.log('target=', target, 'lower bound=', lowerBound, 'upper bound=', upperBound)
-
     while (upperBound - lowerBound > 1e-6) {
         const middle = (upperBound + lowerBound) / 2;
         const middleNewDate = calculateRubatoOnDate(middle, rubato);
@@ -60,7 +58,7 @@ export interface InsertRubatoOptions extends ScopedTransformationOptions {
  */
 export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     name = 'InsertRubato'
-    requires = [TranslatePhyiscalTimeToTicks]
+    requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: InsertRubatoOptions) {
         super()
@@ -78,7 +76,6 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         const chords = [...msm.asChords(this.options.scope).entries()]
             .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
 
-        console.log('dealing with frame', frame, 'and adjusting', chords)
         if (chords.length === 0) return
 
         // The rubato transformation can only be placed
@@ -87,7 +84,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         if (chords.some(([_, notes]) =>
             notes.some(note => note.tickDate === undefined || note.tickDuration === undefined))
         ) {
-            console.log('Some note of the provided MSM does not have a tick date or a tick duration. Not continuing.')
+            console.warn('InsertRubato: some note has no tick date or duration — run a tempo interpolation first.')
             return
         }
 
@@ -163,9 +160,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
                 ? calculateRubatoOnDate(note.date, onsetRubato)
                 : note.date
 
-
             const onsetDiff = onsetInTicks - note.date
-            console.log('note', note, 'should be at date', onsetInTicks, 'instead of', note.date, 'so we shift it by', onsetDiff)
             if (note.tickDate) {
                 note.tickDate -= onsetDiff
             }

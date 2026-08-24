@@ -74,6 +74,21 @@ describe("TransformerRegistry", () => {
         })
     })
 
+    describe("renames", () => {
+        test("a retired name still builds the transformer that replaced it", () => {
+            const transformer = createTransformer("TranslatePhyiscalTimeToTicks")
+            expect(transformer).not.toBeNull()
+            // The instance carries the *current* name, so an old work file loads into a
+            // chain that orders and validates like any other.
+            expect(transformer!.name).toBe("TranslatePhysicalTimeToTicks")
+        })
+
+        test("the retired name is not itself registered", () => {
+            expect(isRegistered("TranslatePhyiscalTimeToTicks")).toBe(false)
+            expect(isRegistered("TranslatePhysicalTimeToTicks")).toBe(true)
+        })
+    })
+
     describe("custom transformer registration (isolated)", () => {
         test("register with after positioning", () => {
             clearRegistry()
