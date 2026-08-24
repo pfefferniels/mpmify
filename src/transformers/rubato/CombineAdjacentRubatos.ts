@@ -1,4 +1,4 @@
-import { MPM, Rubato } from "mpm-ts"
+import { MPM, Rubato } from "../../mpm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { InsertRubato } from "./InsertRubato"
 import { MSM } from "../../msm"
@@ -43,9 +43,18 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
         const rubatos = mpm.getInstructions<Rubato>('rubato', this.options.scope)
         if (rubatos.length <= 1) return
 
+        const lastDate = msm.lastDate()
+
         let ref = rubatos[0]
         while (ref) {
-            for (let date = ref.date + ref.frameLength; date < msm.lastDate(); date += ref.frameLength) {
+            // Where the run of frames after `ref` stopped. `undefined` means it ran off the
+            // end of the piece, which is the case that has no successor and no loop to close:
+            // advancing past `ref` unconditionally is what keeps the outer loop finite. Leaving
+            // it to the `for` alone meant that a `ref` whose next frame started at or after the
+            // last note never reassigned `ref` and span forever. See old-bugs.md.
+            let stoppedAt: number | undefined = undefined
+
+            for (let date = ref.date + ref.frameLength; date < lastDate; date += ref.frameLength) {
                 const current = rubatos.find(r => r.date === date)
 
                 if (current &&
@@ -62,21 +71,28 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
                     mpm.removeInstruction(current)
                     rubatos.splice(rubatos.indexOf(current), 1)
                 } else {
-                    if (ref.loop) {
-                        // in order to stop the loop, we once need to insert a
-                        // new, "neutral" rubato
-                        mpm.insertInstruction({
-                            type: 'rubato',
-                            date,
-                            frameLength: ref.frameLength,
-                            'xml:id': generateId('rubato', date, mpm),
-                        }, this.options.scope)
-                    }
-
-                    ref = rubatos.find(r => r.date > date)
+                    stoppedAt = date
                     break;
                 }
             }
+
+            if (stoppedAt === undefined) {
+                // The run reached the end of the piece: nothing left to close the loop against.
+                break
+            }
+
+            if (ref.loop) {
+                // in order to stop the loop, we once need to insert a
+                // new, "neutral" rubato
+                mpm.insertInstruction({
+                    type: 'rubato',
+                    date: stoppedAt,
+                    frameLength: ref.frameLength,
+                    'xml:id': generateId('rubato', stoppedAt, mpm),
+                }, this.options.scope)
+            }
+
+            ref = rubatos.find(r => r.date > stoppedAt)
         }
     }
 }

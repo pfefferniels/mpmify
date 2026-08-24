@@ -1,4 +1,4 @@
-import { MPM, Author, Comment, RelatedResource, AppInfo, TransformationInfo, Note, Metadata } from "mpm-ts"
+import { MPM, Author, Comment, RelatedResource, AppInfo, TransformationInfo, Note, Metadata } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 

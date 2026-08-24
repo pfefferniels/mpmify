@@ -1,50 +1,29 @@
-import { MPM } from "mpm-ts";
+import { AnyInstruction, MPM, Scope } from "../mpm";
 
-type WithCreated = { created: string[] }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Constructor<T extends WithCreated = WithCreated> = new (...args: any[]) => T;
-type RecordableMethod = 'insertDefinition' | 'insertInstruction' | 'insertStyle';
-
-// A helper that, given a method name and its arguments, returns the ID to log.
-function getIdToRecord(method: RecordableMethod, args: unknown[]): string {
-    const record = args[0] as Record<string, string>;
-    switch (method) {
-        case 'insertDefinition':
-            return record.name;
-        case 'insertInstruction':
-            return record["xml:id"];
-        case 'insertStyle':
-            return record["xml:id"];
-    }
-}
-
-function RecordMethods(...methods: RecordableMethod[]) {
-    return function <T extends Constructor>(constructor: T) {
-        return class extends constructor {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            constructor(...args: any[]) {
-                super(...args);
-                methods.forEach(methodName => {
-                    const original = (this as Record<string, unknown>)[methodName];
-                    if (typeof original === 'function') {
-                        (this as Record<string, unknown>)[methodName] = (...methodArgs: unknown[]) => {
-                            const result = (original as (...args: unknown[]) => unknown).apply(this, methodArgs);
-                            this.created.push(getIdToRecord(methodName, methodArgs));
-                            return result;
-                        };
-                    }
-                });
-            }
-        };
-    };
-}
-
-@RecordMethods('insertInstruction')
+/**
+ * An {@link MPM} that notes the `xml:id` of every instruction written through it.
+ *
+ * `AbstractTransformer.run` hands one of these to `transform` so that a transformer's `created`
+ * list — which is what the argumentation layer attributes MPM elements by — falls out of the
+ * writing rather than having to be maintained by hand.
+ *
+ * Instructions only, not definitions or style switches: those are named rather than identified,
+ * and nothing downstream resolves them. (mpm-ts's version was a method-wrapping decorator whose
+ * type admitted all three; it too was only ever asked to record `insertInstruction`.)
+ *
+ * It shares the espressivo document with the MPM it wraps — a second handle on one tree, not a
+ * copy.
+ */
 export class MPMRecording extends MPM {
     created: string[] = [];
 
-    constructor(rawMPM: MPM) {
-        super()
-        this.doc = rawMPM.doc
+    constructor(mpm: MPM) {
+        super(mpm.document)
+    }
+
+    insertInstruction<T extends AnyInstruction>(instruction: T, scope: Scope, overwrite = false): T {
+        const inserted = super.insertInstruction(instruction, scope, overwrite)
+        this.created.push(inserted['xml:id'])
+        return inserted
     }
 }

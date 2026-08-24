@@ -1,5 +1,5 @@
 import { v4 } from "uuid";
-import { MPM, Scope, Tempo } from "mpm-ts";
+import { MPM, Scope, Tempo } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { TempoWithEndDate, getTempoAt } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
@@ -146,8 +146,10 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
 
         this.removeAffectedTempoInstructions(mpm, this.options.scope, replacementRanges);
 
-        // Insert fitted tempos
-        for (const tempo of tempos) {
+        // Insert fitted tempos. `endDate` is the segment the curve was fitted over — a working
+        // field, not an MPM attribute; it used to be written into the document. See old-bugs.md.
+        for (const fitted of tempos) {
+            const { endDate: _fittingWindow, ...tempo } = fitted;
             tempo['xml:id'] = generateId('tempo', tempo.date, mpm);
             mpm.insertInstruction(tempo, this.options?.scope, true);
         }

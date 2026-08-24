@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, MPM } from "mpm-ts";
+import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
@@ -37,9 +37,15 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
                 }
             }
             else {
-                const notes = msm.notesAtDate(articulation.date, this.options.scope)
-                for (const note of notes) {
-                    notes.splice(notes.indexOf(note), 1)
+                // An <articulation> without @noteid applies to every note at its date. The
+                // inner array used to shadow the outer one, so this spliced from the list it
+                // had just built and left the notes in `notes` — where they then counted
+                // towards the default. See old-bugs.md.
+                for (const note of msm.notesAtDate(articulation.date, this.options.scope)) {
+                    const toDelete = notes.indexOf(note)
+                    if (toDelete !== -1) {
+                        notes.splice(toDelete, 1)
+                    }
                 }
             }
         }
@@ -67,7 +73,7 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
             type: 'style',
             'xml:id': v4(),
             date: 0,
-            'name.ref': 'performance_style',
+            'name.ref': DEFAULT_STYLE_NAME,
             defaultArticulation: def.name,
         }, 'articulation', this.options.scope)
     }

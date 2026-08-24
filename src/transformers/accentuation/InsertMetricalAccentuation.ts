@@ -1,4 +1,4 @@
-import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM, Scope } from "mpm-ts";
+import { Accentuation, AccentuationPattern, AccentuationPatternDef, DEFAULT_STYLE_NAME, MPM, Scope } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
@@ -198,7 +198,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
         if (mpm.getStyles('accentuationPattern', this.options.scope).length === 0) {
             mpm.insertStyle({
-                "name.ref": 'performance_style',
+                "name.ref": DEFAULT_STYLE_NAME,
                 date: 0,
                 'type': 'style',
                 'xml:id': v4(),

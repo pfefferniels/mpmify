@@ -1,5 +1,5 @@
 import { v4 } from "uuid"
-import { MPM, Scope } from "mpm-ts"
+import { MPM, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 

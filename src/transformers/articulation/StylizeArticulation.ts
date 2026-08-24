@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, MPM } from "mpm-ts";
+import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
@@ -32,7 +32,11 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
             const date = articulation.date
             let targetNotes = withinNotes.filter(n => n.date === date)
             if (articulation.noteid) {
-                targetNotes = targetNotes.filter(n => n["xml:id"] === articulation.noteid.slice(1))
+                // `@noteid` is a space-separated list of references — `InsertArticulation`
+                // folds a chord's notes into one instruction. Matching the whole attribute
+                // against a single id found nothing as soon as there were two. See old-bugs.md.
+                const ids = articulation.noteid.split(' ').map(ref => ref.replace(/^#/, ''))
+                targetNotes = targetNotes.filter(n => ids.includes(n["xml:id"]))
             }
 
             for (const note of targetNotes) {
@@ -64,7 +68,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        for (const [scope,] of mpm.doc.performance.parts) {
+        for (const scope of mpm.scopes()) {
             // Find clusters
             const articulations = mpm.getInstructions<Articulation>('articulation', scope)
             const points = this.generateClusters(articulations)
@@ -125,7 +129,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                     type: 'style',
                     'xml:id': v4(),
                     date: 0,
-                    'name.ref': 'performance_style',
+                    'name.ref': DEFAULT_STYLE_NAME,
                     defaultArticulation: defName
                 }, 'articulation', scope)
             }
@@ -136,7 +140,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                     type: 'style',
                     'xml:id': v4(),
                     date: 0,
-                    'name.ref': 'performance_style',
+                    'name.ref': DEFAULT_STYLE_NAME,
                 }, 'articulation', scope)
             }
         }

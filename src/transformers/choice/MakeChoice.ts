@@ -1,4 +1,4 @@
-import { MPM } from "mpm-ts"
+import { MPM } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 

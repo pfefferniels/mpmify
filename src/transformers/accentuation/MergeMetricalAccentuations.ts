@@ -1,4 +1,4 @@
-import { AccentuationPattern, AccentuationPatternDef, MPM } from "mpm-ts";
+import { AccentuationPattern, AccentuationPatternDef, Accentuation, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { InsertMetricalAccentuation } from "./InsertMetricalAccentuation";
@@ -31,8 +31,12 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         if (toMerge.length <= 1) return
 
         const mergedPattern = this.mergePatterns(toMerge, this.options.into)
-        mpm.insertDefinition(mergedPattern, this.options.scope)
+
+        // Remove first, then insert. The merged pattern is a fresh record rather than one of
+        // the originals mutated in place, so the two steps do not interfere: removing the
+        // originals cannot take the merged one with it.
         toMerge.forEach(def => mpm.removeDefinition(def))
+        mpm.insertDefinition(mergedPattern, this.options.scope)
 
         const allInstructions = mpm.getInstructions<AccentuationPattern>('accentuationPattern', this.options.scope)
         allInstructions
@@ -42,27 +46,43 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
             })
     }
 
+    /**
+     * The running mean of the patterns' accentuations, beat by beat, as a new definition named
+     * `into`. Beats the first pattern does not have are not introduced: the prototype decides
+     * the beat structure, and the rest only move its values.
+     */
     private mergePatterns(patterns: AccentuationPatternDef[], into: string): AccentuationPatternDef {
         if (patterns.length <= 1) {
             throw new Error('Cannot merge less than two patterns')
         }
 
         const [prototype, ...rest] = patterns
-        prototype.name = into
+        const children: Accentuation[] = prototype.children.map(accentuation => ({
+            type: 'accentuation',
+            beat: accentuation.beat,
+            value: accentuation.value,
+            'transition.from': accentuation['transition.from'],
+            'transition.to': accentuation['transition.to'],
+        }))
 
         let n = 1
         for (const pattern of rest) {
             for (const accentuation of pattern.children) {
-                const prototypeAccentuation = prototype.children.find(a => a.beat === accentuation.beat)
-                if (!prototypeAccentuation) continue
+                const merged = children.find(a => a.beat === accentuation.beat)
+                if (!merged) continue
 
-                prototypeAccentuation.value = (prototypeAccentuation.value * n + accentuation.value) / (n + 1)
-                prototypeAccentuation["transition.from"] = (prototypeAccentuation["transition.from"] * n + accentuation["transition.from"]) / (n + 1)
-                prototypeAccentuation["transition.to"] = (prototypeAccentuation["transition.to"] * n + accentuation["transition.to"]) / (n + 1)
+                merged.value = (merged.value * n + accentuation.value) / (n + 1)
+                merged["transition.from"] = (merged["transition.from"] * n + accentuation["transition.from"]) / (n + 1)
+                merged["transition.to"] = (merged["transition.to"] * n + accentuation["transition.to"]) / (n + 1)
             }
             n++
         }
 
-        return prototype
+        return {
+            type: 'accentuationPatternDef',
+            name: into,
+            length: prototype.length,
+            children,
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, MPM } from "mpm-ts"
+import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -112,6 +112,20 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         }
 
         mpm.insertDefinition(def, this.options.scope)
+
+        // A <style> switch is what puts the styleDef holding `def` in scope; without one the
+        // @name.ref below resolves to nothing and the articulation is inert. Only
+        // StylizeArticulation and MakeDefaultArticulation used to emit it, so a chain that ran
+        // neither produced definitions no renderer could reach. See old-bugs.md.
+        if (mpm.getStyles('articulation', this.options.scope).length === 0) {
+            mpm.insertStyle({
+                type: 'style',
+                'xml:id': v4(),
+                date: 0,
+                'name.ref': DEFAULT_STYLE_NAME,
+            }, 'articulation', this.options.scope)
+        }
+
         this.undoEffectOf(def, affectedNotes)
 
         articulations = articulations.reduce((acc, curr) => {

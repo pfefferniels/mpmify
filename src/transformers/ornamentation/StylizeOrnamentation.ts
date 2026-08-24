@@ -1,4 +1,4 @@
-import { DynamicsGradient, MPM, Ornament, OrnamentDef } from "mpm-ts"
+import { DEFAULT_STYLE_NAME, DynamicsGradient, MPM, Ornament, OrnamentDef } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -72,7 +72,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        for (const [scope,] of mpm.doc.performance.parts) {
+        for (const scope of mpm.scopes()) {
             const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
 
             const filteredOrnaments = ornaments.filter(o =>
@@ -183,7 +183,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 date: 0,
                 type: 'style',
                 'xml:id': v4(),
-                'name.ref': 'performance_style',
+                'name.ref': DEFAULT_STYLE_NAME,
             }, 'ornament', scope)
 
             // Remove temporary fields from ornaments

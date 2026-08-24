@@ -1,4 +1,4 @@
-import { Tempo } from "mpm-ts";
+import { Tempo } from "../../mpm";
 
 export interface WithEndDate {
     endDate: number

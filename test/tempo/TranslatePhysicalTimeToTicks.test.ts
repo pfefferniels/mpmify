@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { MPM, Ornament, Tempo } from 'mpm-ts'
+import { MPM, Ornament, Tempo } from "../../src/mpm"
 import { TranslatePhyiscalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
 
 /**
@@ -70,71 +70,43 @@ test('It inserts the right tempo instructions using beat length = denominator', 
 })
 
 test('it translates existing physical modifiers into tick modifiers', () => {
-    // Arrange
+    // Arrange: a piece under a single constant tempo, so the tick/ms ratio is known exactly.
+    // At 60 bpm with beatLength 0.25 a quarter note (720 ticks) lasts 1000 ms, i.e. 0.72
+    // ticks per millisecond.
+    const msm = new MSM([
+        { ...generateNote(0, 0.25), 'midi.onset': 0, 'midi.duration': 1, 'midi.velocity': 100 },
+        { ...generateNote(0.25, 0.25), 'midi.onset': 1, 'midi.duration': 1, 'midi.velocity': 100 },
+        { ...generateNote(0.5, 0.25), 'midi.onset': 2, 'midi.duration': 1, 'midi.velocity': 100 },
+    ], { numerator: 4, denominator: 4 })
+
     const mpm = new MPM()
-    const tempos: Tempo[] = [
-        {
-            type: 'tempo',
-            date: 0,
-            'xml:id': 'tempo_1',
-            beatLength: 0.25,
-            bpm: 60,
-            meanTempoAt: 0.3,
-            "transition.to": 120
-        },
-        {
-            type: 'tempo', 
-            date: 2880,
-            'xml:id': 'tempo_2',
-            beatLength: 0.25,
-            bpm: 120
-        }
-    ]
-    mpm.insertInstructions(tempos, 'global')
+    mpm.insertInstructions([{
+        type: 'tempo',
+        date: 0,
+        'xml:id': 'tempo_1',
+        beatLength: 0.25,
+        bpm: 60,
+    }] as Tempo[], 'global')
 
     const physicalArpeggios: Ornament[] = [
         {
             type: 'ornament',
             date: 720,
-            'xml:id': 'ornament_2',
-            "frame.start": -28.492,
-            frameLength: 56.984,
+            'xml:id': 'ornament_720',
+            "frame.start": -50,
+            frameLength: 100,
             'time.unit': 'milliseconds',
             'note.order': 'ascending pitch',
-            'scale': 1,
             'name.ref': 'arpeggio'
         },
         {
             type: 'ornament',
             date: 1440,
-            'xml:id': 'ornament_3',
+            'xml:id': 'ornament_1440',
             "frame.start": -25,
             frameLength: 50,
             'time.unit': 'milliseconds',
             'note.order': 'ascending pitch',
-            'scale': 1,
-            'name.ref': 'arpeggio'
-        },
-        {
-            type: 'ornament',
-            date: 2160,
-            'xml:id': 'ornament_4',
-            "frame.start": -22.505,
-            frameLength: 45.011,
-            'time.unit': 'milliseconds',
-            'note.order': 'ascending pitch',
-            'scale': 1,
-            'name.ref': 'arpeggio'
-        },
-        {
-            type: 'ornament',
-            date: 2880,
-            'xml:id': 'ornament_5',
-            "frame.start": -20.498,
-            frameLength: 40.997,
-            'time.unit': 'milliseconds',
-            'note.order': 'ascending pitch',
-            'scale': 1,
             'name.ref': 'arpeggio'
         }
     ]
@@ -144,12 +116,11 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     const translate = new TranslatePhyiscalTimeToTicks({
         translatePhysicalModifiers: true
     })
-
-    translate.transform(new MSM([], { numerator: 4, denominator: 4 }), mpm)
+    translate.transform(msm, mpm)
 
     // Assert
-    const transformedArpeggios = mpm.getInstructions<Ornament>('ornament', 'global')
-    expect(transformedArpeggios.every(arpeggio => arpeggio["time.unit"] === 'ticks')).toBeTruthy()
-    expect(transformedArpeggios.every(arpeggio => arpeggio["frame.start"] === -31)).toBeTruthy()
-    // TODO: frame.start should be -31, frameLength should be 60
+    const transformed = mpm.getInstructions<Ornament>('ornament', 'global')
+    expect(transformed.every(arpeggio => arpeggio["time.unit"] === 'ticks')).toBeTruthy()
+    expect(transformed.map(a => a["frame.start"])).toEqual([-36, -18])
+    expect(transformed.map(a => a.frameLength)).toEqual([72, 36])
 })

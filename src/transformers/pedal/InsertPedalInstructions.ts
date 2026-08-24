@@ -1,4 +1,4 @@
-import { MPM } from "mpm-ts"
+import { MPM } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { TranslatePhyiscalTimeToTicks } from "../tempo"

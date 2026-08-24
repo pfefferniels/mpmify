@@ -12,7 +12,10 @@ npm run build
 
 This compiles TypeScript sources to `lib/`.
 
-> **Note:** mpmify depends on [mpm-ts](../mpm-ts) as a local package (`file:../mpm-ts`), so make sure it is available at the expected path.
+> **Note:** mpmify depends on [espressivo](../meico-ts) as a local package
+> (`file:../meico-ts`), so make sure it is available at the expected path and built
+> (`npm run build` there). espressivo is the MPM object model mpmify writes through; it
+> replaced `mpm-ts` on 2026-08-24 (see `PORT-TO-ESPRESSIVO.md` and `old-bugs.md`).
 
 ## Quick Example
 
@@ -38,8 +41,22 @@ const msm = new MSM([
 // 2. Create an empty MPM and apply transformers
 const mpm = new MPM()
 
-new InsertDynamicsInstructions({ part: 'global', beatLength: 0.25 }).run(msm, mpm)
-new ApproximateLogarithmicTempo({ part: 'global', beatLength: 0.25 }).run(msm, mpm)
+new ApproximateLogarithmicTempo({
+    scope: 'global', from: 0, to: msm.lastDate(), beatLength: 0.25, silentOnsets: []
+}).run(msm, mpm)
+new InsertDynamicsInstructions({
+    scope: 'global', from: 0, to: msm.lastDate(), phantomVelocities: new Map()
+}).run(msm, mpm)
 
 // mpm now contains dynamics and tempo instructions derived from the performance
 ```
+
+## Testing
+
+```bash
+npm test
+```
+
+The suites under `test/` cover the transformers and, in `test/mpm/`, the MPM layer itself.
+The wider check is `scripts/bake/` — see its README — which runs the whole pipeline over a
+real MEI + `info.json` and is what the port was verified against.

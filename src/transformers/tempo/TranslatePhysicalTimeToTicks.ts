@@ -1,4 +1,4 @@
-import { MPM, Ornament, Tempo } from "mpm-ts";
+import { MPM, Ornament, Tempo } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt } from "./tempoCalculations";
@@ -106,7 +106,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      * @todo Currently, only ornaments are taken into account.
      */
     translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
-        for (const [scope,] of mpm.doc.performance.parts) {
+        for (const scope of mpm.scopes()) {
             const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
             const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
@@ -144,7 +144,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      *            It must contain a `tempoMap`.
      */
     addTickOnsets(msm: MSM, mpm: MPM) {
-        for (const [scope,] of mpm.doc.performance.parts) {
+        for (const scope of mpm.scopes()) {
             const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
             let currentMs = 0
@@ -205,7 +205,7 @@ export class TranslatePhyiscalTimeToTicks extends AbstractTransformer<TranslateP
      * @param mpm 
      */
     addTickDurations(msm: MSM, mpm: MPM, deleteMIDI: boolean = false) {
-        for (const [scope,] of mpm.doc.performance.parts) {
+        for (const scope of mpm.scopes()) {
             const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
             let currentFrameBeginMs = 0

@@ -1,6 +1,6 @@
 import { v4 } from "uuid"
 import { DynamicsWithEndDate } from "./InsertDynamicsInstructions"
-import { Movement } from "mpm-ts"
+import { Movement } from "../../mpm"
 
 export type DynamicsPoints = {
     date: number

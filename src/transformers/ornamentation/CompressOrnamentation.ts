@@ -1,4 +1,4 @@
-import { OrnamentDef, MPM } from "mpm-ts";
+import { OrnamentDef, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { fix } from "../../utils/utils";
@@ -21,7 +21,7 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        const parts = mpm.doc.performance.parts.keys()
+        const parts = mpm.scopes()
         for (const part of parts) {
             const defs = mpm.getDefinitions<OrnamentDef>('ornamentDef', part)
             for (const def of defs) {

@@ -1,4 +1,4 @@
-import { MPM, Rubato } from "mpm-ts"
+import { MPM, Rubato } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp, DefinedProperty } from "../../utils/utils"
@@ -132,8 +132,11 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             lateStart,
         }
 
-        mpm.insertInstruction(rubato, this.options.scope)
-        this.removeRubatoDistortionFrom([rubato], msm, mpm)
+        // The inserted view, not the record: `removeRubatoDistortionFrom` recognises "its own"
+        // rubato by identity against what `instructionsEffectiveAtDate` hands back, which is
+        // the view over the element.
+        const inserted = mpm.insertInstruction(rubato, this.options.scope)
+        this.removeRubatoDistortionFrom([inserted], msm, mpm)
     }
 
     /**

@@ -1,4 +1,4 @@
-import { Dynamics, MPM, Scope } from "mpm-ts"
+import { Dynamics, MPM, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
@@ -33,9 +33,13 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         const { from, to } = this.options
 
         const relevantPoints = points.filter(p => p.date >= from && p.date <= to)
-        const instruction = approximateDynamics(relevantPoints)
-        if (!instruction) return
+        const fitted = approximateDynamics(relevantPoints)
+        if (!fitted) return
 
+        // `endDate` is the window the curve was fitted over — a working field, not an MPM
+        // attribute. It used to be written into the document; a reader gets the span from the
+        // next <dynamics> instead. See old-bugs.md.
+        const { endDate: _fittingWindow, ...instruction } = fitted
         instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
 
         mpm.insertInstruction(instruction, this.options?.scope)

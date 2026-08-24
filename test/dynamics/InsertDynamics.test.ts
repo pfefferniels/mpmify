@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { Dynamics, MPM } from 'mpm-ts'
+import { Dynamics, MPM } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
 
 /**
@@ -20,7 +20,7 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
     'midi.pitch': 67
 })
 
-const msmFixture = new MSM([
+const msmFixture = () => new MSM([
     {
         ...generateNote(0, 0.25),
         'midi.onset': 1,
@@ -41,24 +41,56 @@ const msmFixture = new MSM([
     }],
     { numerator: 3, denominator: 4 })
 
-test('It inserts correct dynamics instructions', () => {
-    // Arrange
+/** Call the protected `transform` method for testing */
+const callTransform = (transformer: InsertDynamicsInstructions, msm: MSM, mpm: MPM) => {
+    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+    ;(transformer as unknown as Transformable).transform(msm, mpm)
+}
+
+const run = (msm: MSM, mpm: MPM) => callTransform(new InsertDynamicsInstructions({
+    scope: 'global',
+    from: 0,
+    to: msm.lastDate(),
+    phantomVelocities: new Map(),
+}), msm, mpm)
+
+test('it fits one <dynamics> across the range, from the first velocity to the last', () => {
+    const msm = msmFixture()
     const mpm = new MPM()
 
-    // Act
-    const transformer = new InsertDynamicsInstructions({
-        part: 'global',
-        beatLength: 'denominator'
-    })
-    transformer.transform(msmFixture, mpm)
+    run(msm, mpm)
 
-    // Assert
     const dynamics = mpm.getInstructions<Dynamics>('dynamics', 'global')
+    expect(dynamics).toHaveLength(1)
+    expect(dynamics[0].date).toBe(0)
+    expect(dynamics[0].volume).toBe(50)
+    expect(dynamics[0]['transition.to']).toBe(100)
+})
 
-    expect(dynamics.map(dynamics => [dynamics.date, dynamics.volume]))
-        .toEqual([
-            [0, 50],
-            [720, 75],
-            [1440, 100]
-        ])
+test('it leaves the residual velocity the curve does not explain on every note', () => {
+    const msm = msmFixture()
+    const mpm = new MPM()
+
+    run(msm, mpm)
+
+    // The reduction: recorded minus explained, left on the note for the next transformer.
+    for (const note of msm.allNotes) {
+        expect(note.absoluteVelocityChange).toBeDefined()
+    }
+
+    // The curve starts at the instruction's own volume, so the note under it is fully
+    // explained. What the curve misses afterwards is exactly what survives — including the
+    // tail, because the fit runs to the last point while the rendering runs to the next
+    // instruction or the end of the piece (see old-bugs.md, "unfixed").
+    expect(msm.allNotes[0].absoluteVelocityChange).toBeCloseTo(0, 5)
+})
+
+test('the fitting window is not written into the document', () => {
+    const msm = msmFixture()
+    const mpm = new MPM()
+
+    run(msm, mpm)
+
+    // `endDate` is a working field of the fit, not an MPM attribute. See old-bugs.md.
+    expect(mpm.toXML()).not.toContain('endDate')
 })

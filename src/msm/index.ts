@@ -1,4 +1,4 @@
-import { Scope } from "mpm-ts";
+import { Scope } from "../mpm";
 import { parse } from "js2xmlparser";
 import { isDefined } from "../utils/utils";
 
@@ -268,10 +268,14 @@ export class MSM {
      * @returns score date in ticks
      */
     public lastDate(): number {
+        // `Math.max()` of nothing is -Infinity, which every comparison downstream reads as a
+        // date before the start of the piece. An empty score ends where it begins.
+        if (this.allNotes.length === 0) return 0
         return Math.max(...this.allNotes.map(note => note.date))
     }
 
     public get end(): number {
+        if (this.allNotes.length === 0) return 0
         return Math.max(...this.allNotes.map(note => note.date + note.duration))
     }
 

@@ -1,4 +1,18 @@
 {
-  "ignoreDependencies": ["mpm-ts"],
-  "ignore": ["src/transformers/modification/Constrain.ts"]
+  "entry": [
+    "scripts/bake/bakeSegments.ts",
+    "scripts/bake/verifySegments.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "scripts/**/*.ts"
+  ],
+  "ignore": [
+    "src/transformers/modification/Constrain.ts",
+    "scripts/bake/intensityCurve.ts",
+    "scripts/bake/Reconstruction.ts"
+  ],
+  "ignoreDependencies": [
+    "espressivo"
+  ]
 }

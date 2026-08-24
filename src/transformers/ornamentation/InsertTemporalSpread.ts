@@ -1,4 +1,4 @@
-import { MPM, Ornament } from "mpm-ts"
+import { MPM, Ornament } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"

@@ -1,4 +1,4 @@
-import { InstructionType, MPM, Scope } from "mpm-ts";
+import { InstructionType, MPM, Scope } from "../mpm";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { v4 } from "uuid";
@@ -91,7 +91,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
     private insertMetadata(mpm: MPM) {
         this.created.forEach(id => {
-            const instruction = mpm.getInstructions().find(i => i['xml:id'] === id)
+            const instruction = mpm.findInstructionById(id)
             if (!instruction) {
                 return
             }

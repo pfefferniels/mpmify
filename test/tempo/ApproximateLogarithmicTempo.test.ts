@@ -2,7 +2,7 @@
 
 import { describe, test, expect } from "vitest"
 import { MSM } from "../../src/msm"
-import { MPM, Tempo } from "mpm-ts"
+import { MPM, Tempo } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
 
 /** Call the protected `transform` method for testing */

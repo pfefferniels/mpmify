@@ -1,19 +1,24 @@
-import { MPM, Ornament } from "mpm-ts"
+import { MPM, Ornament } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 
-export type DynamicsGradient = { from: number, to: number }
-export type DatedDynamicsGradient = Map<number, DynamicsGradient>
+/**
+ * The velocity ramp across an arpeggio, in the normalized units an `<ornament>`'s
+ * `transition.from`/`transition.to` use. Named apart from the MPM `dynamicsGradient` element
+ * of `mpm/types.ts`, which it is fitted into but is not.
+ */
+export type GradientRange = { from: number, to: number }
+export type DatedGradientRange = Map<number, GradientRange>
 
 type SingleGradient = {
     date: number
-    gradient: DynamicsGradient
+    gradient: GradientRange
 }
 
 type DefaultGradients = {
-    crescendo: DynamicsGradient
-    decrescendo: DynamicsGradient
+    crescendo: GradientRange
+    decrescendo: GradientRange
 }
 
 const isSingleGradient = (gradient: SingleGradient | DefaultGradients): gradient is SingleGradient => {
@@ -61,15 +66,26 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
     /**
      * @note If gradient is undefined, it will be estimated.
      */
-    private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient?: DynamicsGradient) => {
+    private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient?: GradientRange) => {
         let arpeggioNotes = msm.asChords(this.options.scope).get(date)
+        if (!arpeggioNotes || arpeggioNotes.length === 0) return
+
+        // Which of the two default gradients the chord calls for is a property of the chord,
+        // not of whether the velocities are also being rewritten. Reading it inside the
+        // `sortVelocities` branch left `gradient` undefined — and the arithmetic below
+        // throwing — for the whole `sortVelocities: false` configuration, which is the
+        // constructor's own default. See old-bugs.md.
+        if (!gradient && !isSingleGradient(this.options)) {
+            gradient = directionOf(arpeggioNotes) === 'crescendo'
+                ? this.options.crescendo
+                : this.options.decrescendo
+        }
 
         if (this.options.sortVelocities) {
-            const defaultDirection = this.sortVelocities(arpeggioNotes)
-            if (!gradient && !isSingleGradient(this.options)) {
-                gradient = defaultDirection === 'crescendo' ? this.options.crescendo : this.options.decrescendo
-            }
+            this.sortVelocities(arpeggioNotes)
         }
+
+        if (!gradient) return
 
         // only consider notes with a defined onset time
         arpeggioNotes = arpeggioNotes
@@ -121,28 +137,46 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         }
     }
 
-    private sortVelocities(chord: MsmNote[]): 'crescendo' | 'descrescendo' {
-        chord.sort((a, b) => a["midi.onset"] - b["midi.onset"])
-
-        let loudestPos = 0;
-        let quietestPos = 0;
-        chord.forEach((note, index) => {
-            if (note['midi.velocity'] > chord[loudestPos]['midi.velocity']) {
-                loudestPos = index;
-            }
-            if (note['midi.velocity'] < chord[quietestPos]['midi.velocity']) {
-                quietestPos = index;
-            }
-        });
+    /**
+     * Rewrite the chord's velocities so they rise or fall monotonically in onset order, in
+     * whichever direction the chord already leans.
+     */
+    private sortVelocities(chord: MsmNote[]): ArpeggioDirection {
+        const direction = directionOf(chord)
 
         const velocities = [...chord.map(note => note['midi.velocity'])];
-        velocities.sort((a, b) => loudestPos > quietestPos ? a - b : b - a);
+        velocities.sort((a, b) => direction === 'crescendo' ? a - b : b - a);
         chord
             .sort((a, b) => a["midi.onset"] - b["midi.onset"])
             .forEach((note, i) => {
                 note["midi.velocity"] = velocities[i];
             })
-        
-        return loudestPos > quietestPos ? 'crescendo' : 'descrescendo';
+
+        return direction;
     }
+}
+
+export type ArpeggioDirection = 'crescendo' | 'descrescendo'
+
+/**
+ * Whether a chord's velocities lean up or down across the arpeggio: up if its loudest note
+ * comes after its quietest in onset order.
+ *
+ * Sorts the chord by onset, which the callers rely on.
+ */
+const directionOf = (chord: MsmNote[]): ArpeggioDirection => {
+    chord.sort((a, b) => a["midi.onset"] - b["midi.onset"])
+
+    let loudestPos = 0;
+    let quietestPos = 0;
+    chord.forEach((note, index) => {
+        if (note['midi.velocity'] > chord[loudestPos]['midi.velocity']) {
+            loudestPos = index;
+        }
+        if (note['midi.velocity'] < chord[quietestPos]['midi.velocity']) {
+            quietestPos = index;
+        }
+    });
+
+    return loudestPos > quietestPos ? 'crescendo' : 'descrescendo';
 }
