@@ -99,7 +99,7 @@ describe('the articulation fitter recovers its own ratios', () => {
      */
     test('per-note articulation units reproduce the performed velocity exactly (#23)', () => {
         const score = buildScore({ beats: 8 })
-        const scoreXml = score.serialize(false)!
+        const scoreXml = score.serialize()!
         const scoreNotes = score.allNotes.map(note => ({ id: note['xml:id'], date: note.date }))
 
         const truthXml = truthMpm({

@@ -107,7 +107,7 @@ describe('pedalling reaches the renderer', () => {
     test('espressivo renders it as a sustain controller stream that reaches full depth', () => {
         const score = pedalledScore()
         const mpm = fitPedals(score)
-        const msmXml = score.serialize(false)!
+        const msmXml = score.serialize()!
 
         const stream = sustainStream(msmXml, exportMPM(mpm))
         expect(stream, 'no sustain stream in the rendered performance').toBeDefined()
@@ -128,6 +128,6 @@ describe('pedalling reaches the renderer', () => {
             + '<performance name="empty" pulsesPerQuarter="720">'
             + '<global><header/><dated/></global></performance></mpm>'
 
-        expect(sustainStream(score.serialize(false)!, empty)).toBeUndefined()
+        expect(sustainStream(score.serialize()!, empty)).toBeUndefined()
     })
 })

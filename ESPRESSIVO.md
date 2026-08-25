@@ -92,6 +92,13 @@ the point of use. There were exactly ten `* 1000` in `src/` and all ten were tha
 back, and `serializeScore()` states only the score half — which is what a residual is measured
 against, since a document carrying both is ambiguous about which timing it means.
 
+The document is **built through espressivo**, not spelled here: `Msm.createMsm` fixes the root and
+the global `<dated>`, `Msm.makePart` fixes a part's, and `addNote` / `addTimeSignature` /
+`addSection` / `addProgramChange` put each entry in its map through `addToMap`, which is what keeps
+a map ascending by `@date`. `Alignment.build` names no element and no attribute. It used to be a
+literal handed to `js2xmlparser` — a private table of how MSM is spelled, next to a library that
+owns the format — and it cost one silent bug that way.
+
 **The pedals are the exception, and they stay out of the document.** MSM's `<pedal>` is
 `date`/`state`/`date.end` in ticks, and a recorded pedal has no symbolic date — which is exactly
 why `getRange` has to derive one from the residual. So there is nothing valid to write. What

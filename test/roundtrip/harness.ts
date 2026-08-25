@@ -134,7 +134,7 @@ export const roundTrip = (spec: Case): RoundTripResult => {
     }
 
     const score = buildScore(spec.score)
-    const scoreXml = score.serialize(false)!
+    const scoreXml = score.serialize()!
     const scoreNotes = score.allNotes.map(note => ({ id: note['xml:id'], date: note.date }))
 
     const truthXml = truthMpm(spec.truth, scoreNotes)

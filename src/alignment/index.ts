@@ -1,5 +1,5 @@
 import { Scope } from "../mpm";
-import { parse } from "js2xmlparser";
+import { Msm } from "espressivo";
 import { isDefined } from "../utils/utils";
 import { PULSES_PER_QUARTER } from "../ppq";
 
@@ -163,140 +163,104 @@ export class Alignment {
     }
 
     /**
-     * The MSM as a document, with the recording in it unless asked to leave it out.
+     * The alignment as an MSM document: the score, and the recording stated in the three
+     * attributes MSM keeps a performance in.
      *
-     * Kept as-is for existing callers; `serializeScore` is what a renderer should be given.
+     * No `<pedalMap>`. MSM's `<pedal>` is `date`/`state`/`date.end` in ticks, and a recorded
+     * pedal has no symbolic date at all — that is the whole reason `getRange` has to derive one
+     * from the residual. So there is nothing valid to write, and what mpmify used to write was
+     * read by nobody: `GenericMap.indexElements` skips a map child with no `@date`, and even an
+     * indexed `<pedal>` reaches no renderer, since pedalling sounds through MPM's `<movement>`
+     * instructions. The pedals live here, which is where `InsertPedal`, `deriveResidual` and
+     * `tickTimes` read them.
      */
-    public serialize(filterIntermediateAttributes = true) {
-        return this.build(filterIntermediateAttributes ? 'none' : 'all')
+    public serialize() {
+        return this.build(true)
     }
 
     /**
-     * The MSM as a *score*: symbolic dates and durations plus `midi.pitch`, and nothing the
-     * performance put there.
+     * The alignment as a *score*: symbolic dates and durations plus `midi.pitch`, and nothing
+     * the performance put there.
      *
-     * This is what goes to espressivo when a residual is derived. The recording states itself
-     * in the same attributes a render writes — `milliseconds.date`, `milliseconds.date.end`,
-     * `velocity` — so a document carrying both is ambiguous about which timing it means, and
-     * the whole point of the residual is to keep the recording and the rendering apart.
+     * This is what goes to espressivo when a residual is derived. The recording states itself in
+     * the same attributes a render writes, so a document carrying both is ambiguous about which
+     * timing it means, and the whole point of the residual is to keep the recording and the
+     * rendering apart.
      */
     public serializeScore() {
-        return this.build('pitch')
+        return this.build(false)
     }
 
     /**
-     * Serialize the MSM as an XML document.
+     * Build the document through espressivo, which owns MSM.
      *
-     * @param midi which of a note's MIDI attributes to carry into the document. `'none'` is
-     * symbolic only; `'pitch'` adds `midi.pitch`, which is the least a renderer needs to sound
-     * the note and the most a *score* should say; `'all'` adds the recorded
-     * `milliseconds.date`, `milliseconds.date.end` and `velocity` as well.
+     * Nothing here spells an element or an attribute name. `createMsm` fixes the root and the
+     * global `<dated>`; `makePart` fixes a part's; `addNote` and friends put each entry in its
+     * map through `addToMap`, which is what keeps a map ascending by `@date`. This used to be a
+     * literal handed to `js2xmlparser` — a private table of how MSM is spelled, next to a
+     * library that owns the format, and it cost one silent bug that way.
+     *
+     * @param performed whether to carry the recording — `velocity`, `milliseconds.date` and
+     * `milliseconds.date.end` — as well as the score.
      */
-    private build(midi: 'none' | 'pitch' | 'all') {
+    private build(performed: boolean) {
         if (this.allNotes.length === 0) {
             console.log('no notes to serialize')
             return
         }
 
-        const msm = {
-            '@': {
-                title: 'aligned performance',
-                pulsesPerQuarter: PULSES_PER_QUARTER,
-            },
-            'global': {
-                'header': {},
-                'dated': {
-                    'timeSignatureMap': {
-                        'timeSignature': {
-                            '@': {
-                                'date': 0.0,
-                                'numerator': this.timeSignature?.numerator || 4,
-                                'denominator': this.timeSignature?.denominator || 4,
-                            }
-                        }
-                    },
-                    'sectionMap': {
-                        // TODO: derive from FormalAlterations
-                        'section': {
-                            '@': {
-                                date: 0.0,
-                                'date.end': this.allNotes[this.allNotes.length - 1].date
-                            }
-                        }
-                    }
-                    // No `<pedalMap>`. MSM's `<pedal>` is `date`/`state`/`date.end` in ticks, and
-                    // an aligned pedal has no symbolic date at all — that is the whole reason
-                    // `getRange` has to derive one from the residual. So there is nothing valid
-                    // to write, and what mpmify used to write was read by nobody: espressivo's
-                    // `GenericMap.indexElements` skips a map child with no `@date`, and even an
-                    // indexed `<pedal>` reaches no renderer, since pedalling sounds through MPM's
-                    // `<movement>` instructions. Rendering with and without the map gives the
-                    // same performance, byte for byte. The pedals live on the alignment, which
-                    // is where `InsertPedal`, `deriveResidual` and `tickTimes` read them.
-                }
-            },
-            // One `<part>` per part the notes actually use, ascending. This was
-            // `Array.from(Array(2).keys())` — exactly two, always — so every note in part 3 or
-            // higher was dropped from the serialized score without a word, and a single-part
-            // piece still emitted an empty second `<part>`. `parts()` is the same 0-based
-            // numbering `notesInPart` uses. See issue #34.
-            'part': [...this.parts()].sort((a, b) => a - b).map(part => {
-                return {
-                    '@': {
-                        name: `part${part}`,
-                        number: `${part + 1}`,
-                        'midi.channel': part,
-                        'midi.port': 0
-                    },
-                    header: {},
-                    dated: {
-                        'programChangeMap': {
-                            'programChange': {
-                                '@': {
-                                    date: 0,
-                                    value: 0
-                                }
-                            }
-                        },
-                        score: {
-                            'note': this.allNotes
-                                .filter(note => note.part === part + 1)
-                                .map(note => {
-                                    const result = {
-                                        'xml:id': note['xml:id'],
-                                        'date': note['date'],
-                                        'pitchname': note['pitchname'],
-                                        'octave': note['octave'],
-                                        'accidentals': note['accidentals'],
-                                        'duration': note['duration']
-                                    } as Record<string, unknown>
+        // A fixed root id, because the chain is compared run against run and `createMsm` mints a
+        // random UUID for a null one.
+        const msm = Msm.createMsm('aligned performance', 'aligned', PULSES_PER_QUARTER)
+        const global = msm.getGlobal()
+        if (!global) return
 
-                                    if (midi !== 'none' && note['midi.pitch']) {
-                                        result['midi.pitch'] = note['midi.pitch']
-                                    }
-                                    if (midi === 'all') {
-                                        if (note['milliseconds.date']) {
-                                            result['milliseconds.date'] = note['milliseconds.date']
-                                        }
-                                        if (note['milliseconds.date.end']) {
-                                            result['milliseconds.date.end'] = note['milliseconds.date.end']
-                                        }
-                                        if (note.velocity) {
-                                            result.velocity = note.velocity
-                                        }
-                                    }
+        msm.addTimeSignature(global, {
+            date: 0,
+            numerator: this.timeSignature?.numerator ?? 4,
+            denominator: this.timeSignature?.denominator ?? 4,
+        })
+        // TODO: derive from FormalAlterations
+        msm.addSection({ date: 0, dateEnd: this.allNotes[this.allNotes.length - 1].date })
 
-                                    return {
-                                        '@': result
-                                    }
-                                })
-                        }
-                    }
-                }
+        // One `<part>` per part the notes actually use, ascending. `@number` is the part index
+        // plus one and `@midi.channel` is the index itself, which is the numbering
+        // `notesInPart` and `MPM`'s `requireMap` both assume.
+        for (const part of [...this.parts()].sort((a, b) => a - b)) {
+            const element = Msm.makePart({
+                name: `part${String(part)}`,
+                number: part + 1,
+                midiChannel: part,
+                midiPort: 0,
             })
+            msm.addPart(element)
+            msm.addProgramChange(element, { date: 0, value: 0 })
+
+            for (const note of this.allNotes.filter(n => n.part === part + 1)) {
+                msm.addNote(element, {
+                    id: note['xml:id'],
+                    date: note.date,
+                    duration: note.duration,
+                    midiPitch: note['midi.pitch'],
+                    pitchname: note.pitchname,
+                    accidentals: note.accidentals,
+                    octave: note.octave,
+                    ...(performed && {
+                        velocity: note.velocity,
+                        millisecondsDate: note['milliseconds.date'],
+                        millisecondsDateEnd: note['milliseconds.date.end'],
+                    }),
+                })
+            }
         }
 
-        return parse('msm', msm)
+        // `createMsm` and `makePart` open every map the format defines; a fitted alignment fills
+        // two of them. Twice, because the sweep walks one snapshot: a `<miscMap>` left empty by
+        // the removal of its own `<tupletSpanMap>` is not revisited on that pass.
+        msm.deleteEmptyMaps()
+        msm.deleteEmptyMaps()
+
+        return msm.writeMsm() ?? undefined
     }
 
     /**
