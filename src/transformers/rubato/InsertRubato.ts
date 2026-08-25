@@ -4,7 +4,7 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions } from "..
 import { clamp, DefinedProperty } from "../../utils/utils"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
-import { calculateRubatoOnDate, removeRubatoDistortion } from "./rubatoMath"
+import { removeRubatoDistortion } from "./rubatoMath"
 
 // Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
 // moved, and mpm-desk's rubato desk imports it from "mpmify".

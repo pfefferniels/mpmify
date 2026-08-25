@@ -2,7 +2,6 @@ import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mp
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
-import { DefinedProperty } from "../../utils/utils"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { deriveResidual, NoteResidual } from "../../residual"
 
@@ -19,8 +18,6 @@ export type ArticulationUnit = {
 }
 
 export type InsertArticulationOptions = ScopedTransformationOptions & ArticulationUnit
-
-type ArticulatedNote = DefinedProperty<MsmNote, 'tickDuration'>
 
 /**
  * Defines the articulation of a note through the attributes relativeDuration and
