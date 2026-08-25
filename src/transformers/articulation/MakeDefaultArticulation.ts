@@ -1,9 +1,9 @@
-import { ensureDefaultStyle, getInstructions, insertDefinition, Mpm } from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer';
-import { TranslatePhysicalTimeToTicks } from '../tempo';
-import { deriveResidual } from '../../residual';
-import { makeArticulationDef } from './InsertArticulation';
+import { ensureDefaultStyle, getInstructions, insertDefinition, Mpm } from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer.js';
+import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
+import { deriveResidual } from '../../residual/index.js';
+import { makeArticulationDef } from './InsertArticulation.js';
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {}

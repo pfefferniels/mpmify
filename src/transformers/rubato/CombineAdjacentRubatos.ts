@@ -1,7 +1,13 @@
-import { getInstructions, Instruction, Mpm, removeInstruction, requireMap } from '../../mpm';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
-import { InsertRubato } from './InsertRubato';
-import { Alignment } from '../../alignment';
+import {
+  getInstructions,
+  Instruction,
+  Mpm,
+  removeInstruction,
+  requireMap,
+} from '../../mpm/index.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { InsertRubato } from './InsertRubato.js';
+import { Alignment } from '../../alignment/index.js';
 
 export interface CombineAdjacentRubatoOptions extends ScopedTransformationOptions {
   // adjacentRubatos: Rubato[]

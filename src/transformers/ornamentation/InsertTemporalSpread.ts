@@ -1,8 +1,8 @@
 import { AddOrnamentOptions, FrameDomain, NoteOffShift } from 'espressivo';
-import { Mpm, OrnamentDraft, fillInAt, requireMap, setOrnamentDraft } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { isDefined } from '../../utils/utils';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
+import { Mpm, OrnamentDraft, fillInAt, requireMap, setOrnamentDraft } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { isDefined } from '../../utils/utils.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
 
 export type ArpeggioPlacement = 'on-beat' | 'before-beat' | 'estimate' | 'none';
 export type DatedArpeggioPlacement = Map<number, ArpeggioPlacement>;

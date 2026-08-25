@@ -11,13 +11,13 @@ import {
   requireMap,
   Scope,
   scopesOf,
-} from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
+} from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
 import { v4 } from 'uuid';
-import { dbscan } from '../../utils/dbscan';
-import { InsertDynamicsGradient } from './InsertDynamicsGradient';
-import { InsertTemporalSpread } from './InsertTemporalSpread';
+import { dbscan } from '../../utils/dbscan.js';
+import { InsertDynamicsGradient } from './InsertDynamicsGradient.js';
+import { InsertTemporalSpread } from './InsertTemporalSpread.js';
 
 export interface StylizeOrnamentationOptions extends TransformationOptions {
   /**

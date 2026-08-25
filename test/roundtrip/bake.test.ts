@@ -3,8 +3,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, test } from 'vitest';
-import { getInstructions } from '../../src/mpm';
-import { derive } from '../../scripts/bake/deriveSegments';
+import { getInstructions } from '../../src/mpm/index.js';
+import { derive } from '../../scripts/bake/deriveSegments.js';
 
 /**
  * The other half of the bake: the intensity segments the viewer reads.

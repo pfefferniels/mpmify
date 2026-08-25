@@ -4,9 +4,9 @@ import {
   getInstructions,
   InstructionType,
   Scope,
-} from '../mpm';
-import { Alignment } from '../alignment';
-import { Residual } from '../residual';
+} from '../mpm/index.js';
+import { Alignment } from '../alignment/index.js';
+import { Residual } from '../residual/index.js';
 import { Mpm } from 'espressivo';
 import { v4 } from 'uuid';
 

@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'vitest';
 import { performMsmToData } from 'espressivo';
-import { createMpm, exportMPM, getInstructions } from '../../src/mpm';
-import { compareTransformers } from '../../src/transformers';
+import { createMpm, exportMPM, getInstructions } from '../../src/mpm/index.js';
+import { compareTransformers } from '../../src/transformers/index.js';
 import {
   ApproximateLogarithmicTempo,
   TranslatePhysicalTimeToTicks,
-} from '../../src/transformers/tempo';
-import { InsertPedal } from '../../src/transformers/pedal/InsertPedalInstructions';
-import { buildScore, QUARTER } from './score';
-import { assertWellFormed } from './invariants';
+} from '../../src/transformers/tempo/index.js';
+import { InsertPedal } from '../../src/transformers/pedal/InsertPedalInstructions.js';
+import { buildScore, QUARTER } from './score.js';
+import { assertWellFormed } from './invariants.js';
 
 /**
  * Pedalling — and why this is not a round-trip case.

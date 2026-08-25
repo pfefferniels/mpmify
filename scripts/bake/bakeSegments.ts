@@ -39,7 +39,7 @@ globalThis.XMLSerializer = window.XMLSerializer;
 globalThis.Element = window.Element;
 globalThis.Node = window.Node;
 
-const { derive } = await import('./deriveSegments');
+const { derive } = await import('./deriveSegments.js');
 
 const info = readFileSync(infoPath, 'utf-8');
 const { scoreMsm, mpmXml, reconstruction, stats } = derive(readFileSync(meiPath, 'utf-8'), info);

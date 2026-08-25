@@ -1,9 +1,15 @@
 import { FrameDomain } from 'espressivo';
-import { getInstructions, Mpm, ornamentDraftOf, scopesOf, setOrnamentDraft } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
-import { dateAtMilliseconds, millisecondsAt } from './tempoCalculations';
-import { placeTempos, PlacedTempo, segmentAtMs } from './placedTempos';
+import {
+  getInstructions,
+  Mpm,
+  ornamentDraftOf,
+  scopesOf,
+  setOrnamentDraft,
+} from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { dateAtMilliseconds, millisecondsAt } from './tempoCalculations.js';
+import { placeTempos, PlacedTempo, segmentAtMs } from './placedTempos.js';
 
 export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
   /**

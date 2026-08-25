@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment';
+import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment/index.js';
 
 /**
  * The three places an `Alignment` reports a bound — `lastDate`, `end` and the minimum

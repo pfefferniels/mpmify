@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
 import {
   Mpm,
   createMpm,
@@ -7,9 +7,9 @@ import {
   getInstructions,
   getStyles,
   requireMap,
-} from '../../src/mpm';
-import { MakeDefaultArticulation } from '../../src/transformers/articulation/MakeDefaultArticulation';
-import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation';
+} from '../../src/mpm/index.js';
+import { MakeDefaultArticulation } from '../../src/transformers/articulation/MakeDefaultArticulation.js';
+import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation.js';
 
 /**
  * The `@name.ref` the hand-built articulations below carry, naming no `<articulationDef>` that

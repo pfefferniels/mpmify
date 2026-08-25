@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import { beforeAll, describe, expect, test } from 'vitest';
-import { AlignedRun, runAligned } from './aligned';
-import { describe as describeErrors } from './harness';
-import { assertWellFormed } from './invariants';
+import { AlignedRun, runAligned } from './aligned.js';
+import { describe as describeErrors } from './harness.js';
+import { assertWellFormed } from './invariants.js';
 
 /**
  * The round trip on a real recording — issue #51.

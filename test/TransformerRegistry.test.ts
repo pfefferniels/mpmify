@@ -5,13 +5,13 @@ import {
   getTransformerOrder,
   isRegistered,
   clearRegistry,
-} from '../src/transformers/TransformerRegistry';
-import { AbstractTransformer, TransformationOptions } from '../src/transformers/Transformer';
-import { exportWork, importWork } from '../src/Work';
+} from '../src/transformers/TransformerRegistry.js';
+import { AbstractTransformer, TransformationOptions } from '../src/transformers/Transformer.js';
+import { exportWork, importWork } from '../src/Work.js';
 
 // Importing Order also registers every built-in transformer, which is what the first describe
 // below reads.
-import { validate } from '../src/transformers/Order';
+import { validate } from '../src/transformers/Order.js';
 
 describe('TransformerRegistry', () => {
   describe('built-in registration', () => {

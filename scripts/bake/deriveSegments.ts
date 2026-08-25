@@ -20,10 +20,10 @@ import {
 } from 'mpmify';
 import type { InstructionType, Mpm, Alignment, Segment as WorkSegment, Transformer } from 'mpmify';
 import { convertMeiToMsm } from 'espressivo';
-import { InsertTempo } from './InsertTempo';
-import { asMSM } from './asMSM';
-import { mergeOverlappingSegments } from './mergeSegments';
-import type { Reconstruction, Segment, Span } from './Reconstruction';
+import { InsertTempo } from './InsertTempo.js';
+import { asMSM } from './asMSM.js';
+import { mergeOverlappingSegments } from './mergeSegments.js';
+import type { Reconstruction, Segment, Span } from './Reconstruction.js';
 
 registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' });
 

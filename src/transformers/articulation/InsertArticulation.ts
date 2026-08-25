@@ -5,12 +5,12 @@ import {
   Mpm,
   requireMap,
   unwrap,
-} from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
+} from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
 import { v4 } from 'uuid';
-import { TranslatePhysicalTimeToTicks } from '../tempo';
-import { deriveResidual, NoteResidual } from '../../residual';
+import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
+import { deriveResidual, NoteResidual } from '../../residual/index.js';
 
 export type ArticulationProperty =
   'relativeDuration' | 'relativeVelocity' | 'absoluteDuration' | 'absoluteDurationChange';

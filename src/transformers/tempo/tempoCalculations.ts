@@ -27,8 +27,8 @@
  * desks drive, which now measure with the renderer's quadrature instead of their own.
  */
 import { TempoMap, resolveTempo, tempoAt, type Tempo as ResolvedTempo } from 'espressivo';
-import type { InstructionOptions } from '../../mpm';
-import { beatLengthInTicks, PULSES_PER_QUARTER } from '../../ppq';
+import type { InstructionOptions } from '../../mpm/index.js';
+import { beatLengthInTicks, PULSES_PER_QUARTER } from '../../ppq.js';
 
 export interface WithEndDate {
   endDate: number;

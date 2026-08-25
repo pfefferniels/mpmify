@@ -7,8 +7,8 @@ import {
   instructionsEffectiveAtDate,
   requireMap,
   unwrap,
-} from '../../src/mpm';
-import { PULSES_PER_WHOLE } from '../../src/ppq';
+} from '../../src/mpm/index.js';
+import { PULSES_PER_WHOLE } from '../../src/ppq.js';
 
 const withTempo = (...tempos: InstructionOptions<'tempo'>[]) => {
   const mpm = createMpm();

@@ -1,6 +1,6 @@
 import { describe, test } from 'vitest';
-import { tierTwoCases } from './cases';
-import { expectCase } from './expectations';
+import { tierTwoCases } from './cases.js';
+import { expectCase } from './expectations.js';
 
 /**
  * Tier 2 — one aspect at a time, segmentation handed in, compared in performance space.

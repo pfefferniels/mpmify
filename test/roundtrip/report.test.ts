@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import { test } from 'vitest';
-import { runAligned } from './aligned';
-import { allCases } from './cases';
-import { describe as describeErrors, roundTrip } from './harness';
-import { findViolations } from './invariants';
+import { runAligned } from './aligned.js';
+import { allCases } from './cases.js';
+import { describe as describeErrors, roundTrip } from './harness.js';
+import { findViolations } from './invariants.js';
 
 /**
  * Prints what every case currently measures, so bounds can be re-recorded from evidence rather

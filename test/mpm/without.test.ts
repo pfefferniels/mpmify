@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { createMpm, exportMPM, getInstructions, requireMap, withoutMaps } from '../../src/mpm';
+import {
+  createMpm,
+  exportMPM,
+  getInstructions,
+  requireMap,
+  withoutMaps,
+} from '../../src/mpm/index.js';
 
 const populated = () => {
   const mpm = createMpm();

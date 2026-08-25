@@ -37,9 +37,9 @@
  * an overlap could take its onset from one segment and its duration from the next. The windows
  * are a partition now, and {@link segmentAtMs} is where that is stated — see its note.
  */
-import { getInstructions, Mpm, Scope } from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { millisecondsAt, resolveSpan, TempoWithEndDate } from './tempoCalculations';
+import { getInstructions, Mpm, Scope } from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { millisecondsAt, resolveSpan, TempoWithEndDate } from './tempoCalculations.js';
 import type { Tempo as ResolvedTempo } from 'espressivo';
 
 export interface PlacedTempo {

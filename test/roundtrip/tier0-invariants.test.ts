@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { findViolations } from './invariants';
+import { findViolations } from './invariants.js';
 
 /**
  * Tests for the structural checks themselves.

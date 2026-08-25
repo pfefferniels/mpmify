@@ -33,8 +33,8 @@
 import { describe, test } from 'vitest';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
-import { allCases } from '../test/roundtrip/cases';
-import { roundTrip } from '../test/roundtrip/harness';
+import { allCases } from '../test/roundtrip/cases.js';
+import { roundTrip } from '../test/roundtrip/harness.js';
 
 const OUT = join(__dirname, 'mpm-digest.txt');
 

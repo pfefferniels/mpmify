@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
-import { createMpm, requireMap } from '../../src/mpm';
-import { deriveResidual } from '../../src/residual';
-import { computeTickTimes } from '../../src/transformers/tempo/tickTimes';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import { createMpm, requireMap } from '../../src/mpm/index.js';
+import { deriveResidual } from '../../src/residual/index.js';
+import { computeTickTimes } from '../../src/transformers/tempo/tickTimes.js';
 
 const note = (position: number, onset: number, velocity = 100, duration = 1000): AlignedNote =>
   ({

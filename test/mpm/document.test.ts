@@ -28,7 +28,7 @@ import {
   scopesOf,
   setOrnamentDraft,
   unwrap,
-} from '../../src/mpm';
+} from '../../src/mpm/index.js';
 
 const tempo = (date: number, bpm: number, id = `tempo_${date}`): InstructionOptions<'tempo'> => ({
   id,

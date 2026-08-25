@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation';
-import { StylizeOrnamentation } from '../../src/transformers/ornamentation/StylizeOrnamentation';
+import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation.js';
+import { StylizeOrnamentation } from '../../src/transformers/ornamentation/StylizeOrnamentation.js';
 
 /**
  * A tolerance of `0` is a request, not a missing argument.

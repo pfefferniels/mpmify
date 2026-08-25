@@ -1,28 +1,28 @@
-import { InsertMetricalAccentuation, MergeMetricalAccentuations } from './accentuation';
-import { InsertArticulation, MakeDefaultArticulation } from './articulation';
-import { StylizeArticulation } from './articulation/StylizeArticulation';
-import { InsertAsynchrony } from './asynchrony/InsertAsynchrony';
-import { MakeChoice } from './choice/MakeChoice';
-import { InsertDynamicsInstructions } from './dynamics';
-import { InsertMetadata } from './metadata';
-import { Modify } from './modification/Modify';
+import { InsertMetricalAccentuation, MergeMetricalAccentuations } from './accentuation/index.js';
+import { InsertArticulation, MakeDefaultArticulation } from './articulation/index.js';
+import { StylizeArticulation } from './articulation/StylizeArticulation.js';
+import { InsertAsynchrony } from './asynchrony/InsertAsynchrony.js';
+import { MakeChoice } from './choice/MakeChoice.js';
+import { InsertDynamicsInstructions } from './dynamics/index.js';
+import { InsertMetadata } from './metadata/index.js';
+import { Modify } from './modification/Modify.js';
 import {
   CompressOrnamentation,
   InsertTemporalSpread,
   InsertDynamicsGradient,
   StylizeOrnamentation,
-} from './ornamentation';
-import { InsertPedal } from './pedal/InsertPedalInstructions';
-import { CombineAdjacentRubatos } from './rubato/CombineAdjacentRubatos';
-import { InsertRubato } from './rubato/InsertRubato';
-import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from './tempo';
-import { Transformer } from './Transformer';
+} from './ornamentation/index.js';
+import { InsertPedal } from './pedal/InsertPedalInstructions.js';
+import { CombineAdjacentRubatos } from './rubato/CombineAdjacentRubatos.js';
+import { InsertRubato } from './rubato/InsertRubato.js';
+import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from './tempo/index.js';
+import { Transformer } from './Transformer.js';
 import {
   getTransformerOrder,
   isRegistered,
   registerAlias,
   registerTransformer,
-} from './TransformerRegistry';
+} from './TransformerRegistry.js';
 
 // Register all built-in transformers in their standard order.
 registerTransformer(MakeChoice);

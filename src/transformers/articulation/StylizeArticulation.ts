@@ -13,12 +13,12 @@ import {
   removeInstruction,
   Scope,
   scopesOf,
-} from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
-import { dbscan, IPoint } from '../../utils/dbscan';
-import { InsertArticulation, makeArticulationDef } from './InsertArticulation';
-import { deriveResidual, Residual } from '../../residual';
+} from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { dbscan, IPoint } from '../../utils/dbscan.js';
+import { InsertArticulation, makeArticulationDef } from './InsertArticulation.js';
+import { deriveResidual, Residual } from '../../residual/index.js';
 
 type Articulation = Instruction<'articulation'>;
 

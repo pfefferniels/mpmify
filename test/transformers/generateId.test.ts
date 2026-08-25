@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { createMpm, InstructionOptions, Mpm, requireMap } from '../../src/mpm';
-import { generateId } from '../../src/transformers/Transformer';
+import { createMpm, InstructionOptions, Mpm, requireMap } from '../../src/mpm/index.js';
+import { generateId } from '../../src/transformers/Transformer.js';
 
 const tempo = (date: number, id: string): InstructionOptions<'tempo'> => ({
   id,

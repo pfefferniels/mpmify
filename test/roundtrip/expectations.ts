@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
-import { Bound, Case, describe as describeErrors, roundTrip, RoundTripResult } from './harness';
-import { assertWellFormed, findViolations } from './invariants';
+import { Bound, Case, describe as describeErrors, roundTrip, RoundTripResult } from './harness.js';
+import { assertWellFormed, findViolations } from './invariants.js';
 
 /**
  * What every render-tier case asserts, in one place.

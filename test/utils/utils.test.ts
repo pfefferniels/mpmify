@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { fix } from '../../src/utils/utils';
+import { fix } from '../../src/utils/utils.js';
 
 /**
  * `fix` rounds one numeric property of an object in place.

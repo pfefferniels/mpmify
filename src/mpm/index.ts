@@ -7,12 +7,12 @@
  * resolved to a map, a map read back as a list, the two sweeps that say what a transformer just
  * did, and the one merge contract two pairs of transformers share.
  */
-export * from './types';
-export * from './document';
-export * from './instructions';
-export * from './styles';
-export * from './ornamentDraft';
-export * from './fillInAt';
+export * from './types.js';
+export * from './document.js';
+export * from './instructions.js';
+export * from './styles.js';
+export * from './ornamentDraft.js';
+export * from './fillInAt.js';
 
 /**
  * The espressivo classes a transformer builds a definition with, re-exported so that writing an

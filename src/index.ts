@@ -1,8 +1,8 @@
-export * from './alignment';
-export * from './mpm';
-export * from './transformers';
-export * from './residual';
-export { BeatLengthBasis } from './transformers/BeatLengthBasis';
-export * from './Work';
-export * from './transformers/Transformer';
-export { IPoint } from './utils/dbscan';
+export * from './alignment/index.js';
+export * from './mpm/index.js';
+export * from './transformers/index.js';
+export * from './residual/index.js';
+export { BeatLengthBasis } from './transformers/BeatLengthBasis.js';
+export * from './Work.js';
+export * from './transformers/Transformer.js';
+export { IPoint } from './utils/dbscan.js';

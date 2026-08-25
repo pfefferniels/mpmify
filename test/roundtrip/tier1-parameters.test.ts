@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'vitest';
 import { performMsmToData } from 'espressivo';
-import { createMpm, exportMPM, getDefinitions, getInstructions } from '../../src/mpm';
-import { compareTransformers } from '../../src/transformers';
+import { createMpm, exportMPM, getDefinitions, getInstructions } from '../../src/mpm/index.js';
+import { compareTransformers } from '../../src/transformers/index.js';
 import {
   ApproximateLogarithmicTempo,
   TranslatePhysicalTimeToTicks,
-} from '../../src/transformers/tempo';
-import { InsertDynamicsInstructions } from '../../src/transformers/dynamics';
-import { InsertArticulation } from '../../src/transformers/articulation/InsertArticulation';
-import { buildScore, QUARTER } from './score';
-import { truthMpm } from './truth';
-import { roundTrip, notesOf } from './harness';
-import { tierTwoCases } from './cases';
+} from '../../src/transformers/tempo/index.js';
+import { InsertDynamicsInstructions } from '../../src/transformers/dynamics/index.js';
+import { InsertArticulation } from '../../src/transformers/articulation/InsertArticulation.js';
+import { buildScore, QUARTER } from './score.js';
+import { truthMpm } from './truth.js';
+import { roundTrip, notesOf } from './harness.js';
+import { tierTwoCases } from './cases.js';
 
 /**
  * Tier 1 — the diagnostic tier.

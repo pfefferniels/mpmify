@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { dbscan } from '../../src/utils/dbscan';
+import { dbscan } from '../../src/utils/dbscan.js';
 
 const labels = (points: number[][], epsilons?: number[], minPoints = 2) =>
   dbscan(points, epsilons ? { epsilons, minPoints } : { minPoints }).map((p) => p.label);

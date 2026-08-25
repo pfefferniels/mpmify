@@ -7,10 +7,10 @@ import {
   Mpm,
   removeDefinition,
   unwrap,
-} from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer';
-import { InsertMetricalAccentuation } from './InsertMetricalAccentuation';
+} from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer.js';
+import { InsertMetricalAccentuation } from './InsertMetricalAccentuation.js';
 
 interface MergeMetricalAccentuationsOptions extends ScopedTransformationOptions {
   names: string[];

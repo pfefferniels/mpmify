@@ -22,8 +22,8 @@ import {
   type Header,
   type OkOf,
 } from 'espressivo';
-import { PULSES_PER_QUARTER } from '../ppq';
-import { InstructionType, mapNames, MapFor, Scope } from './types';
+import { PULSES_PER_QUARTER } from '../ppq.js';
+import { InstructionType, mapNames, MapFor, Scope } from './types.js';
 
 /** The `<performance>` mpmify writes into. mpm-ts wrote exactly one, unnamed. */
 const PERFORMANCE_NAME = 'unknown';

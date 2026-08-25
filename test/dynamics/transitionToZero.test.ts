@@ -4,9 +4,9 @@ import {
   computeInnerControlPointsXPositions,
   positionAtDate,
   volumeAtDate,
-} from '../../src/transformers/dynamics/Approximation';
-import { DynamicsWithEndDate } from '../../src/transformers/dynamics/InsertDynamicsInstructions';
-import { InstructionOptions } from '../../src/mpm';
+} from '../../src/transformers/dynamics/Approximation.js';
+import { DynamicsWithEndDate } from '../../src/transformers/dynamics/InsertDynamicsInstructions.js';
+import { InstructionOptions } from '../../src/mpm/index.js';
 
 /**
  * A `@transition.to` of **0** is a target, not an absence.

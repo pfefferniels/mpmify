@@ -1,6 +1,6 @@
-import { Mpm } from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer';
+import { Mpm } from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer.js';
 
 export interface RangeChoice {
   from: number;

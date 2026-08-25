@@ -1,1 +1,1 @@
-export * from './InsertMetadata';
+export * from './InsertMetadata.js';

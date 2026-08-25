@@ -1,6 +1,6 @@
-import { Mpm } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer';
+import { Mpm } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer.js';
 
 export type ModifyOptions = ScopedTransformationOptions &
   ({ noteIDs: string[] } | { from: number; to: number }) & {

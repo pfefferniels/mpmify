@@ -6,8 +6,8 @@ import {
   type Normalized,
 } from 'espressivo';
 import { v4 } from 'uuid';
-import { DynamicsWithEndDate } from './InsertDynamicsInstructions';
-import { hashSeed, Random, seededRandom } from '../../utils/random';
+import { DynamicsWithEndDate } from './InsertDynamicsInstructions.js';
+import { hashSeed, Random, seededRandom } from '../../utils/random.js';
 
 export type DynamicsPoints = {
   date: number;

@@ -9,7 +9,7 @@
  * {@link DEFAULT_STYLE_NAME}, and one `<style date="0">` switch per map that names it.
  */
 import { Attribute, collectionNameOfKind, Element, Mpm, type AnyStyle } from 'espressivo';
-import { headerOf, requireMap, mapOf, scopesOf } from './document';
+import { headerOf, requireMap, mapOf, scopesOf } from './document.js';
 import {
   DEFAULT_STYLE_NAME,
   DefOf,
@@ -18,7 +18,7 @@ import {
   Scope,
   Style,
   styleKinds,
-} from './types';
+} from './types.js';
 import { v4 } from 'uuid';
 
 /**

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { Mpm, createMpm } from '../../src/mpm';
-import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment';
-import { MakeChoice } from '../../src/transformers/choice/MakeChoice';
+import { Mpm, createMpm } from '../../src/mpm/index.js';
+import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment/index.js';
+import { MakeChoice } from '../../src/transformers/choice/MakeChoice.js';
 
 /**
  * `MakeChoice` collapses the several readings of a passage down to one.

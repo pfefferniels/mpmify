@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { createMpm, exportMPM } from '../../src/mpm';
-import { InsertMetadata } from '../../src/transformers';
-import { Alignment } from '../../src/alignment';
+import { createMpm, exportMPM } from '../../src/mpm/index.js';
+import { InsertMetadata } from '../../src/transformers/index.js';
+import { Alignment } from '../../src/alignment/index.js';
 
 const score = () => new Alignment();
 

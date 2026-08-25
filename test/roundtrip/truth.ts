@@ -1,4 +1,4 @@
-import { PPQ } from './score';
+import { PPQ } from './score.js';
 
 /**
  * The ground-truth MPM, as literal XML.

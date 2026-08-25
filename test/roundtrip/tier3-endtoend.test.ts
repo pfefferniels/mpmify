@@ -1,6 +1,6 @@
 import { describe, test } from 'vitest';
-import { tierThreeCases } from './cases';
-import { expectCase } from './expectations';
+import { tierThreeCases } from './cases.js';
+import { expectCase } from './expectations.js';
 
 /**
  * Tier 3 — several aspects at once, and in the last pair, the segmentation withheld.

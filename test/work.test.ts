@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { exportWork, importWork, sourcesOf, type WorkFile } from '../src/Work';
-import { InsertRubato, MakeChoice } from '../src/transformers';
-import '../src/transformers/Order';
+import { exportWork, importWork, sourcesOf, type WorkFile } from '../src/Work.js';
+import { InsertRubato, MakeChoice } from '../src/transformers/index.js';
+import '../src/transformers/Order.js';
 
 const work = { name: 'Träumerei', mei: 'roll.mei', mpm: 'performance.mpm' };
 

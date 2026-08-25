@@ -9,8 +9,8 @@
  * and calls `addTempo` on it.
  */
 import { Element, Mpm } from 'espressivo';
-import { mapOf, scopesOf } from './document';
-import { getDefinition } from './styles';
+import { mapOf, scopesOf } from './document.js';
+import { getDefinition } from './styles.js';
 import {
   AnyInstruction,
   Instruction,
@@ -19,8 +19,8 @@ import {
   instructionTypes,
   MapFor,
   Scope,
-} from './types';
-import { PULSES_PER_WHOLE } from '../ppq';
+} from './types.js';
+import { PULSES_PER_WHOLE } from '../ppq.js';
 
 /** `NaN`, `Infinity` and `-Infinity` as an attribute would be spelled. See {@link auditInstructions}. */
 const NON_FINITE = /([\w.:]+)="(-?Infinity|NaN)"/g;

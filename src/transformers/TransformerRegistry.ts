@@ -1,4 +1,4 @@
-import { Transformer, TransformerConstructor } from './Transformer';
+import { Transformer, TransformerConstructor } from './Transformer.js';
 
 const registry = new Map<string, TransformerConstructor>();
 const order: string[] = [];

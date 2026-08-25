@@ -7,13 +7,13 @@ import {
   Mpm,
   requireMap,
   unwrap,
-} from '../../mpm';
-import { Alignment } from '../../alignment';
-import { deriveResidual, Residual } from '../../residual';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
+} from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { deriveResidual, Residual } from '../../residual/index.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
 import { v4 } from 'uuid';
-import { InsertDynamicsInstructions } from '../dynamics';
-import { PULSES_PER_WHOLE } from '../../ppq';
+import { InsertDynamicsInstructions } from '../dynamics/index.js';
+import { PULSES_PER_WHOLE } from '../../ppq.js';
 
 export interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
   name: string;

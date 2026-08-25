@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
-import { InstructionOptions, createMpm, requireMap } from '../../src/mpm';
-import { computeTickTimes } from '../../src/transformers/tempo/tickTimes';
-import { placeTempos, segmentAtMs } from '../../src/transformers/tempo/placedTempos';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import { InstructionOptions, createMpm, requireMap } from '../../src/mpm/index.js';
+import { computeTickTimes } from '../../src/transformers/tempo/tickTimes.js';
+import { placeTempos, segmentAtMs } from '../../src/transformers/tempo/placedTempos.js';
 
 const QUARTER = 720;
 const BOUNDARY = 2 * QUARTER;

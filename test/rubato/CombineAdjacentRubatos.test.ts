@@ -1,7 +1,13 @@
 import { expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
-import { InstructionOptions, Mpm, createMpm, getInstructions, requireMap } from '../../src/mpm';
-import { CombineAdjacentRubatos } from '../../src/transformers/rubato/CombineAdjacentRubatos';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import {
+  InstructionOptions,
+  Mpm,
+  createMpm,
+  getInstructions,
+  requireMap,
+} from '../../src/mpm/index.js';
+import { CombineAdjacentRubatos } from '../../src/transformers/rubato/CombineAdjacentRubatos.js';
 
 const note = (date: number): AlignedNote => ({
   'xml:id': `n${date}`,

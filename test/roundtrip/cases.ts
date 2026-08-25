@@ -1,5 +1,5 @@
-import { Case } from './harness';
-import { QUARTER } from './score';
+import { Case } from './harness.js';
+import { QUARTER } from './score.js';
 
 /**
  * The coverage matrix.

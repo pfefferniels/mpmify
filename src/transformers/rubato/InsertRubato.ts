@@ -1,16 +1,16 @@
 import type { AddRubatoOptions } from 'espressivo';
-import { Mpm, requireMap } from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
-import { clamp } from '../../utils/utils';
-import { PULSES_PER_QUARTER } from '../../ppq';
-import { TranslatePhysicalTimeToTicks } from '../tempo';
-import { determineIntensity } from '../ornamentation';
-import { deriveResidual, Residual } from '../../residual';
+import { Mpm, requireMap } from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { clamp } from '../../utils/utils.js';
+import { PULSES_PER_QUARTER } from '../../ppq.js';
+import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
+import { determineIntensity } from '../ornamentation/index.js';
+import { deriveResidual, Residual } from '../../residual/index.js';
 
 // Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
 // moved, and mpm-desk's rubato desk imports it from "mpmify".
-export { calculateRubatoOnDate } from './rubatoMath';
+export { calculateRubatoOnDate } from './rubatoMath.js';
 
 /**
  * Where a chord fell under the tempo, averaged over its notes — or `undefined` when the

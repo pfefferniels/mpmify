@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { performMsmToData } from 'espressivo';
 import type { PerformanceData, PerformedNote } from 'espressivo';
-import { Alignment } from '../../src/alignment';
-import { createMpm } from '../../src/mpm';
-import { importWork } from '../../src/Work';
-import { asMSM } from '../../scripts/bake/asMSM';
-import { runPipeline } from '../../scripts/bake/deriveSegments';
-import { AspectError, Errors, EMPTY_MPM, statistics } from './harness';
+import { Alignment } from '../../src/alignment/index.js';
+import { createMpm } from '../../src/mpm/index.js';
+import { importWork } from '../../src/Work.js';
+import { asMSM } from '../../scripts/bake/asMSM.js';
+import { runPipeline } from '../../scripts/bake/deriveSegments.js';
+import { AspectError, Errors, EMPTY_MPM, statistics } from './harness.js';
 
 /**
  * The round trip on a performance no MPM produced.

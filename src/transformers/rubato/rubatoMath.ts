@@ -14,9 +14,9 @@
  * a performed one.
  */
 import { resolveRubato, type AddRubatoOptions, type Rubato as ResolvedRubato } from 'espressivo';
-import { instructionsEffectiveAtDate, Mpm, Scope } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { TickTimes } from '../tempo/tickTimes';
+import { instructionsEffectiveAtDate, Mpm, Scope } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { TickTimes } from '../tempo/tickTimes.js';
 
 /**
  * What this module needs a `<rubato>` to say: where its first frame begins, and the five

@@ -27,9 +27,9 @@ globalThis.Node = window.Node;
 
 const { spotlightMpm } = await import('espressivo');
 const { getInstructions, getRange } = await import('mpmify');
-const { derive } = await import('./deriveSegments');
-const { negotiateIntensityCurve } = await import('./intensityCurve');
-import type { Reconstruction, Segment } from './Reconstruction';
+const { derive } = await import('./deriveSegments.js');
+const { negotiateIntensityCurve } = await import('./intensityCurve.js');
+import type { Reconstruction, Segment } from './Reconstruction.js';
 
 const problems: string[] = [];
 const check = (ok: boolean, message: string) => {

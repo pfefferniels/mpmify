@@ -1,8 +1,14 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
-import { Mpm, createMpm, getDefinitions, getInstructions, requireMap } from '../../src/mpm';
-import { InsertMetricalAccentuation } from '../../src/transformers/accentuation';
-import { PULSES_PER_QUARTER } from '../../src/ppq';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import {
+  Mpm,
+  createMpm,
+  getDefinitions,
+  getInstructions,
+  requireMap,
+} from '../../src/mpm/index.js';
+import { InsertMetricalAccentuation } from '../../src/transformers/accentuation/index.js';
+import { PULSES_PER_QUARTER } from '../../src/ppq.js';
 
 /**
  * The loop in `InsertMetricalAccentuation` is driven entirely by the *residual* velocity — what

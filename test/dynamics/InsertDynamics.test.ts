@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
-import { Alignment } from '../../src/alignment';
-import { Mpm, createMpm, exportMPM, getInstructions } from '../../src/mpm';
-import { InsertDynamicsInstructions } from '../../src/transformers';
-import { deriveResidual } from '../../src/residual';
+import { Alignment } from '../../src/alignment/index.js';
+import { Mpm, createMpm, exportMPM, getInstructions } from '../../src/mpm/index.js';
+import { InsertDynamicsInstructions } from '../../src/transformers/index.js';
+import { deriveResidual } from '../../src/residual/index.js';
 
 /**
  * Quickly generates a simple aligned note

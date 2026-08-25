@@ -37,9 +37,9 @@
  *   and is held byte-equivalent to meico on it; reassembling that here would be new and
  *   unproven code that has to stay in step with a renderer it does not own.
  */
-import { exportMPM, InstructionType, Mpm, withoutMaps } from '../mpm';
-import { Alignment, AlignedNote, AlignedPedal } from '../alignment';
-import { computeTickTimes } from '../transformers/tempo/tickTimes';
+import { exportMPM, InstructionType, Mpm, withoutMaps } from '../mpm/index.js';
+import { Alignment, AlignedNote, AlignedPedal } from '../alignment/index.js';
+import { computeTickTimes } from '../transformers/tempo/tickTimes.js';
 import { performMsmToData } from 'espressivo';
 
 export interface NoteResidual {

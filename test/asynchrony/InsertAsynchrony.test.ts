@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { Mpm, createMpm, getInstructions } from '../../src/mpm';
-import { Alignment, AlignedNote } from '../../src/alignment';
-import { InsertAsynchrony } from '../../src/transformers/asynchrony/InsertAsynchrony';
-import { PULSES_PER_QUARTER } from '../../src/ppq';
+import { Mpm, createMpm, getInstructions } from '../../src/mpm/index.js';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import { InsertAsynchrony } from '../../src/transformers/asynchrony/InsertAsynchrony.js';
+import { PULSES_PER_QUARTER } from '../../src/ppq.js';
 
 /** How long every note in these fixtures is held, in milliseconds. */
 const HELD = 500000;

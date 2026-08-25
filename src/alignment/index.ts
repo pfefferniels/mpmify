@@ -1,7 +1,7 @@
-import { Scope } from '../mpm';
+import { Scope } from '../mpm/index.js';
 import { Msm } from 'espressivo';
-import { isDefined } from '../utils/utils';
-import { PULSES_PER_QUARTER } from '../ppq';
+import { isDefined } from '../utils/utils.js';
+import { PULSES_PER_QUARTER } from '../ppq.js';
 
 /**
  * When the recording sounds an event, in the two attributes MSM states a performance in:

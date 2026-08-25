@@ -1,33 +1,33 @@
 import { performMsmToData } from 'espressivo';
 import type { PerformanceData, PerformedNote } from 'espressivo';
-import { Alignment } from '../../src/alignment';
-import { createMpm, exportMPM, Mpm } from '../../src/mpm';
-import { Transformer } from '../../src/transformers/Transformer';
-import { compareTransformers } from '../../src/transformers';
+import { Alignment } from '../../src/alignment/index.js';
+import { createMpm, exportMPM, Mpm } from '../../src/mpm/index.js';
+import { Transformer } from '../../src/transformers/Transformer.js';
+import { compareTransformers } from '../../src/transformers/index.js';
 import {
   ApproximateLogarithmicTempo,
   TranslatePhysicalTimeToTicks,
-} from '../../src/transformers/tempo';
-import { InsertDynamicsInstructions } from '../../src/transformers/dynamics';
-import { InsertRubato } from '../../src/transformers/rubato/InsertRubato';
-import { CombineAdjacentRubatos } from '../../src/transformers/rubato/CombineAdjacentRubatos';
+} from '../../src/transformers/tempo/index.js';
+import { InsertDynamicsInstructions } from '../../src/transformers/dynamics/index.js';
+import { InsertRubato } from '../../src/transformers/rubato/InsertRubato.js';
+import { CombineAdjacentRubatos } from '../../src/transformers/rubato/CombineAdjacentRubatos.js';
 import {
   InsertTemporalSpread,
   InsertDynamicsGradient,
   StylizeOrnamentation,
-} from '../../src/transformers/ornamentation';
+} from '../../src/transformers/ornamentation/index.js';
 
 import {
   InsertArticulation,
   ArticulationProperty,
-} from '../../src/transformers/articulation/InsertArticulation';
-import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation';
+} from '../../src/transformers/articulation/InsertArticulation.js';
+import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation.js';
 import {
   InsertMetricalAccentuation,
   MergeMetricalAccentuations,
-} from '../../src/transformers/accentuation';
-import { buildScore, PPQ, ScoreSpec } from './score';
-import { Truth, truthMpm } from './truth';
+} from '../../src/transformers/accentuation/index.js';
+import { buildScore, PPQ, ScoreSpec } from './score.js';
+import { Truth, truthMpm } from './truth.js';
 
 /**
  * The round trip.

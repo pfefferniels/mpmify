@@ -1,7 +1,7 @@
 import { Author, Comment, RelatedResource } from 'espressivo';
-import { Mpm, unwrap } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
+import { Mpm, unwrap } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
 
 export interface AuthorOptions {
   number: number;

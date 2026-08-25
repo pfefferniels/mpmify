@@ -1,7 +1,13 @@
 import { expect, test } from 'vitest';
-import { Alignment } from '../../src/alignment';
-import { FrameDomain, Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm';
-import { InsertTemporalSpread } from '../../src/transformers';
+import { Alignment } from '../../src/alignment/index.js';
+import {
+  FrameDomain,
+  Mpm,
+  createMpm,
+  getInstructions,
+  ornamentDraftOf,
+} from '../../src/mpm/index.js';
+import { InsertTemporalSpread } from '../../src/transformers/index.js';
 
 /**
  * Quickly generates a simple aligned note

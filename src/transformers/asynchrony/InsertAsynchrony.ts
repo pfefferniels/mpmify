@@ -1,8 +1,8 @@
 import { v4 } from 'uuid';
-import { Mpm, requireMap, Scope } from '../../mpm';
-import { Alignment, AlignedNote, ChordMap } from '../../alignment';
-import { isDefined } from '../../utils/utils';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
+import { Mpm, requireMap, Scope } from '../../mpm/index.js';
+import { Alignment, AlignedNote, ChordMap } from '../../alignment/index.js';
+import { isDefined } from '../../utils/utils.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
 
 export type InsertAsynchronyOptions = TransformationOptions & {
   /**

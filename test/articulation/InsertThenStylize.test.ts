@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
 import {
   Mpm,
   createMpm,
@@ -7,9 +7,9 @@ import {
   getInstructions,
   getStyles,
   requireMap,
-} from '../../src/mpm';
-import { InsertArticulation } from '../../src/transformers/articulation/InsertArticulation';
-import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation';
+} from '../../src/mpm/index.js';
+import { InsertArticulation } from '../../src/transformers/articulation/InsertArticulation.js';
+import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation.js';
 
 /**
  * The chain issue #25 is about: `InsertArticulation` first, `StylizeArticulation` on what it

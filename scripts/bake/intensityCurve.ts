@@ -1,4 +1,4 @@
-import type { Segment } from './Reconstruction';
+import type { Segment } from './Reconstruction.js';
 
 function bridgeToZeroLinear(curve: number[]): number[] {
   const n = curve.length;

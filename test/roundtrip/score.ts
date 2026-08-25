@@ -1,4 +1,4 @@
-import { Alignment, AlignedNote } from '../../src/alignment';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
 
 export const PPQ = 720;
 /** One quarter note, the beat these scores are built on. */

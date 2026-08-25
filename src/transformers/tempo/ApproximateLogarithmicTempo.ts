@@ -8,12 +8,12 @@ import {
   removeInstruction,
   requireMap,
   Scope,
-} from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from './tempoCalculations';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
-import { clamp } from '../../utils/utils';
-import { beatLengthInTicks } from '../../ppq';
+} from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from './tempoCalculations.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { clamp } from '../../utils/utils.js';
+import { beatLengthInTicks } from '../../ppq.js';
 
 // ── Types ──────────────────────────────────────────────────────────
 

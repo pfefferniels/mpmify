@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment';
-import { createMpm, Mpm, requireMap } from '../../src/mpm';
-import { computeTickTimes, emptyTickTimes } from '../../src/transformers/tempo/tickTimes';
-import { removeRubatoDistortion } from '../../src/transformers/rubato/rubatoMath';
+import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import { createMpm, Mpm, requireMap } from '../../src/mpm/index.js';
+import { computeTickTimes, emptyTickTimes } from '../../src/transformers/tempo/tickTimes.js';
+import { removeRubatoDistortion } from '../../src/transformers/rubato/rubatoMath.js';
 
 const QUARTER = 720;
 const FRAME = 4 * QUARTER;

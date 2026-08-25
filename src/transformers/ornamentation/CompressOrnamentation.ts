@@ -1,8 +1,8 @@
-import { getDefinitions, Mpm, scopesOf } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
-import { fix } from '../../utils/utils';
-import { StylizeOrnamentation } from './StylizeOrnamentation';
+import { getDefinitions, Mpm, scopesOf } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { fix } from '../../utils/utils.js';
+import { StylizeOrnamentation } from './StylizeOrnamentation.js';
 
 interface CompressOrnamentationOptions extends TransformationOptions {
   tickPrecision: number;

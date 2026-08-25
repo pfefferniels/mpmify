@@ -1,7 +1,13 @@
-import { InstructionOptions, Mpm, fillInAt, requireMap, setOrnamentDraft } from '../../mpm';
-import { Alignment, AlignedNote } from '../../alignment';
-import { isDefined } from '../../utils/utils';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
+import {
+  InstructionOptions,
+  Mpm,
+  fillInAt,
+  requireMap,
+  setOrnamentDraft,
+} from '../../mpm/index.js';
+import { Alignment, AlignedNote } from '../../alignment/index.js';
+import { isDefined } from '../../utils/utils.js';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
 
 /**
  * The velocity ramp across an arpeggio, in the normalized units a `<dynamicsGradient>`'s

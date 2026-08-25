@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment } from '../../src/alignment';
+import { Alignment } from '../../src/alignment/index.js';
 import {
   FrameDomain,
   InstructionOptions,
@@ -14,8 +14,8 @@ import {
   ornamentDraftOf,
   requireMap,
   setOrnamentDraft,
-} from '../../src/mpm';
-import { StylizeOrnamentation } from '../../src/transformers';
+} from '../../src/mpm/index.js';
+import { StylizeOrnamentation } from '../../src/transformers/index.js';
 
 /**
  * `StylizeOrnamentation` moves the def fields an ornament was fitted with into an

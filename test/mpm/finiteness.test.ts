@@ -6,9 +6,9 @@ import {
   getInstructions,
   Mpm,
   requireMap,
-} from '../../src/mpm';
-import { Alignment } from '../../src/alignment';
-import { AbstractTransformer, TransformationOptions } from '../../src/transformers/Transformer';
+} from '../../src/mpm/index.js';
+import { Alignment } from '../../src/alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../../src/transformers/Transformer.js';
 
 /**
  * mpmify never authors a non-finite attribute; it still reads one.

@@ -1,9 +1,9 @@
 import type { Normalized } from 'espressivo';
-import { Mpm, requireMap } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { AbstractTransformer, TransformationOptions } from '../Transformer';
-import { TranslatePhysicalTimeToTicks } from '../tempo';
-import { deriveResidual } from '../../residual';
+import { Mpm, requireMap } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
+import { deriveResidual } from '../../residual/index.js';
 
 /**
  * A pedal depth as `@position` and `@transition.to` are typed: espressivo's `Normalized`.

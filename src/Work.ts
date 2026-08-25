@@ -17,9 +17,9 @@
  * which call produced which element. That is what is here.
  */
 import { v4 } from 'uuid';
-import { MakeChoice, compareTransformers } from './transformers';
-import { TransformationOptions, Transformer } from './transformers/Transformer';
-import { createTransformer } from './transformers/TransformerRegistry';
+import { MakeChoice, compareTransformers } from './transformers/index.js';
+import { TransformationOptions, Transformer } from './transformers/Transformer.js';
+import { createTransformer } from './transformers/TransformerRegistry.js';
 
 export interface Work {
   name: string;

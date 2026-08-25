@@ -21,11 +21,11 @@
  * The walk itself now lives in `placedTempos.ts`, which states that rule once for the four
  * callers that used to each carry their own copy of it.
  */
-import { getInstructions, Mpm, scopesOf } from '../../mpm';
-import { Alignment } from '../../alignment';
-import { dateAtMilliseconds } from './tempoCalculations';
-import { coversDate, placeTempos, PlacedTempo, segmentAtMs } from './placedTempos';
-import { removeRubatoDistortion } from '../rubato/rubatoMath';
+import { getInstructions, Mpm, scopesOf } from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
+import { dateAtMilliseconds } from './tempoCalculations.js';
+import { coversDate, placeTempos, PlacedTempo, segmentAtMs } from './placedTempos.js';
+import { removeRubatoDistortion } from '../rubato/rubatoMath.js';
 
 /** Where one note or pedal fell on the score grid. Absent fields mean "no tempo covered it". */
 export interface TickTime {

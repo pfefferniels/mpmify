@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { FrameDomain } from 'espressivo';
-import { Alignment } from '../../src/alignment';
+import { Alignment } from '../../src/alignment/index.js';
 import {
   InstructionOptions,
   Mpm,
@@ -11,9 +11,9 @@ import {
   ornamentDraftOf,
   requireMap,
   setOrnamentDraft,
-} from '../../src/mpm';
-import { TranslatePhysicalTimeToTicks } from '../../src/transformers/tempo/TranslatePhysicalTimeToTicks';
-import { deriveResidual } from '../../src/residual';
+} from '../../src/mpm/index.js';
+import { TranslatePhysicalTimeToTicks } from '../../src/transformers/tempo/TranslatePhysicalTimeToTicks.js';
+import { deriveResidual } from '../../src/residual/index.js';
 
 /**
  * Quickly generates a simple MSM note

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { Alignment } from '../../src/alignment';
-import { Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm';
-import { InsertDynamicsGradient } from '../../src/transformers';
+import { Alignment } from '../../src/alignment/index.js';
+import { Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm/index.js';
+import { InsertDynamicsGradient } from '../../src/transformers/index.js';
 
 /**
  * Quickly generates a simple MSM note

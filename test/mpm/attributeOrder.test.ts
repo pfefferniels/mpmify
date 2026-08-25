@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { createMpm, exportMPM, Mpm, requireMap } from '../../src/mpm';
+import { createMpm, exportMPM, Mpm, requireMap } from '../../src/mpm/index.js';
 
 /** The attribute names of the first `<tempo>`, in serialized order. */
 const tempoAttributeOrder = (mpm: Mpm) => {
