@@ -1,16 +1,19 @@
 import { expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
-import { MPM, Rubato, Tempo } from "../../src/mpm"
+import { Alignment, AlignedNote } from "../../src/alignment"
+import { createMpm, Mpm, requireMap } from "../../src/mpm"
 import { computeTickTimes, emptyTickTimes } from "../../src/transformers/tempo/tickTimes"
 import { removeRubatoDistortion } from "../../src/transformers/rubato/rubatoMath"
 
 const QUARTER = 720
 const FRAME = 4 * QUARTER
 
-/** Eight quarter notes at a nominal 60bpm, played with a push and pull inside each bar. */
-const OFFSETS = [0, -0.06, 0.09, 0.02, 0, -0.05, 0.08, 0.03]
+/**
+ * Eight quarter notes at a nominal 60bpm — a second to the beat — played with a push and pull
+ * inside each bar. The offsets are milliseconds off the beat.
+ */
+const OFFSETS = [0, -60, 90, 20, 0, -50, 80, 30]
 
-const fixture = () => new MSM(
+const fixture = () => new Alignment(
     OFFSETS.map((offset, beat) => ({
         'xml:id': `n${beat}`,
         date: beat * QUARTER,
@@ -20,24 +23,21 @@ const fixture = () => new MSM(
         accidentals: 0,
         duration: QUARTER,
         'midi.pitch': 67,
-        'midi.onset': beat + offset,
-        'midi.duration': 1,
-        'midi.velocity': 100,
-    } as MsmNote)),
+        'milliseconds.date': beat * 1000 + offset,
+        'milliseconds.date.end': beat * 1000 + offset + 1000,
+        velocity: 100,
+    } as AlignedNote)),
     { numerator: 4, denominator: 4 }
 )
 
 const withTempo = () => {
-    const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
-const rubatoAt = (mpm: MPM, date: number) => mpm.insertInstruction<Rubato>({
-    type: 'rubato', 'xml:id': `r${date}`, date, frameLength: FRAME, intensity: 0.65,
-}, 'global')
+const rubatoAt = (mpm: Mpm, date: number) => requireMap(mpm, 'rubato', 'global')
+    .addRubato({ id: `r${date}`, date, frameLength: FRAME, intensity: 0.65 })
 
 /**
  * The tick walk is three steps — onsets, then durations measured from them, then the rubato warp

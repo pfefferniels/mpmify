@@ -9,8 +9,7 @@
     "test/roundtrip/aligned*.ts"
   ],
   "ignore": [
-    "scripts/bake/intensityCurve.ts",
-    "scripts/bake/Reconstruction.ts"
+    "scripts/bake/intensityCurve.ts"
   ],
   "ignoreDependencies": [
     "espressivo"

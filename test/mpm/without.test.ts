@@ -1,43 +1,37 @@
 import { describe, expect, test } from "vitest"
-import { Dynamics, MPM, Tempo } from "../../src/mpm"
+import { createMpm, exportMPM, getInstructions, requireMap, withoutMaps } from "../../src/mpm"
 
 const populated = () => {
-    const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 120, beatLength: 0.25,
-    }, 'global')
-    mpm.insertInstruction<Dynamics>({
-        type: 'dynamics', 'xml:id': 'd1', date: 0, volume: 64,
-    }, 'global')
-    mpm.insertInstruction<Dynamics>({
-        type: 'dynamics', 'xml:id': 'd2', date: 720, volume: 90,
-    }, 1)
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+    requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 64 })
+    requireMap(mpm, 'dynamics', 1).addDynamics({ id: 'd2', date: 720, volume: 90 })
     return mpm
 }
 
-describe('MPM.without', () => {
+describe('withoutMaps', () => {
     test('drops the named maps in every scope', () => {
-        const probe = populated().without(['dynamics'])
+        const probe = withoutMaps(populated(), ['dynamics'])
 
-        expect(probe.getInstructions('dynamics')).toHaveLength(0)
-        expect(probe.getInstructions('tempo')).toHaveLength(1)
-        expect(probe.toXML()).not.toContain('dynamicsMap')
-        expect(probe.toXML()).toContain('tempoMap')
+        expect(getInstructions(probe, 'dynamics')).toHaveLength(0)
+        expect(getInstructions(probe, 'tempo')).toHaveLength(1)
+        expect(exportMPM(probe)).not.toContain('dynamicsMap')
+        expect(exportMPM(probe)).toContain('tempoMap')
     })
 
     test('leaves the document it was taken from untouched', () => {
         const mpm = populated()
-        const before = mpm.toXML()
+        const before = exportMPM(mpm)
 
-        mpm.without(['dynamics', 'tempo'])
+        withoutMaps(mpm, ['dynamics', 'tempo'])
 
-        expect(mpm.toXML()).toEqual(before)
-        expect(mpm.getInstructions('dynamics')).toHaveLength(2)
-        expect(mpm.getInstructions('tempo')).toHaveLength(1)
+        expect(exportMPM(mpm)).toEqual(before)
+        expect(getInstructions(mpm, 'dynamics')).toHaveLength(2)
+        expect(getInstructions(mpm, 'tempo')).toHaveLength(1)
     })
 
     test('an empty list is a faithful copy', () => {
         const mpm = populated()
-        expect(mpm.without([]).toXML()).toEqual(mpm.toXML())
+        expect(exportMPM(withoutMaps(mpm, []))).toEqual(exportMPM(mpm))
     })
 })

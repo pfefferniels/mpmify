@@ -1,5 +1,18 @@
-import { DynamicsGradient, MPM, Ornament, OrnamentDef, Scope, TemporalSpread } from "../../mpm"
-import { MSM } from "../../msm"
+import { Element, FrameDomain, NoteOffShift, OrnamentDef } from "espressivo"
+import {
+    clearOrnamentDraft,
+    ensureDefaultStyle,
+    getInstructions,
+    Instruction,
+    insertDefinition,
+    Mpm,
+    OrnamentDraft,
+    ornamentDraftOf,
+    requireMap,
+    Scope,
+    scopesOf,
+} from "../../mpm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { dbscan } from "../../utils/dbscan"
@@ -24,6 +37,47 @@ export interface StylizeOrnamentationOptions extends TransformationOptions {
     intensityTolerance: number
 }
 
+/**
+ * One `<ornament>` together with the def fields fitted onto it.
+ *
+ * The draft is read once, at the top of the run, because everything below reads from it and
+ * nothing from the instruction: the frame, the ramp, the intensity and the note-off shift are
+ * `<ornamentDef>` fields parked on the element, not `<ornament>` attributes. The instruction is
+ * carried alongside for the two things only it can answer — which element this is, and what
+ * `@name.ref` to write once a definition exists.
+ */
+type FittedOrnament = {
+    instruction: Instruction<'ornament'>
+    draft: OrnamentDraft
+}
+
+/** The two ends of a `<dynamicsGradient>`, once a caller has decided there is one. */
+type GradientValues = {
+    transitionFrom: number
+    transitionTo: number
+}
+
+/** The five values a `<temporalSpread>` is built from, with every absence already resolved. */
+type SpreadValues = {
+    frameStart: number
+    frameLength: number
+    frameDomain: FrameDomain
+    intensity: number
+    noteOffShift: NoteOffShift
+}
+
+/**
+ * The note-off shift as a number dbscan can measure.
+ *
+ * Its epsilon is zero, so all this has to do is keep the three readings apart — and put an
+ * absent shift on `false`'s coordinate, which is the reading MPM gives it and the one
+ * {@link StylizeOrnamentation.temporalSpreadOf} writes into the def.
+ */
+const noteOffShiftCoordinate = (shift: NoteOffShift | undefined): number => {
+    if (shift === NoteOffShift.Monophonic) return -1
+    return shift === NoteOffShift.True ? 1 : 0
+}
+
 export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentationOptions> {
     name = 'StylizeOrnamentation'
     requires = [InsertDynamicsGradient, InsertTemporalSpread]
@@ -43,13 +97,13 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         })
     }
 
-    generateClusters(ornaments: Ornament[]) {
-        const points = ornaments.map(o => {
+    generateClusters(ornaments: FittedOrnament[]) {
+        const points = ornaments.map(({ draft }) => {
             return [
-                o["frame.start"] as number,
-                o.frameLength as number,
-                (o.intensity || 1) as number,
-                (o["noteoff.shift"] === 'monophonic' ? -1 : (o['noteoff.shift']) || 0) as number
+                draft.frameStart as number,
+                draft.frameLength as number,
+                draft.intensity || 1,
+                noteOffShiftCoordinate(draft.noteOffShift)
             ]
         })
         return dbscan(points, {
@@ -62,11 +116,11 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         })
     }
 
-    generateSubClusters(ornaments: Ornament[]) {
-        const points = ornaments.map(o => {
+    generateSubClusters(ornaments: FittedOrnament[]) {
+        const points = ornaments.map(({ draft }) => {
             return [
-                (o["transition.from"] || 0) as number,
-                (o["transition.to"] || 0) as number
+                draft.transitionFrom || 0,
+                draft.transitionTo || 0
             ]
         })
         return dbscan(points, {
@@ -77,33 +131,35 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        for (const scope of mpm.scopes()) {
-            const ornaments = mpm.getInstructions('ornament', scope)
+    protected transform(msm: Alignment, mpm: Mpm) {
+        for (const scope of scopesOf(mpm)) {
+            const ornaments: FittedOrnament[] = getInstructions(mpm, 'ornament', scope)
+                .map(instruction => ({ instruction, draft: ornamentDraftOf(instruction.element) }))
 
-            const filteredOrnaments = ornaments.filter(o =>
-                o["frame.start"] !== undefined &&
-                o.frameLength !== undefined
+            const filteredOrnaments = ornaments.filter(({ draft }) =>
+                draft.frameStart !== undefined &&
+                draft.frameLength !== undefined
             )
 
             // An ornament can carry a velocity ramp and no roll — that is exactly what
             // `InsertDynamicsGradient` fits. Clustering keys on the frame, so those used to fall
             // out here and be left pointing at `neutralArpeggio`, a name no definition ever
             // carries. They get definitions of their own, keyed on the only thing they have.
-            const gradientOnly = ornaments.filter(o =>
-                o["frame.start"] === undefined &&
-                o.frameLength === undefined &&
-                o["transition.from"] !== undefined &&
-                o["transition.to"] !== undefined
+            const gradientOnly = ornaments.filter(({ draft }) =>
+                draft.frameStart === undefined &&
+                draft.frameLength === undefined &&
+                draft.transitionFrom !== undefined &&
+                draft.transitionTo !== undefined
             )
 
             if (filteredOrnaments.length === 0 && gradientOnly.length === 0) continue
 
             // Which ornaments this run actually gave a definition to. The cleanup below is
-            // restricted to these: an ornament that was skipped keeps its attributes, so it
-            // still describes something, rather than being emptied out while pointing at a
-            // definition that does not exist.
-            const defined = new Set<Ornament>()
+            // restricted to these: an ornament that was skipped keeps its draft, so it still
+            // describes something, rather than being emptied out while pointing at a definition
+            // that does not exist. Keyed by element rather than by instruction, since an
+            // instruction is a snapshot and the element is what survives being rewritten.
+            const defined = new Set<Element>()
 
             const clusters = this.generateClusters(filteredOrnaments)
 
@@ -111,26 +167,26 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             const clustersByLabel = clusters.reduce((acc, cur, i) => {
                 const label = cur.label.toString()
                 if (!acc[label]) acc[label] = []
-                acc[label].push({ ornament: filteredOrnaments[i], point: cur.value as [number, number, number] })
+                acc[label].push(filteredOrnaments[i])
                 return acc
-            }, {} as { [label: string]: { ornament: Ornament, point: [number, number, number] }[] })
+            }, {} as { [label: string]: FittedOrnament[] })
 
             // Process each cluster
             for (const label in clustersByLabel) {
                 const group = clustersByLabel[label]
                 if (label === "-1") {
-                    group.forEach(({ ornament }) => this.defineAndName(mpm, scope, ornament, defined))
+                    group.forEach(ornament => this.defineAndName(mpm, scope, ornament, defined))
                     continue
                 }
 
                 // Process subgroups
-                const subClusters = this.generateSubClusters(group.map(c => c.ornament))
+                const subClusters = this.generateSubClusters(group)
                 const subClustersByLabel = subClusters.reduce((acc, cur, i) => {
                     const label = cur.label.toString()
                     if (!acc[label]) acc[label] = []
-                    acc[label].push(group[i].ornament)
+                    acc[label].push(group[i])
                     return acc
-                }, {} as { [label: string]: Ornament[] })
+                }, {} as { [label: string]: FittedOrnament[] })
 
                 for (const subLabel in subClustersByLabel) {
                     const subgroup = subClustersByLabel[subLabel]
@@ -139,121 +195,141 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                         subgroup.forEach(ornament => this.defineAndName(mpm, scope, ornament, defined))
                     } else {
                         const def = this.mergedDef(subgroup, `def_${scope}_${label}_${subLabel}`)
-                        mpm.insertDefinition(def, scope)
-                        subgroup.forEach(ornament => {
-                            ornament["name.ref"] = def.name
-                            defined.add(ornament)
-                        })
+                        if (!def) continue
+
+                        insertDefinition(mpm, 'ornamentDef', def, scope)
+                        subgroup.forEach(ornament => this.nameAfter(mpm, ornament, def, defined))
                     }
                 }
             }
 
             this.defineGradientOnly(mpm, scope, gradientOnly, defined)
 
-            mpm.ensureDefaultStyle('ornament', scope)
+            ensureDefaultStyle(mpm, 'ornament', scope)
 
-            // The working attributes move into the definition, so they come off the
-            // instruction — but only for the ornaments that got one. This used to test
-            // `name.ref` for truthiness, which is true of an ornament that merely *arrived*
-            // carrying a reference: `InsertDynamicsGradient` writes `neutralArpeggio`, a name
-            // no definition ever has. Those were stripped of the gradient they were fitted with
-            // and left pointing at nothing.
-            defined.forEach(ornament => {
-                delete ornament['noteoff.shift']
-                delete ornament['time.unit']
-                delete ornament['transition.from']
-                delete ornament['transition.to']
-                delete ornament["frame.start"]
-                delete ornament["frameLength"]
-            })
+            // The working fields move into the definition, so they come off the instruction —
+            // but only for the ornaments that got one. This used to test `name.ref` for
+            // truthiness, which is true of an ornament that merely *arrived* carrying a
+            // reference: `InsertDynamicsGradient` writes `neutralArpeggio`, a name no definition
+            // ever has. Those were stripped of the gradient they were fitted with and left
+            // pointing at nothing.
+            defined.forEach(element => clearOrnamentDraft(element))
         }
     }
 
     /**
-     * One definition for a cluster of ornaments: each attribute the mean of the group's.
+     * One definition for a cluster of ornaments: each value the mean of the group's.
      *
-     * Averaged from the ornaments themselves rather than from the clustering's coordinate
-     * vectors. Those vectors were being read by position — `point[3]` and `point[4]` for the two
-     * `transition.*` — while `generateClusters` builds a **four**-dimensional point ending in
-     * `noteoff.shift`. So the gradient was read one place short: `transition.from` came back as
-     * the note-off shift and `transition.to` as `transition.from`, which turned every clustered
+     * Averaged from the drafts themselves rather than from the clustering's coordinate vectors.
+     * Those vectors were being read by position — `point[3]` and `point[4]` for the two
+     * `transition.*` — while `generateClusters` builds a **four**-dimensional point ending in the
+     * note-off shift. So the gradient was read one place short: `transitionFrom` came back as the
+     * note-off shift and `transitionTo` as `transitionFrom`, which turned every clustered
      * crescendo into its own mirror image — a truth of 39/51.5/64 refitting as 64/51.5/39. Read
-     * the attributes by name and the two cannot come apart again.
+     * the draft by name and the two cannot come apart again.
      */
-    private mergedDef(ornaments: Ornament[], name: string): OrnamentDef {
-        const mean = (of: (ornament: Ornament) => number | undefined) => {
+    private mergedDef(ornaments: FittedOrnament[], name: string): OrnamentDef | null {
+        const mean = (of: (draft: OrnamentDraft) => number | undefined) => {
             const values = ornaments
-                .map(of)
+                .map(({ draft }) => of(draft))
                 .filter((value): value is number => value !== undefined)
             if (values.length === 0) return undefined
             return values.reduce((sum, value) => sum + value, 0) / values.length
         }
 
-        const transitionFrom = mean(ornament => ornament["transition.from"])
-        const transitionTo = mean(ornament => ornament["transition.to"])
+        const transitionFrom = mean(draft => draft.transitionFrom)
+        const transitionTo = mean(draft => draft.transitionTo)
 
-        return {
-            type: 'ornamentDef',
+        // Neither the unit nor the note-off shift is a number to average. `generateClusters` keys
+        // on the note-off shift with an epsilon of zero, so the group is uniform in it and the
+        // first ornament speaks for all.
+        const first = ornaments[0].draft
+
+        return this.buildDef(
             name,
             // Only if the group actually carries one. Defaulting the two ends to zero would
             // describe a ramp nobody measured.
-            dynamicsGradient: (transitionFrom !== undefined && transitionTo !== undefined)
-                ? {
-                    type: 'dynamicsGradient',
-                    'transition.from': transitionFrom,
-                    'transition.to': transitionTo,
-                }
+            (transitionFrom !== undefined && transitionTo !== undefined)
+                ? { transitionFrom, transitionTo }
                 : undefined,
-            temporalSpread: this.temporalSpreadOf({
-                'frame.start': mean(ornament => ornament["frame.start"]),
-                'frameLength': mean(ornament => ornament.frameLength),
-                // Neither of these is a number to average. `generateClusters` keys on the
-                // note-off shift with an epsilon of zero, so the group is uniform in it and the
-                // first ornament speaks for all.
-                'noteoff.shift': ornaments[0]["noteoff.shift"],
-                'time.unit': ornaments[0]["time.unit"],
+            this.temporalSpreadOf({
+                frameStart: mean(draft => draft.frameStart),
+                frameLength: mean(draft => draft.frameLength),
+                noteOffShift: first.noteOffShift,
+                frameDomain: first.frameDomain,
                 // `?? 1`, not `|| 1`: an intensity of 0 is a legal value, not a missing one.
-                intensity: mean(ornament => ornament.intensity ?? 1),
+                intensity: mean(draft => draft.intensity ?? 1),
             })
-        }
+        )
     }
 
     /**
-     * The `<temporalSpread>` a set of ornament attributes describes, or nothing where they
-     * describe no roll.
+     * The `<temporalSpread>` a draft describes — as the five values espressivo builds one from —
+     * or nothing where it describes no roll.
      *
-     * All four attributes a spread needs are optional on the `<ornament>` they are read off, so
-     * this is the one place that says what each absence means. The frame's two ends *are* the
-     * roll: an ornament with no frame is a velocity ramp and nothing else, and writing a
-     * `<temporalSpread>` full of undefined for it would describe a roll that was never measured.
-     * A frame of `NaN` describes one just as little — that is the "unusable frame"
-     * `defineAndName` refuses to write a definition for, and it asks here rather than deciding
-     * again on its own.
+     * Every field a spread needs is optional on the draft, so this is the one place that says
+     * what each absence means. The frame's two ends *are* the roll: an ornament with no frame is
+     * a velocity ramp and nothing else, and writing a `<temporalSpread>` for it would describe a
+     * roll that was never measured. A frame of `NaN` describes one just as little — that is the
+     * "unusable frame" `defineAndName` refuses to write a definition for, and it asks here rather
+     * than deciding again on its own.
      *
-     * The unit and the note-off shift are the two that have a reading when absent, and writing
-     * that reading down says exactly what silence would have said: MPM reads a missing
-     * `@time.unit` as ticks and a missing `@noteoff.shift` as false. False is also the reading
-     * `generateClusters` already gives it, coding absent and `false` onto the same coordinate —
-     * so within a cluster the two are indistinguishable by construction and the def has to pick
-     * the one dbscan saw.
+     * The other three have a reading when absent, and writing that reading down says exactly what
+     * silence would have said: MPM reads a missing `@time.unit` as ticks, a missing
+     * `@noteoff.shift` as false and a missing `@intensity` as 1. `false` is also the reading
+     * `generateClusters` already gives the shift, coding absent and `false` onto the same
+     * coordinate — so within a cluster the two are indistinguishable by construction and the def
+     * has to pick the one dbscan saw. Naming all three costs the document nothing: espressivo
+     * omits each attribute again when it holds the default.
      */
     private temporalSpreadOf(
-        source: Pick<Ornament, 'frame.start' | 'frameLength' | 'noteoff.shift' | 'time.unit' | 'intensity'>
-    ): TemporalSpread | undefined {
-        const frameStart = source["frame.start"]
-        const frameLength = source.frameLength
+        draft: Pick<OrnamentDraft, 'frameStart' | 'frameLength' | 'noteOffShift' | 'frameDomain' | 'intensity'>
+    ): SpreadValues | undefined {
+        const frameStart = draft.frameStart
+        const frameLength = draft.frameLength
 
         if (frameStart === undefined || frameLength === undefined) return undefined
         if (isNaN(frameStart) || isNaN(frameLength)) return undefined
 
         return {
-            type: 'temporalSpread',
-            'frame.start': frameStart,
-            'frameLength': frameLength,
-            'noteoff.shift': source["noteoff.shift"] ?? false,
-            'time.unit': source["time.unit"] ?? 'ticks',
-            intensity: source.intensity,
+            frameStart,
+            frameLength,
+            noteOffShift: draft.noteOffShift ?? NoteOffShift.False,
+            frameDomain: draft.frameDomain ?? FrameDomain.Ticks,
+            intensity: draft.intensity ?? 1,
         }
+    }
+
+    /**
+     * The `<ornamentDef>` a name and these two transformers make.
+     *
+     * The gradient is set before the spread because each setter appends its child as it goes, and
+     * `<dynamicsGradient>` precedes `<temporalSpread>` in a def. `createOrnamentDef` answers a
+     * `Result`: a name it refuses is no definition, and the caller then leaves the ornament
+     * unnamed rather than pointing it at one that was never written.
+     */
+    private buildDef(
+        name: string,
+        gradient: GradientValues | undefined,
+        spread: SpreadValues | undefined,
+    ): OrnamentDef | null {
+        const built = OrnamentDef.createOrnamentDef(name)
+        if (!built.ok) return null
+
+        const def = built.value
+        if (gradient) {
+            def.setDynamicsGradientValues(gradient.transitionFrom, gradient.transitionTo)
+        }
+        if (spread) {
+            def.setTemporalSpreadValues(
+                spread.frameStart,
+                spread.frameLength,
+                spread.frameDomain,
+                spread.intensity,
+                spread.noteOffShift,
+            )
+        }
+        return def
     }
 
     /**
@@ -264,7 +340,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * definition each. Without this the whole family reached the document as `@name.ref`
      * pointing at nothing — well-formed, and silent.
      */
-    private defineGradientOnly(mpm: MPM, scope: Scope, ornaments: Ornament[], defined: Set<Ornament>) {
+    private defineGradientOnly(mpm: Mpm, scope: Scope, ornaments: FittedOrnament[], defined: Set<Element>) {
         if (ornaments.length === 0) return
 
         const clusters = this.generateSubClusters(ornaments)
@@ -273,7 +349,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             if (!acc[label]) acc[label] = []
             acc[label].push(ornaments[index])
             return acc
-        }, {} as { [label: string]: Ornament[] })
+        }, {} as { [label: string]: FittedOrnament[] })
 
         for (const label in byLabel) {
             const group = byLabel[label]
@@ -283,26 +359,19 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 continue
             }
 
-            const sums = group.reduce((acc, ornament) => ({
-                from: acc.from + (ornament["transition.from"] as number),
-                to: acc.to + (ornament["transition.to"] as number),
+            const sums = group.reduce((acc, { draft }) => ({
+                from: acc.from + (draft.transitionFrom as number),
+                to: acc.to + (draft.transitionTo as number),
             }), { from: 0, to: 0 })
 
-            const def: OrnamentDef = {
-                type: 'ornamentDef',
-                name: `def_${scope}_gradient_${label}`,
-                dynamicsGradient: {
-                    type: 'dynamicsGradient',
-                    'transition.from': sums.from / group.length,
-                    'transition.to': sums.to / group.length,
-                }
-            }
+            const def = this.buildDef(`def_${scope}_gradient_${label}`, {
+                transitionFrom: sums.from / group.length,
+                transitionTo: sums.to / group.length,
+            }, undefined)
+            if (!def) continue
 
-            mpm.insertDefinition(def, scope)
-            group.forEach(ornament => {
-                ornament["name.ref"] = def.name
-                defined.add(ornament)
-            })
+            insertDefinition(mpm, 'ornamentDef', def, scope)
+            group.forEach(ornament => this.nameAfter(mpm, ornament, def, defined))
         }
     }
 
@@ -313,27 +382,16 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * had decided whether to insert the definition at all; every skipped one therefore left the
      * map naming a definition that was never written. Naming now happens where inserting does.
      */
-    private asDef(ornament: Ornament): OrnamentDef {
-        // `transition.to` is compared against undefined rather than tested for truth. Zero is a
+    private asDef({ draft }: FittedOrnament): OrnamentDef | null {
+        // `transitionTo` is compared against undefined rather than tested for truth. Zero is a
         // legal end for a ramp — and it is the end of `InsertDynamicsGradient`'s own default
         // crescendo, `{ from: -1, to: 0 }` — so a truthiness test dropped the gradient from
         // every crescendo mpmify fits by default.
-        let dynamicsGradient: DynamicsGradient | undefined = undefined
-        if (ornament["transition.from"] !== undefined &&
-            ornament["transition.to"] !== undefined) {
-            dynamicsGradient = {
-                type: 'dynamicsGradient',
-                'transition.from': ornament["transition.from"],
-                'transition.to': ornament["transition.to"]
-            }
-        }
+        const gradient = (draft.transitionFrom !== undefined && draft.transitionTo !== undefined)
+            ? { transitionFrom: draft.transitionFrom, transitionTo: draft.transitionTo }
+            : undefined
 
-        return {
-            type: 'ornamentDef',
-            name: `def_${v4()}`,
-            dynamicsGradient,
-            temporalSpread: this.temporalSpreadOf(ornament)
-        }
+        return this.buildDef(`def_${v4()}`, gradient, this.temporalSpreadOf(draft))
     }
 
     /**
@@ -341,21 +399,36 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * apart. An ornament whose frame did not survive translation gets neither: it keeps whatever
      * `@name.ref` it already had rather than gaining a dangling one.
      */
-    private defineAndName(mpm: MPM, scope: Scope, ornament: Ornament, defined: Set<Ornament>) {
-        const hasFrame = ornament["frame.start"] !== undefined && ornament.frameLength !== undefined
+    private defineAndName(mpm: Mpm, scope: Scope, ornament: FittedOrnament, defined: Set<Element>) {
+        const { draft } = ornament
+        const hasFrame = draft.frameStart !== undefined && draft.frameLength !== undefined
 
         // Having no frame and having an unusable one are different. A gradient-only ornament has
         // nothing to check; one whose frame failed translation must not be given a definition.
         // Which frames are unusable is `temporalSpreadOf`'s to say, so it is asked rather than
         // second-guessed here.
-        if (hasFrame && this.temporalSpreadOf(ornament) === undefined) {
-            console.warn('skipping ornament with an unusable frame', ornament["xml:id"])
+        if (hasFrame && this.temporalSpreadOf(draft) === undefined) {
+            console.warn('skipping ornament with an unusable frame', ornament.instruction.id)
             return
         }
 
         const def = this.asDef(ornament)
-        mpm.insertDefinition(def, scope)
-        ornament["name.ref"] = def.name
-        defined.add(ornament)
+        if (!def) return
+
+        insertDefinition(mpm, 'ornamentDef', def, scope)
+        this.nameAfter(mpm, ornament, def, defined)
+    }
+
+    /**
+     * Point an ornament at the definition just written for it, and record that this run is the
+     * one that defined it — which is what licenses taking the draft back off afterwards.
+     */
+    private nameAfter(mpm: Mpm, ornament: FittedOrnament, def: OrnamentDef, defined: Set<Element>) {
+        const map = requireMap(mpm, 'ornament', ornament.instruction.scope)
+        map.updateOrnamentAt(
+            map.getElementIndexOf(ornament.instruction.element),
+            { nameRef: def.getName() }
+        )
+        defined.add(ornament.instruction.element)
     }
 }

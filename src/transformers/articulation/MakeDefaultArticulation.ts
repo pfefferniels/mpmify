@@ -1,8 +1,9 @@
-import { ArticulationDef, MPM } from "../../mpm";
-import { MSM, MsmNote } from "../../msm";
+import { ensureDefaultStyle, getInstructions, insertDefinition, Mpm } from "../../mpm";
+import { Alignment, AlignedNote } from "../../alignment";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { TranslatePhysicalTimeToTicks } from "../tempo";
 import { deriveResidual } from "../../residual";
+import { makeArticulationDef } from "./InsertArticulation";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
@@ -21,15 +22,15 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         // collect notes that have no articulation
         //
         // From this transformer's own scope. The articulations below are read per-scope and the
         // definition it writes is inserted per-scope, but the candidate notes were taken from
         // the whole score — so a part-scoped call averaged the other parts' notes into this
         // part's `relativeDuration`, and then published that as the part's default (issue #44).
-        const notes: MsmNote[] = msm.notesInPart(this.options.scope)
-        for (const articulation of mpm.getInstructions('articulation', this.options.scope)) {
+        const notes: AlignedNote[] = msm.notesInPart(this.options.scope)
+        for (const articulation of getInstructions(mpm, 'articulation', this.options.scope)) {
             if (articulation.noteid) {
                 // One reference, the way the renderer reads it. This walked a space-separated
                 // list for as long as `InsertArticulation` wrote one — see issue #53.
@@ -79,13 +80,9 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
 
         const mean = relativeDurations.reduce((acc, curr) => acc + curr, 0) / relativeDurations.length
 
-        const def: ArticulationDef = {
-            name: 'default articulation',
-            relativeDuration: mean,
-            type: 'articulationDef',
-        }
-        mpm.insertDefinition(def, this.options.scope)
+        const def = makeArticulationDef('default articulation', { relativeDuration: mean })
+        insertDefinition(mpm, 'articulationDef', def, this.options.scope)
 
-        mpm.ensureDefaultStyle('articulation', this.options.scope, { defaultArticulation: def.name })
+        ensureDefaultStyle(mpm, 'articulation', this.options.scope, { defaultArticulation: def.getName() })
     }
 }

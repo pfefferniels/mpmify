@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { performMsmToData } from "espressivo"
 import type { PerformanceData, PerformedNote } from "espressivo"
-import { MSM } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { Alignment } from "../../src/alignment"
+import { createMpm } from "../../src/mpm"
 import { importWork } from "../../src/Work"
 import { asMSM } from "../../scripts/bake/asMSM"
 import { runPipeline } from "../../scripts/bake/deriveSegments"
@@ -37,8 +37,8 @@ export interface AlignedRun {
     scoreMsm: string
     /** The chain's MPM. */
     mpmXml: string
-    /** The recording the chain was asked to reproduce, in seconds, shifted to start at zero. */
-    observed: MSM
+    /** The recording the chain was asked to reproduce, shifted to start at zero. */
+    observed: Alignment
     rendered: PerformanceData
     errors: Errors
     /**
@@ -90,10 +90,10 @@ export const runAligned = (): AlignedRun => {
  * that quietly wrote its answer into the observations would otherwise be measured against its
  * own writing and score perfectly.
  */
-const recording = (mei: string, scoreMsm: string, info: string): MSM => {
+const recording = (mei: string, scoreMsm: string, info: string): Alignment => {
     const observed = asMSM(mei, scoreMsm)
     const { transformers } = importWork(info)
-    const scratch = new MPM()
+    const scratch = createMpm()
 
     for (const transformer of transformers) {
         if (transformer.name === 'MakeChoice' || transformer.name === 'Modify') {
@@ -107,10 +107,8 @@ const recording = (mei: string, scoreMsm: string, info: string): MSM => {
 }
 
 const declaredCalls = (info: string): number => {
-    const parsed = JSON.parse(info) as {
-        creation: { argumentations: { calls: unknown[] }[] }
-    }
-    return parsed.creation.argumentations.reduce((total, a) => total + a.calls.length, 0)
+    const parsed = JSON.parse(info) as { provenance: unknown[] }
+    return parsed.provenance.length
 }
 
 /** The share of the recording's departure from the bare score that the MPM accounts for. */
@@ -126,7 +124,7 @@ const explained = (exercised: AspectError, remaining: AspectError) =>
  * alignment, not the chain. A note the recording *does* have and the render does not is
  * `missing`, and that is a failure.
  */
-const compareToRecording = (observed: MSM, rendered: PerformanceData): Errors => {
+const compareToRecording = (observed: Alignment, rendered: PerformanceData): Errors => {
     const byId = new Map<string, PerformedNote>()
     for (const part of rendered.parts) {
         for (const note of part.notes) if (note.id) byId.set(note.id, note)
@@ -140,11 +138,11 @@ const compareToRecording = (observed: MSM, rendered: PerformanceData): Errors =>
     for (const note of observed.allNotes) {
         const performed = byId.get(note['xml:id'])
         if (!performed) { missing++; continue }
-        onsets.push(Math.abs(performed.milliseconds.date - note['midi.onset'] * 1000))
+        onsets.push(Math.abs(performed.milliseconds.date - note['milliseconds.date']))
         durations.push(Math.abs(
             (performed.milliseconds.end - performed.milliseconds.date)
-            - note['midi.duration'] * 1000))
-        velocities.push(Math.abs(performed.velocity - note['midi.velocity']))
+            - (note['milliseconds.date.end'] - note['milliseconds.date'])))
+        velocities.push(Math.abs(performed.velocity - note.velocity))
     }
 
     return {

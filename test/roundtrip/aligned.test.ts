@@ -43,7 +43,7 @@ const BOUNDS = {
      * the rest of the list.
      */
     duration: { mean: 230, max: 1100 },
-    /** Velocity. Measured mean 1.64, max 8.5, against a bare-score departure of 63. */
+    /** Velocity. Measured mean 1.70, max 8.5, against a bare-score departure of 63. */
     velocity: { mean: 2.3, max: 12 },
 }
 

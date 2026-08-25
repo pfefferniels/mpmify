@@ -26,7 +26,7 @@ globalThis.Element = window.Element
 globalThis.Node = window.Node
 
 const { spotlightMpm } = await import('espressivo')
-const { getRange } = await import('mpmify')
+const { getInstructions, getRange } = await import('mpmify')
 const { derive } = await import('./deriveSegments')
 const { negotiateIntensityCurve } = await import('./intensityCurve')
 import type { Reconstruction, Segment } from './Reconstruction'
@@ -60,7 +60,7 @@ check(withoutMintedIds(fresh.scoreMsm) === withoutMintedIds(shipped.scoreMsm),
 
 /** What a segment claims, independent of which spans carry it. */
 const claim = (s: Segment) =>
-    `${s.id} ${s.motivation}/${s.certainty} [${s.from},${s.to}]${s.continue ? ` ->${s.continue}` : ''} ${s.note ?? ''}`
+    `${s.id} ${s.intensity} [${s.from},${s.to}] ${s.note ?? ''}`
 check(segments.map(claim).sort().join('\n') === fresh.reconstruction.segments.map(claim).sort().join('\n'),
     `every segment, its range and its argument survive a re-run (${segments.length})`)
 
@@ -162,17 +162,33 @@ check(spanFailures === 0, `all ${spanIds.length} single-span selections spotligh
 console.log('\n4. the intensity curve is unchanged')
 
 /**
- * How TransformerStack built the curve before the bake: argumentations grouped
- * by identity, ranges resolved through the MSM, element types looked up in the MPM.
+ * How TransformerStack built the curve before the bake: calls grouped by the segment that names
+ * them, ranges resolved through the MSM, element types looked up in the MPM.
+ *
+ * The intensity is re-derived here rather than imported from `deriveSegments.ts`, so that the
+ * check compares two readings of the MPM and not one function with itself.
  */
 const curveFromPipeline = (maxDate: number) => {
-    const { transformers, msm, mpm } = fresh.pipeline
-    const typeById = new Map((mpm.getInstructions() as { 'xml:id': string; type: string }[])
-        .map(i => [i['xml:id'], i.type]))
-    const argumentations = Map.groupBy(transformers, t => t.argumentation)
+    const { transformers, segments: grouping, msm, mpm } = fresh.pipeline
+    const typeById = new Map(getInstructions(mpm).map(i => [i.id, i.type]))
+    const byCallId = new Map(transformers.map(t => [t.id, t]))
+    const groups = grouping.map(segment =>
+        segment.calls.map(id => byCallId.get(id)).filter(t => t !== undefined))
+
+    /** The elements a group made, of one instruction type, earliest first. */
+    const inOrder = <T extends { id?: string; date: number }>(instructions: T[], elements: Set<string>) =>
+        instructions
+            .filter(i => i.id !== undefined && elements.has(i.id))
+            .sort((a, b) => a.date - b.date)
+
+    /** How far the numeric values of such a run travel; a style-relative name counts for none. */
+    const travelled = (values: readonly (number | string | undefined)[]) => {
+        const numbers = values.filter((value): value is number => typeof value === 'number')
+        return numbers.length === 0 ? 0 : numbers[numbers.length - 1] - numbers[0]
+    }
 
     const startsByType = new Map<string, number[]>()
-    for (const [, group] of argumentations) {
+    for (const group of groups) {
         for (const t of group) {
             const range = getRange(t.options, msm)
             if (!range) continue
@@ -185,18 +201,20 @@ const curveFromPipeline = (maxDate: number) => {
     for (const starts of startsByType.values()) starts.sort((a, b) => a - b)
 
     const diff = new Array<number>(maxDate).fill(0)
-    for (const [argumentation, group] of argumentations) {
+    for (const group of groups) {
         const range = getRange(group, msm)
         if (!range) continue
 
-        let sign: number, gain: number
-        switch (argumentation.conclusion.motivation) {
-            case 'intensify': sign = +1; gain = 1.0; break
-            case 'move': sign = +1; gain = 0.5; break
-            case 'relax': sign = -1; gain = 1.0; break
-            case 'calm': sign = -1; gain = 0.5; break
-            default: continue
-        }
+        const elements = new Set(group.flatMap(t => t.created).filter(id => typeById.has(id)))
+        const tempo = inOrder(getInstructions(mpm, 'tempo'), elements)
+            .flatMap(i => [i.bpm, i.transitionTo])
+        const dynamics = inOrder(getInstructions(mpm, 'dynamics'), elements)
+            .flatMap(i => [i.volume, i.transitionTo])
+
+        const intensity = Math.sign(travelled(tempo)) * 0.5 + Math.sign(travelled(dynamics)) * 0.5
+        if (intensity === 0) continue
+        const sign = Math.sign(intensity)
+        const gain = Math.abs(intensity)
 
         const start = range.from
         const end = range.to ?? range.from

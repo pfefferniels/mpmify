@@ -1,7 +1,7 @@
 import { performMsmToData } from "espressivo"
 import type { PerformanceData, PerformedNote } from "espressivo"
-import { MSM } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { Alignment } from "../../src/alignment"
+import { createMpm, exportMPM, Mpm } from "../../src/mpm"
 import { Transformer } from "../../src/transformers/Transformer"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
@@ -101,13 +101,13 @@ export const EMPTY_MPM = '<?xml version="1.0" encoding="UTF-8"?>'
     + '<global><header/><dated/></global></performance></mpm>'
 
 export interface RoundTripResult {
-    score: MSM
+    score: Alignment
     scoreXml: string
     truthXml: string
     truthPerformance: PerformanceData
     /** The MSM the chain was given: the score, carrying the truth's performance. */
-    performed: MSM
-    fitted: MPM
+    performed: Alignment
+    fitted: Mpm
     fittedXml: string
     refitPerformance: PerformanceData
     errors: Errors
@@ -134,7 +134,7 @@ export const roundTrip = (spec: Case): RoundTripResult => {
     }
 
     const score = buildScore(spec.score)
-    const scoreXml = score.serialize(false)!
+    const scoreXml = score.serialize()!
     const scoreNotes = score.allNotes.map(note => ({ id: note['xml:id'], date: note.date }))
 
     const truthXml = truthMpm(spec.truth, scoreNotes)
@@ -142,11 +142,11 @@ export const roundTrip = (spec: Case): RoundTripResult => {
 
     const performed = withPerformance(buildScore(spec.score), truthPerformance)
 
-    const fitted = new MPM()
+    const fitted = createMpm()
     const transformers = chainFor(spec, performed)
     for (const transformer of transformers) transformer.run(performed, fitted)
 
-    const fittedXml = fitted.toXML()
+    const fittedXml = exportMPM(fitted)
     const refitPerformance = performMsmToData({ msm: scoreXml, mpm: fittedXml })
     const baseline = performMsmToData({ msm: scoreXml, mpm: EMPTY_MPM })
 
@@ -160,7 +160,7 @@ export const roundTrip = (spec: Case): RoundTripResult => {
 }
 
 /** Attach a rendered performance to a clean score, the way `asMSM` attaches an aligned one. */
-const withPerformance = (score: MSM, performance: PerformanceData): MSM => {
+const withPerformance = (score: Alignment, performance: PerformanceData): Alignment => {
     const byId = new Map<string, PerformedNote>()
     for (const part of performance.parts) {
         for (const note of part.notes) if (note.id) byId.set(note.id, note)
@@ -169,9 +169,9 @@ const withPerformance = (score: MSM, performance: PerformanceData): MSM => {
     for (const note of score.allNotes) {
         const performed = byId.get(note['xml:id'])
         if (!performed) throw new Error(`no rendered note for ${note['xml:id']}`)
-        note['midi.onset'] = performed.milliseconds.date / 1000
-        note['midi.duration'] = (performed.milliseconds.end - performed.milliseconds.date) / 1000
-        note['midi.velocity'] = performed.velocity
+        note['milliseconds.date'] = performed.milliseconds.date
+        note['milliseconds.date.end'] = performed.milliseconds.end
+        note.velocity = performed.velocity
     }
 
     return score
@@ -188,7 +188,7 @@ const withPerformance = (score: MSM, performance: PerformanceData): MSM => {
  * removes that freedom, and `compareTransformers` — the registry's own order, not a hand-picked
  * one — decides what runs when.
  */
-export const chainFor = (spec: Case, msm: MSM): Transformer[] => {
+export const chainFor = (spec: Case, msm: Alignment): Transformer[] => {
     const transformers: Transformer[] = []
     const end = msm.lastDate()
 
@@ -361,7 +361,7 @@ const accentuationCalls = (spec: Case, end: number): Transformer[] => {
  * the mean. Handing it the truth's grouping is the tier-2 setup. Withholding it — one call over
  * everything, with `StylizeArticulation` to cluster the notes back apart — is the tier-3 one.
  */
-const articulationCalls = (spec: Case, msm: MSM): Transformer[] => {
+const articulationCalls = (spec: Case, msm: Alignment): Transformer[] => {
     const articulation = spec.truth.articulation!
     const aspects = new Set<ArticulationProperty>()
     for (const def of articulation.defs) {

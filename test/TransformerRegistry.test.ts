@@ -11,8 +11,9 @@ import {
 import { AbstractTransformer, TransformationOptions } from "../src/transformers/Transformer"
 import { exportWork, importWork } from "../src/Work"
 
-// Ensure built-in registrations are loaded (side-effect of importing Order)
-import "../src/transformers/Order"
+// Importing Order also registers every built-in transformer, which is what the first describe
+// below reads.
+import { validate } from "../src/transformers/Order"
 
 describe("TransformerRegistry", () => {
     describe("built-in registration", () => {
@@ -76,20 +77,14 @@ describe("TransformerRegistry", () => {
 
     describe("roundtrip through importWork/exportWork", () => {
         test("transformer survives serialization roundtrip", () => {
+            // A work file records a call as its name and its options, and `importWork` rebuilds
+            // it through the registry — so the roundtrip holds exactly as long as the name is
+            // registered under the spelling the file uses.
             const transformer = createTransformer("ApproximateLogarithmicTempo")!
             transformer.options = {
                 scope: 'global',
                 from: 0,
                 to: 720,
-            }
-            transformer.argumentation = {
-                id: "arg-1",
-                type: "simpleArgumentation",
-                conclusion: {
-                    id: "belief-1",
-                    motivation: "move",
-                    certainty: "plausible"
-                }
             }
 
             const work = { name: "test", mpm: "test.mpm", mei: "test.mei" }
@@ -97,6 +92,7 @@ describe("TransformerRegistry", () => {
             const result = importWork(json)
 
             expect(result.transformers).toHaveLength(1)
+            expect(result.transformers[0].id).toBe(transformer.id)
             expect(result.transformers[0].name).toBe("ApproximateLogarithmicTempo")
             expect(result.transformers[0].options).toEqual(transformer.options)
         })
@@ -207,6 +203,60 @@ describe("TransformerRegistry", () => {
             expect(() => {
                 registerTransformer(Custom, { after: "DoesNotExist" })
             }).toThrow('anchor not found in order')
+        })
+    })
+
+    // `validate` is the registry read from the other end: what a chain has to look like for the
+    // pipeline to be able to order, save and run it. Isolated for the same reason as above.
+    describe("validate (isolated)", () => {
+        class Alpha extends AbstractTransformer<TransformationOptions> {
+            name = "Alpha"
+            requires = []
+            constructor() { super({}) }
+            protected transform() { /* no-op */ }
+        }
+        class NeedsAlpha extends AbstractTransformer<TransformationOptions> {
+            name = "NeedsAlpha"
+            requires = [Alpha]
+            constructor() { super({}) }
+            protected transform() { /* no-op */ }
+        }
+
+        test("an unregistered name is reported, with its position in the chain", () => {
+            clearRegistry()
+            registerTransformer(Alpha)
+
+            class Stranger extends AbstractTransformer<TransformationOptions> {
+                name = "Stranger"
+                requires = []
+                constructor() { super({}) }
+                protected transform() { /* no-op */ }
+            }
+
+            // Unregistered, so `importWork` would drop it and the chain would run without it
+            // saying anything. That silence is what `validate` breaks.
+            const messages = validate([new Alpha(), new Stranger()])
+            expect(messages).toHaveLength(1)
+            expect(messages[0].index).toBe(1)
+            expect(messages[0].message).toContain("Stranger")
+        })
+
+        test("a requirement is reported only when the chain does not already satisfy it", () => {
+            clearRegistry()
+            registerTransformer(Alpha)
+            registerTransformer(NeedsAlpha)
+
+            expect(validate([new NeedsAlpha()])).toHaveLength(1)
+            expect(validate([new Alpha(), new NeedsAlpha()])).toEqual([])
+        })
+
+        test("a requirement met only later in the chain is still missing", () => {
+            clearRegistry()
+            registerTransformer(Alpha)
+            registerTransformer(NeedsAlpha)
+
+            // `requires` is about what has already run, not about mere presence.
+            expect(validate([new NeedsAlpha(), new Alpha()])).toHaveLength(1)
         })
     })
 })

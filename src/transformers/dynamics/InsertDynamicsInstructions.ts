@@ -1,10 +1,18 @@
-import { Dynamics, MPM, Scope } from "../../mpm"
-import { MSM } from "../../msm"
+import type { AddDynamicsOptions } from "espressivo"
+import { getInstructions, InstructionOptions, Mpm, requireMap, Scope, fillInAt } from "../../mpm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, DynamicsPoints } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
-export type DynamicsWithEndDate = Dynamics & WithEndDate
+/**
+ * A fitted `<dynamics>` plus the window it was fitted over.
+ *
+ * `endDate` is not an MPM attribute and is not in `AddDynamicsOptions`; it travels with the fit
+ * only as far as {@link InsertDynamicsInstructions.transform}, which takes it back off before the
+ * record reaches the document.
+ */
+export type DynamicsWithEndDate = AddDynamicsOptions & WithEndDate
 
 export interface InsertDynamicsInstructionsOptions extends ScopedTransformationOptions {
     from: number
@@ -25,7 +33,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const points = this.asPoints(msm, this.options.scope)
         const { from, to } = this.options
 
@@ -36,14 +44,27 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // `endDate` is the window the curve was fitted over — a working field, not an MPM
         // attribute. It used to be written into the document; a reader gets the span from the
         // next <dynamics> instead. See old-bugs.md.
-        const { endDate: fittingWindow, ...instruction } = fitted
-        instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
+        //
+        // This destructuring is now the *only* thing keeping it out: the serializer used to write
+        // from a table of attribute spellings, which had no row for `endDate`, and espressivo
+        // writes what its options type names instead. Taking it off here is load-bearing, not
+        // belt-and-braces.
+        const { endDate: fittingWindow, ...fit } = fitted
+        const instruction: InstructionOptions<'dynamics'> =
+            { ...fit, id: generateId('dynamics', fit.date, mpm) }
 
-        // The view the document ended up with, not the record handed in: an instruction already
-        // at that date is merged into rather than replaced, so this is what the curve to be
-        // closed actually says.
-        const inserted = mpm.insertInstruction(instruction, this.options?.scope)
-        this.closeTransition(mpm, inserted, fittingWindow)
+        // `fillInAt`, not `addDynamics`: in a chain, each segment's fit lands on the date the
+        // previous segment's `closeTransition` already wrote a closing `<dynamics>` at. One
+        // element has to carry both — the closing volume and this curve — or the closer sits in
+        // front of the curve and shadows it.
+        const map = requireMap(mpm, 'dynamics', this.options.scope)
+        fillInAt(map, instruction, {
+            localName: 'dynamics',
+            add: o => map.addDynamics(o),
+            read: i => map.getDynamicsOptionsOf(i),
+            update: (i, patch) => map.updateDynamicsAt(i, patch),
+        })
+        this.closeTransition(mpm, instruction, fittingWindow)
     }
 
     /**
@@ -60,27 +81,26 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
      * An instruction already at that date already closes the span — in a chain each segment is
      * closed by the next — and is left alone.
      */
-    private closeTransition(mpm: MPM, instruction: Dynamics, endDate: number) {
-        const target = instruction["transition.to"]
+    private closeTransition(mpm: Mpm, instruction: AddDynamicsOptions, endDate: number) {
+        const target = instruction.transitionTo
         if (target === undefined || endDate <= instruction.date) return
 
-        const existing = mpm.getInstructions('dynamics', this.options.scope)
+        const existing = getInstructions(mpm, 'dynamics', this.options.scope)
         if (existing.some(dynamics => dynamics.date === endDate)) return
 
-        mpm.insertInstruction({
-            type: 'dynamics',
-            'xml:id': generateId('dynamics', endDate, mpm),
+        requireMap(mpm, 'dynamics', this.options.scope).addDynamics({
+            id: generateId('dynamics', endDate, mpm),
             date: endDate,
             volume: target
-        }, this.options.scope)
+        })
     }
 
-    private asPoints(msm: MSM, part: Scope): DynamicsPoints[] {
+    private asPoints(msm: Alignment, part: Scope): DynamicsPoints[] {
         const points: DynamicsPoints[] = []
         const chords = msm.asChords(part)
         for (const [date, notes] of chords) {
             const notesWithVolume = notes
-                .filter(n => n["midi.velocity"] !== undefined)
+                .filter(n => n.velocity !== undefined)
 
             // A phantom velocity is what the caller says the curve should pass through at this
             // date, and it stands in for the chord's own mean whether or not it happens to be
@@ -91,7 +111,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
             if (phantomVelocity === undefined && notesWithVolume.length === 0) continue
 
             const velocity = phantomVelocity ?? notesWithVolume
-                .reduce((sum, curr) => sum + curr["midi.velocity"], 0) / notesWithVolume.length
+                .reduce((sum, curr) => sum + curr.velocity, 0) / notesWithVolume.length
 
             points.push({ date, velocity })
         }

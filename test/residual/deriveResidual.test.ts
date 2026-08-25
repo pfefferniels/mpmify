@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
-import { Dynamics, MPM, Tempo } from "../../src/mpm"
+import { Alignment, AlignedNote } from "../../src/alignment"
+import { createMpm, requireMap } from "../../src/mpm"
 import { deriveResidual } from "../../src/residual"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 
-const note = (position: number, onset: number, velocity = 100, duration = 1): MsmNote => ({
+const note = (position: number, onset: number, velocity = 100, duration = 1000): AlignedNote => ({
     'xml:id': `n_${position}`,
     date: position * 4 * 720,
     part: 1,
@@ -13,22 +13,20 @@ const note = (position: number, onset: number, velocity = 100, duration = 1): Ms
     accidentals: 0,
     duration: 0.25 * 4 * 720,
     'midi.pitch': 67,
-    'midi.onset': onset,
-    'midi.duration': duration,
-    'midi.velocity': velocity,
-} as MsmNote)
+    'milliseconds.date': onset,
+    'milliseconds.date.end': onset + duration,
+    velocity,
+} as AlignedNote)
 
 /** Three quarter notes at 60bpm, the last one late and quiet. */
-const fixture = () => new MSM(
-    [note(0, 0), note(0.25, 1), note(0.5, 2.1, 80)],
+const fixture = () => new Alignment(
+    [note(0, 0), note(0.25, 1000), note(0.5, 2100, 80)],
     { numerator: 4, denominator: 4 }
 )
 
 const withTempo = () => {
-    const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
@@ -58,7 +56,7 @@ describe('deriveResidual, tick domain', () => {
     })
 
     test('an MPM with no tempo leaves the tick figures unknown, not zero', () => {
-        const derived = deriveResidual(fixture(), new MPM())
+        const derived = deriveResidual(fixture(), createMpm())
         expect(derived.notes.map(n => n.tickDate)).toEqual([undefined, undefined, undefined])
     })
 })
@@ -73,21 +71,17 @@ describe('deriveResidual, velocity', () => {
 
     test('measures against the curve once there is one', () => {
         const mpm = withTempo()
-        mpm.insertInstruction<Dynamics>({
-            type: 'dynamics', 'xml:id': 'd1', date: 0, volume: 80,
-        }, 'global')
+        requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
 
         const derived = deriveResidual(fixture(), mpm)
         expect(derived.notes.map(n => n.velocity)).toEqual([20, 20, 0])
     })
 
-    // `without` is what replaces each transformer subtracting its own share: hold your own
+    // `withoutMaps` is what replaces each transformer subtracting its own share: hold your own
     // dimension out and what comes back is what the rest of the MPM leaves for you.
     test('without holds a dimension out of the measurement', () => {
         const mpm = withTempo()
-        mpm.insertInstruction<Dynamics>({
-            type: 'dynamics', 'xml:id': 'd1', date: 0, volume: 80,
-        }, 'global')
+        requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
 
         const withDynamics = deriveResidual(fixture(), mpm)
         const withoutDynamics = deriveResidual(fixture(), mpm, { without: ['dynamics'] })

@@ -1,5 +1,6 @@
-import { MPM, Author, Comment, RelatedResource, AppInfo, TransformationInfo, Note, Metadata } from "../../mpm"
-import { MSM } from "../../msm"
+import { Author, Comment, RelatedResource } from "espressivo"
+import { Mpm, unwrap } from "../../mpm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
 export interface AuthorOptions {
@@ -16,35 +17,18 @@ export interface RelatedResourceOptions {
     type: string
 }
 
-export interface NoteOptions {
-    text: string
-}
-
-export interface TransformationInfoOptions {
-    'xml:id': string
-    name: string
-    cdata: string
-    notes?: NoteOptions[]
-}
-
-export interface AppInfoOptions {
-    name: string
-    version: string
-    url: string
-    transformations?: TransformationInfoOptions[]
-}
-
 export interface InsertMetadataOptions extends TransformationOptions {
     authors?: AuthorOptions[]
     comments?: CommentOptions[]
     relatedResources?: RelatedResourceOptions[]
-    appInfo?: AppInfoOptions
 }
 
 /**
- * Inserts metadata into the MPM document.
+ * Writes the document's `<metadata>`: who made this performance description, what they said
+ * about it, and which files it relates to.
  *
- * Metadata can include authors, comments, related resources, and app info.
+ * The one transformer that touches nothing dated — it adds no instruction and reads no note, so
+ * it can stand anywhere in a chain.
  */
 export class InsertMetadata extends AbstractTransformer<InsertMetadataOptions> {
     name = 'InsertMetadata'
@@ -54,66 +38,48 @@ export class InsertMetadata extends AbstractTransformer<InsertMetadataOptions> {
         super(options || {})
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        const metadata: Metadata = []
+    protected transform(msm: Alignment, mpm: Mpm) {
+        const authors = (this.options.authors ?? [])
+            .map(author => unwrap(Author.fromName(author.text, author.number, null), 'author'))
+        const comments = (this.options.comments ?? [])
+            .map(comment => unwrap(Comment.fromText(comment.text, null), 'comment'))
+        const resources = (this.options.relatedResources ?? [])
+            .map(resource => unwrap(RelatedResource.fromUri(resource.uri, resource.type), 'related resource'))
 
-        if (this.options.authors) {
-            for (const author of this.options.authors) {
-                metadata.push({
-                    type: 'author',
-                    number: author.number,
-                    text: author.text
-                } as Author)
-            }
+        if (authors.length === 0 && comments.length === 0 && resources.length === 0) return
+
+        // `addMetadata` appends to a `<metadata>` that is already there, so a chain run twice
+        // over the same document would list every author and comment twice. What the options
+        // say is the whole of the metadata, not an addition to it.
+        mpm.removeMetadata()
+
+        // One author and one comment per call is all `addMetadata` takes; the resources ride
+        // along with the first, which is the call that builds the element.
+        const calls = Math.max(authors.length, comments.length, 1)
+        for (let index = 0; index < calls; ++index) {
+            mpm.addMetadata(
+                authors.at(index) ?? null,
+                comments.at(index) ?? null,
+                index === 0 ? resources : null,
+            )
         }
 
-        if (this.options.comments) {
-            for (const comment of this.options.comments) {
-                metadata.push({
-                    type: 'comment',
-                    text: comment.text
-                } as Comment)
-            }
-        }
+        this.moveMetadataFirst(mpm)
+    }
 
-        if (this.options.relatedResources) {
-            for (const resource of this.options.relatedResources) {
-                metadata.push({
-                    uri: resource.uri,
-                    type: resource.type
-                } as RelatedResource)
-            }
-        }
-
-        if (this.options.appInfo) {
-            const transformations: TransformationInfo[] = []
-
-            if (this.options.appInfo.transformations) {
-                for (const t of this.options.appInfo.transformations) {
-                    const notes: Note[] = (t.notes || []).map(n => ({
-                        type: 'note' as const,
-                        text: n.text
-                    }))
-
-                    transformations.push({
-                        type: 'transformation',
-                        'xml:id': t['xml:id'],
-                        name: t.name,
-                        cdata: t.cdata,
-                        children: notes
-                    } as TransformationInfo)
-                }
-            }
-
-            metadata.push({
-                type: 'appInfo',
-                name: this.options.appInfo.name,
-                version: this.options.appInfo.version,
-                url: this.options.appInfo.url,
-                children: transformations
-            } as AppInfo)
-        }
-
-        mpm.setMetadata(metadata)
+    /**
+     * Put `<metadata>` in front of the performances, where MPM's content model wants it:
+     * `<mpm>` is `metadata? performance+`, a sequence.
+     *
+     * `Mpm.addMetadata` appends to the root, and appending after a `<performance>` is out of
+     * order — faithfully so, since Java meico does the same (`Mpm.java:280`). Reading is
+     * unaffected either way, so nothing catches it but a schema.
+     */
+    private moveMetadataFirst(mpm: Mpm) {
+        const element = mpm.getMetadata()?.getXml()
+        const root = mpm.getRootElement()
+        if (!element || !root || root.indexOf(element) === 0) return
+        root.removeChild(element)
+        root.insertChild(element, 0)
     }
 }

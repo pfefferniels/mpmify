@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { performMsmToData } from "espressivo"
-import { MPM } from "../../src/mpm"
+import { createMpm, exportMPM, getInstructions } from "../../src/mpm"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
 import { InsertPedal } from "../../src/transformers/pedal/InsertPedalInstructions"
@@ -32,20 +32,22 @@ const RAMP_TICKS = 60
 const pedalledScore = () => {
     const score = buildScore({ beats: 8 })
     for (const note of score.allNotes) {
-        note['midi.onset'] = (note.date / QUARTER) * 0.5
-        note['midi.duration'] = 0.5
-        note['midi.velocity'] = 64
+        // Half a second to the quarter, which is the 120 bpm the assertions below read back.
+        const onset = (note.date / QUARTER) * 500
+        note['milliseconds.date'] = onset
+        note['milliseconds.date.end'] = onset + 500
+        note.velocity = 64
     }
-    // Down on beat 1, again on beat 5 — 0 s and 2 s at the 120 bpm the onsets describe.
+    // Down on beat 1, again on beat 5 — 0 ms and 2000 ms at the 120 bpm the onsets describe.
     score.pedals = [
-        { 'xml:id': 'ped0', type: 'sustain', 'midi.onset': 0, 'midi.duration': 1 },
-        { 'xml:id': 'ped1', type: 'sustain', 'midi.onset': 2, 'midi.duration': 1 },
+        { 'xml:id': 'ped0', type: 'sustain', 'milliseconds.date': 0, 'milliseconds.date.end': 1000 },
+        { 'xml:id': 'ped1', type: 'sustain', 'milliseconds.date': 2000, 'milliseconds.date.end': 3000 },
     ]
     return score
 }
 
 const fitPedals = (score: ReturnType<typeof pedalledScore>, depth = SUSTAIN_DEPTH) => {
-    const mpm = new MPM()
+    const mpm = createMpm()
     const chain = [
         new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: 7 * QUARTER, beatLength: 0.25, silentOnsets: [],
@@ -73,14 +75,14 @@ describe('pedalling reaches the renderer', () => {
         const score = pedalledScore()
         const mpm = fitPedals(score)
 
-        const movements = mpm.getInstructions('movement', 'global')
+        const movements = getInstructions(mpm, 'movement', 'global')
             .sort((a, b) => a.date - b.date)
 
         // Two pedal marks, each a start and the point it arrives at full depth.
         expect(movements).toHaveLength(4)
         expect(movements[0].date).toBeCloseTo(0, 6)
         expect(movements[0].position).toBe(0)
-        expect(movements[0]['transition.to']).toBe(SUSTAIN_DEPTH)
+        expect(movements[0].transitionTo).toBe(SUSTAIN_DEPTH)
         expect(movements[1].date).toBeCloseTo(RAMP_TICKS, 6)
         expect(movements[1].position).toBe(SUSTAIN_DEPTH)
 
@@ -94,7 +96,7 @@ describe('pedalling reaches the renderer', () => {
     })
 
     test('the fitted movementMap is structurally sound', () => {
-        assertWellFormed(fitPedals(pedalledScore()).toXML(), 'the fitted pedal MPM')
+        assertWellFormed(exportMPM(fitPedals(pedalledScore())), 'the fitted pedal MPM')
     })
 
     /**
@@ -105,9 +107,9 @@ describe('pedalling reaches the renderer', () => {
     test('espressivo renders it as a sustain controller stream that reaches full depth', () => {
         const score = pedalledScore()
         const mpm = fitPedals(score)
-        const msmXml = score.serialize(false)!
+        const msmXml = score.serialize()!
 
-        const stream = sustainStream(msmXml, mpm.toXML())
+        const stream = sustainStream(msmXml, exportMPM(mpm))
         expect(stream, 'no sustain stream in the rendered performance').toBeDefined()
         expect(stream!.ccNumber).toBe(64)
         expect(stream!.points.length).toBeGreaterThan(1)
@@ -123,11 +125,10 @@ describe('pedalling reaches the renderer', () => {
      * asked for, silently (issue #46).
      */
     test('a depth of 0 is a depth, not an absent option', () => {
-        const movements = fitPedals(pedalledScore(), 0)
-            .getInstructions('movement', 'global')
+        const movements = getInstructions(fitPedals(pedalledScore(), 0), 'movement', 'global')
             .sort((a, b) => a.date - b.date)
 
-        expect(movements[0]['transition.to']).toBe(0)
+        expect(movements[0].transitionTo).toBe(0)
         expect(movements[1].position).toBe(0)
     })
 
@@ -140,6 +141,6 @@ describe('pedalling reaches the renderer', () => {
             + '<performance name="empty" pulsesPerQuarter="720">'
             + '<global><header/><dated/></global></performance></mpm>'
 
-        expect(sustainStream(score.serialize(false)!, empty)).toBeUndefined()
+        expect(sustainStream(score.serialize()!, empty)).toBeUndefined()
     })
 })

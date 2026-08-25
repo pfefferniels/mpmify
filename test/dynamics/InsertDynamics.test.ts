@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { Alignment } from "../../src/alignment"
+import { Mpm, createMpm, exportMPM, getInstructions } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
 import { deriveResidual } from "../../src/residual"
 
 /**
- * Quickly generates a simple MSM note
+ * Quickly generates a simple aligned note
  * @note Example for duration and position: 0.25 = quarter note etc.
  */
 const generateNote = (position: number, duration: number, part: number = 1) => ({
@@ -21,34 +21,34 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
     'midi.pitch': 67
 })
 
-const msmFixture = () => new MSM([
+const msmFixture = () => new Alignment([
     {
         ...generateNote(0, 0.25),
-        'midi.onset': 1,
-        'midi.duration': 1,
-        'midi.velocity': 50
+        'milliseconds.date': 1000,
+        'milliseconds.date.end': 2000,
+        velocity: 50
     },
     {
         ...generateNote(0.25, 0.25),
-        'midi.onset': 2,
-        'midi.duration': 2,
-        'midi.velocity': 75
+        'milliseconds.date': 2000,
+        'milliseconds.date.end': 4000,
+        velocity: 75
     },
     {
         ...generateNote(0.5, 0.25),
-        'midi.onset': 3,
-        'midi.duration': 3,
-        'midi.velocity': 100
+        'milliseconds.date': 3000,
+        'milliseconds.date.end': 6000,
+        velocity: 100
     }],
     { numerator: 3, denominator: 4 })
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: InsertDynamicsInstructions, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const callTransform = (transformer: InsertDynamicsInstructions, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const run = (msm: MSM, mpm: MPM) => callTransform(new InsertDynamicsInstructions({
+const run = (msm: Alignment, mpm: Mpm) => callTransform(new InsertDynamicsInstructions({
     scope: 'global',
     from: 0,
     to: msm.lastDate(),
@@ -57,14 +57,14 @@ const run = (msm: MSM, mpm: MPM) => callTransform(new InsertDynamicsInstructions
 
 test('it fits one <dynamics> across the range, from the first velocity to the last', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
-    const dynamics = mpm.getInstructions('dynamics', 'global')
+    const dynamics = getInstructions(mpm, 'dynamics', 'global')
     expect(dynamics[0].date).toBe(0)
     expect(dynamics[0].volume).toBe(50)
-    expect(dynamics[0]['transition.to']).toBe(100)
+    expect(dynamics[0].transitionTo).toBe(100)
 })
 
 
@@ -74,7 +74,7 @@ test('it fits one <dynamics> across the range, from the first velocity to the la
 
 test('the fitted curve explains the notes at both ends of its span exactly', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
@@ -92,12 +92,12 @@ test('the fitted curve explains the notes at both ends of its span exactly', () 
 
 test('the fitting window is not written into the document', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
     // `endDate` is a working field of the fit, not an MPM attribute. See old-bugs.md.
-    expect(mpm.toXML()).not.toContain('endDate')
+    expect(exportMPM(mpm)).not.toContain('endDate')
 })
 
 
@@ -114,7 +114,7 @@ test('the fitting window is not written into the document', () => {
  */
 test('a phantom velocity of 0 is used, not read as an absent one', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     callTransform(new InsertDynamicsInstructions({
         scope: 'global',
@@ -123,21 +123,21 @@ test('a phantom velocity of 0 is used, not read as an absent one', () => {
         phantomVelocities: new Map([[msm.lastDate(), 0]]),
     }), msm, mpm)
 
-    expect(mpm.getInstructions('dynamics', 'global')[0]['transition.to']).toBe(0)
+    expect(getInstructions(mpm, 'dynamics', 'global')[0].transitionTo).toBe(0)
 })
 
 /**
- * `0 / 0` is not a velocity. A date with neither a phantom nor a note carrying `midi.velocity`
- * has nothing to contribute, and a point whose velocity is NaN is not a point.
+ * `0 / 0` is not a velocity. A date with neither a phantom nor a note carrying a `velocity` has
+ * nothing to contribute, and a point whose velocity is NaN is not a point.
  */
 test('a chord with no measured velocity contributes no point rather than a NaN one', () => {
     const msm = msmFixture()
     for (const note of msm.allNotes) {
-        (note as Partial<typeof note>)['midi.velocity'] = undefined
+        (note as Partial<typeof note>).velocity = undefined
     }
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
-    expect(mpm.getInstructions('dynamics', 'global')).toHaveLength(0)
+    expect(getInstructions(mpm, 'dynamics', 'global')).toHaveLength(0)
 })

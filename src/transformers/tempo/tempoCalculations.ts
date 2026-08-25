@@ -17,9 +17,9 @@
  *
  * The last of those is a behaviour change worth stating plainly: a document with
  * `meanTempoAt="x"` used to fit quietly against a ramp the renderer would never draw, and now
- * produces `NaN` — which `view.ts` refuses to write. That is the intended outcome. The renderer's
- * answer is the one that decides whether a fit is right, so matching it is correctness and not
- * precision.
+ * produces `NaN` — which `auditInstructions` refuses to let a transformer leave standing. That is
+ * the intended outcome. The renderer's answer is the one that decides whether a fit is right, so
+ * matching it is correctness and not precision.
  *
  * What is genuinely mpmify's stays here: the inverse direction — {@link ticksForConstantTempo}
  * and {@link dateAtMilliseconds}, which answer "which tick is this millisecond" and have no
@@ -27,14 +27,20 @@
  * desks drive, which now measure with the renderer's quadrature instead of their own.
  */
 import { TempoMap, resolveTempo, tempoAt, type Tempo as ResolvedTempo } from 'espressivo'
-import { Tempo } from "../../mpm";
+import type { InstructionOptions } from "../../mpm";
 import { beatLengthInTicks, PULSES_PER_QUARTER } from "../../ppq";
 
 export interface WithEndDate {
     endDate: number
 }
 
-export type TempoWithEndDate = Tempo & WithEndDate
+/**
+ * A `<tempo>` as the document states it, plus the date the next one takes over.
+ *
+ * `@endDate` is not an MPM attribute and never was: it is the window a span is evaluated over,
+ * which every one of these functions needs and which the instruction itself does not carry.
+ */
+export type TempoWithEndDate = InstructionOptions<'tempo'> & WithEndDate
 
 // ── the bridge to espressivo ──────────────────────────────────────
 
@@ -63,7 +69,7 @@ export const resolveSpan = (tempo: TempoWithEndDate): ResolvedTempo => resolveTe
         beatLength: tempo.beatLength,
     },
     String(tempo.bpm),
-    tempo['transition.to'] === undefined ? null : String(tempo['transition.to']),
+    tempo.transitionTo === undefined ? null : String(tempo.transitionTo),
     tempo.meanTempoAt === undefined ? null : String(tempo.meanTempoAt),
     // No style: mpmify writes numeric `@bpm` throughout, and a `<tempoDef>` it did not write is
     // not in scope here anyway. An unresolvable name therefore lands on meico's 100.0.
@@ -184,13 +190,11 @@ export function fitMeanTempoAt(
         // A unit span, so `tempoAt`'s progress term is `x` itself and nothing is lost to the
         // division. `beatLength` does not enter the tempo curve at all.
         const curve = resolveSpan({
-            type: 'tempo',
-            'xml:id': '',
             date: 0,
             endDate: 1,
             beatLength: 0.25,
             bpm: from.bpm,
-            'transition.to': to.bpm,
+            transitionTo: to.bpm,
             meanTempoAt: im,
         })
         let error = 0
@@ -233,13 +237,11 @@ export function computeElapsedMs(
 
     const endDate = segLengthBeats * PULSES_PER_QUARTER
     return millisecondsAt(endDate, resolveSpan({
-        type: 'tempo',
-        'xml:id': '',
         date: 0,
         endDate,
         beatLength: 0.25,
         bpm: startBpm,
-        'transition.to': endBpm,
+        transitionTo: endBpm,
         meanTempoAt,
     }))
 }
@@ -335,7 +337,7 @@ export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) =>
  */
 export const ticksForConstantTempo = (
     milliseconds: number,
-    tempo: Pick<Tempo, 'bpm' | 'beatLength'>
+    tempo: Pick<InstructionOptions<'tempo'>, 'bpm' | 'beatLength'>
 ): number => (milliseconds * Number(tempo.bpm) * tempo.beatLength * PULSES_PER_QUARTER) / 15000.0
 
 /** How close {@link dateAtMilliseconds} gets, where the iteration it replaces stopped at 1 ms. */

@@ -1,43 +1,8 @@
-import { InstructionType, MPM, Scope } from "../mpm";
-import { MSM } from "../msm";
-import { MPMRecording } from "./MPMRecording";
+import { auditInstructions, fingerprintInstructions, getInstructions, InstructionType, Scope } from "../mpm";
+import { Alignment } from "../alignment";
 import { Residual } from "../residual";
+import { Mpm } from "espressivo";
 import { v4 } from "uuid";
-type WithId = { id: string };
-type WithActor = { actor?: { name: string; sameAs: string[]; role?: string } };
-type WithNote = { note?: string };
-
-export const beliefValues = [
-    'authentic',
-    'plausible',
-    'speculative',
-    'unfounded'
-] as const;
-
-export type Certainty = typeof beliefValues[number];
-
-export interface Argumentation<T extends string = 'simpleArgumentation'> extends WithActor, WithNote, WithId {
-    type: T;
-    conclusion: ActivityBelief;
-    continue?: string;  // id of the predecessor argumentation in the chain
-}
-
-export const activityMotivations = [
-    'move',
-    'intensify',
-    'relax',
-    'calm',
-] as const;
-
-export type ActivityMotivation = typeof activityMotivations[number];
-
-/**
- * For now both, E7 and I2
- */
-export interface ActivityBelief extends WithId, WithNote {
-    motivation: ActivityMotivation
-    certainty: Certainty
-}
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface TransformationOptions {
@@ -61,10 +26,15 @@ export interface Transformer {
     id: string
     readonly name: string
     options: TransformationOptions
+    /**
+     * The `xml:id`s of the MPM elements this call is answerable for, as of its last run.
+     *
+     * Derived, never declared — see {@link AbstractTransformer.run}. It is what a work file's
+     * segments name, and what the bake turns into spans.
+     */
     created: string[]
-    run(msm: MSM, mpm: MPM): void
+    run(msm: Alignment, mpm: Mpm): void
     readonly requires: Array<TransformerConstructor>
-    argumentation: Argumentation
 }
 
 /**
@@ -76,51 +46,52 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     options: OptionsType
     created: string[] = []
 
-    /**
-     * Assigned by whoever builds the chain — `importWork` off a saved file, the desk when the
-     * user creates or edits one — never by the transformer itself, which is why there is no
-     * initializer here and why `run` reads it through `?.`.
-     *
-     * Declared as definitely assigned rather than optional because the contract holds on every
-     * transformer that reaches a chain, and `Transformer.argumentation` is consumed as required
-     * downstream. The window in which it is genuinely absent is between `new` and the caller's
-     * next statement.
-     */
-    argumentation!: Argumentation;
-
     abstract readonly requires: Array<TransformerConstructor>
 
     protected constructor(options: OptionsType) {
         this.options = options
     }
 
-    // this method should not be overridden
-    public run(msm: MSM, mpm: MPM) {
-        const mpmRecording = new MPMRecording(mpm)
-        this.transform(msm, mpmRecording)
-        this.created = mpmRecording.created
+    /**
+     * Run the transformer and record which MPM elements it is answerable for.
+     *
+     * `created` is **derived**, by fingerprinting every instruction before and after — the same
+     * move `src/residual/` made, and for the same reason. Nothing intercepts a write, which is
+     * what lets `transform` write straight through espressivo's own maps.
+     *
+     * "Answerable for", not "inserted": the diff sees an instruction a transformer *changed* as
+     * well as one it added, so `StylizeArticulation` naming an articulation and
+     * `CombineAdjacentRubatos` folding two frames together are both attributed.
+     *
+     * Not to be overridden.
+     */
+    public run(msm: Alignment, mpm: Mpm) {
+        const before = fingerprintInstructions(mpm)
+        this.transform(msm, mpm)
 
-        this.insertMetadata(mpm)
+        const { fingerprints, unnamed, nonFinite } = auditInstructions(mpm)
+
+        if (unnamed.length > 0) {
+            throw new Error(
+                `${this.name} left ${String(unnamed.length)} instruction(s) with no xml:id `
+                + `(${unnamed.slice(0, 3).join(', ')}). One without an id cannot be attributed `
+                + 'to the transformer that wrote it — pass `id` in the options.'
+            )
+        }
+        if (nonFinite.length > 0) {
+            throw new Error(
+                `${this.name} wrote ${nonFinite.slice(0, 3).join(', ')}: an MPM attribute must be `
+                + 'a finite number. Whatever computed it produced NaN or an infinity — look '
+                + 'there, not here.'
+            )
+        }
+
+        this.created = [...fingerprints]
+            .filter(([id, xml]) => before.get(id) !== xml)
+            .map(([id]) => id)
     }
 
-    protected abstract transform(msm: MSM, mpm: MPM): void
-
-    private insertMetadata(mpm: MPM) {
-        this.created.forEach(id => {
-            const instruction = mpm.findInstructionById(id)
-            if (!instruction) {
-                return
-            }
-
-            const newCorresp = this.argumentation?.id || this.id
-            if (!instruction.corresp) {
-                instruction.corresp = newCorresp
-            }
-            else if (!instruction.corresp.split(' ').includes(newCorresp)) {
-                instruction.corresp += ' ' + newCorresp
-            }
-        })
-    }
+    protected abstract transform(msm: Alignment, mpm: Mpm): void
 }
 
 export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
@@ -133,15 +104,15 @@ export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
  * `tempo_0_1`, `tempo_0_2` remain, the count is 2 and `tempo_0_2` is taken (issue #30).
  * `ApproximateLogarithmicTempo` removes and re-inserts its instructions on every refit, so that
  * is ordinary operation rather than a corner case — and a duplicate id is not a cosmetic
- * problem: `MPMRecording.created` records ids and `AbstractTransformer.insertMetadata` resolves
- * them back through `findInstructionById` to write `@corresp`, so a collision attributes an
- * argumentation to the wrong element without saying anything.
+ * problem: {@link AbstractTransformer.run} derives `created` by fingerprinting instructions *by
+ * id*, so two elements sharing one id look like one element, and whichever of them was written
+ * second is the only one anything can be answerable for.
  *
  * The scan is over every instruction of the type rather than only those at the date, because an
  * id is only unique if it is unique in the document.
  */
-export const generateId = (type: InstructionType, date: number, mpm: MPM) => {
-    const taken = new Set(mpm.getInstructions(type).map(instruction => instruction['xml:id']))
+export const generateId = (type: InstructionType, date: number, mpm: Mpm) => {
+    const taken = new Set(getInstructions(mpm, type).map(instruction => instruction.id))
     let candidate = `${type}_${date}`
     for (let n = 1; taken.has(candidate); n++) {
         candidate = `${type}_${date}_${n}`
@@ -177,7 +148,7 @@ type Range = {
  */
 export const getRange = (
     transformer: TransformationOptions | Transformer[],
-    msm: MSM,
+    msm: Alignment,
     residual?: Residual
 ): Range | undefined => {
     if (Array.isArray(transformer)) {

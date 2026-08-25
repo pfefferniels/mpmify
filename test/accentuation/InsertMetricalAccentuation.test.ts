@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { describe, expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
-import { AccentuationPatternDef, Dynamics, MPM, Tempo } from "../../src/mpm"
+import { Alignment, AlignedNote } from "../../src/alignment"
+import { Mpm, createMpm, getDefinitions, getInstructions, requireMap } from "../../src/mpm"
 import { InsertMetricalAccentuation } from "../../src/transformers/accentuation"
 import { PULSES_PER_QUARTER } from "../../src/ppq"
 
@@ -12,13 +12,13 @@ import { PULSES_PER_QUARTER } from "../../src/ppq"
  * quantity rather than the recorded velocities directly.
  *
  * A single flat `<dynamics>` makes the two the same thing up to a constant: espressivo renders
- * every note at `volume`, so `residual = midi.velocity - volume` exactly, with no rounding to
+ * every note at `volume`, so `residual = velocity - volume` exactly, with no rounding to
  * work around. Everything below is written in terms of the residual and the fixture adds the
  * constant back.
  */
 const VOLUME = 64
 
-const note = (index: number, velocity: number): MsmNote => ({
+const note = (index: number, velocity: number): AlignedNote => ({
     'xml:id': `n_${index}`,
     date: index * PULSES_PER_QUARTER,
     part: 1,
@@ -27,10 +27,10 @@ const note = (index: number, velocity: number): MsmNote => ({
     accidentals: 0,
     duration: PULSES_PER_QUARTER,
     'midi.pitch': 60,
-    'midi.onset': index * 500,
-    'midi.duration': 500,
-    'midi.velocity': velocity,
-} as MsmNote)
+    'milliseconds.date': index * 500,
+    'milliseconds.date.end': index * 500 + 500,
+    velocity,
+} as AlignedNote)
 
 /**
  * The residual shape one bar carries, as a fraction of that bar's scale.
@@ -59,7 +59,7 @@ const SHAPE = [0.3, 1, 0.5, 0.2]
  * exits disagreeing.
  */
 const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
-    const notes: MsmNote[] = []
+    const notes: AlignedNote[] = []
     for (let bar = 0; bar < scales.length; bar++) {
         for (let beat = 0; beat < 4; beat++) {
             notes.push(note(bar * 4 + beat, VOLUME + SHAPE[beat] * scales[bar]))
@@ -67,21 +67,17 @@ const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
     }
     if (closingDownbeat) notes.push(note(scales.length * 4, VOLUME))
 
-    const msm = new MSM(notes, { numerator: 4, denominator: 4 })
+    const msm = new Alignment(notes, { numerator: 4, denominator: 4 })
 
-    const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 120, beatLength: 0.25,
-    }, 'global')
-    mpm.insertInstruction<Dynamics>({
-        type: 'dynamics', 'xml:id': 'd1', date: 0, volume: VOLUME,
-    }, 'global')
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+    requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: VOLUME })
 
     return { msm, mpm }
 }
 
 /** Call the protected `transform` method for testing */
-const run = (msm: MSM, mpm: MPM, scaleTolerance: number) => {
+const run = (msm: Alignment, mpm: Mpm, scaleTolerance: number) => {
     const transformer = new InsertMetricalAccentuation({
         scope: 'global',
         name: 'metre',
@@ -90,13 +86,12 @@ const run = (msm: MSM, mpm: MPM, scaleTolerance: number) => {
         beatLength: 0.25,
         scaleTolerance,
     })
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const fitted = (mpm: MPM) => mpm
-    .getInstructions('accentuationPattern', 'global')
-    .find(p => p["name.ref"] === 'metre')!
+const fitted = (mpm: Mpm) => getInstructions(mpm, 'accentuationPattern', 'global')
+    .find(p => p.accentuationPatternDefName === 'metre')!
 
 describe('the fixture drives the loop it claims to', () => {
     // Everything below reads `@scale` as a mean over a known set of bars. That only means
@@ -110,15 +105,18 @@ describe('the fixture drives the loop it claims to', () => {
         expect(pattern.loop).toBe(true)
 
         // The neutral pattern closing the loop marks where the fold stopped: after bar 3.
-        const neutral = mpm.getInstructions('accentuationPattern', 'global')
-            .find(p => p["name.ref"] === 'neutral')!
+        const neutral = getInstructions(mpm, 'accentuationPattern', 'global')
+            .find(p => p.accentuationPatternDefName === 'neutral')!
         expect(neutral.date).toBe(12 * PULSES_PER_QUARTER)
 
         // The definition is the prototype's shape, normalised by the prototype's own scale.
-        const def = mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', 'global')
-            .find(d => d.name === 'metre')!
-        expect(def.children.map(a => a.beat)).toEqual([1, 2, 3, 4])
-        expect(def.children.map(a => a.value)).toEqual(SHAPE)
+        // Each accentuation is espressivo's `[beat, value, transition.from, transition.to]`
+        // tuple, so the first two slots are what the shape is read out of.
+        const def = getDefinitions(mpm, 'accentuationPatternDef', 'global')
+            .find(d => d.getName() === 'metre')!
+        const accentuations = def.getAllAccentuations().map(a => a.key)
+        expect(accentuations.map(([beat]) => beat)).toEqual([1, 2, 3, 4])
+        expect(accentuations.map(([, value]) => value)).toEqual(SHAPE)
     })
 })
 
@@ -171,8 +169,8 @@ describe('the scale tolerance is measured against the prototype', () => {
         const pattern = fitted(mpm)
         expect(pattern.scale).toBe(12)
 
-        const neutral = mpm.getInstructions('accentuationPattern', 'global')
-            .find(p => p["name.ref"] === 'neutral')!
+        const neutral = getInstructions(mpm, 'accentuationPattern', 'global')
+            .find(p => p.accentuationPatternDefName === 'neutral')!
         expect(neutral.date).toBe(12 * PULSES_PER_QUARTER)
     })
 
@@ -192,9 +190,8 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
     // the `while` condition simply goes false there is no rejected cell: `currentCell` is the
     // one that was just accepted, and the neutral landed a bar early, on top of a repetition
     // the loop had validated, cancelling it.
-    const neutralsIn = (mpm: MPM) => mpm
-        .getInstructions('accentuationPattern', 'global')
-        .filter(p => p["name.ref"] === 'neutral')
+    const neutralsIn = (mpm: Mpm) => getInstructions(mpm, 'accentuationPattern', 'global')
+        .filter(p => p.accentuationPatternDefName === 'neutral')
 
     test('a piece ending on the bar line closes the loop after the last bar, not before it', () => {
         // Without the closing downbeat the last note fills bar 3, so `msm.end` is the bar line
@@ -218,13 +215,12 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
 
         // A second accentuation desk starting at bar 4 — the ordinary shape of two adjacent
         // desks, and what makes this exit reachable on a piece that does not end flush.
-        mpm.insertInstruction({
-            type: 'accentuationPattern',
-            'xml:id': 'next_desk',
-            'name.ref': 'other',
+        requireMap(mpm, 'accentuationPattern', 'global').addAccentuationPattern({
+            id: 'next_desk',
+            accentuationPatternDefName: 'other',
             date: 12 * PULSES_PER_QUARTER,
             scale: 7,
-        }, 'global')
+        })
 
         run(msm, mpm, 1)
 
@@ -233,14 +229,20 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
         expect(pattern.scale).toBe(10)
 
         // The run was accepted right up to the following desk, so nothing may cancel it before
-        // then. The neutral due at 12 quarters is where the next desk already takes over, and
-        // `insertInstruction` merges it into that desk rather than duplicating the date — which
-        // leaves the desk's own pattern in place, as it must.
+        // then, and the desk's own pattern has to survive intact.
+        //
+        // Note what this no longer covers. The neutral is due at 12 quarters, which is the date
+        // the next desk already occupies. The write this replaces merged the two: the desk
+        // carried a `@name.ref` and a `@scale` already, so the neutral's were dropped and no
+        // second element ever appeared. `addAccentuationPattern` appends instead, so the map now
+        // holds the desk *and* a neutral at that date, the neutral last. The assertions below
+        // still hold — they ask about dates strictly before 12 quarters, and about the desk
+        // element itself — but they do not see the neutral sitting on top of it.
         expect(neutralsIn(mpm).filter(n => n.date < 12 * PULSES_PER_QUARTER)).toEqual([])
 
-        const nextDesk = mpm.getInstructions('accentuationPattern', 'global')
-            .find(p => p["xml:id"] === 'next_desk')!
-        expect(nextDesk["name.ref"]).toBe('other')
+        const nextDesk = getInstructions(mpm, 'accentuationPattern', 'global')
+            .find(p => p.id === 'next_desk')!
+        expect(nextDesk.accentuationPatternDefName).toBe('other')
         expect(nextDesk.scale).toBe(7)
     })
 })
@@ -264,16 +266,14 @@ describe('a beat grid that is not a power of two', () => {
             ...note(0, VOLUME + shape * 10),
             'xml:id': `t_${index}`,
             date: index * TRIPLET_TICKS,
-        } as MsmNote))
+        } as AlignedNote))
 
-        const msm = new MSM(notes, { numerator: 4, denominator: 4 })
-        const mpm = new MPM()
-        mpm.insertInstruction<Tempo>({
-            type: 'tempo', 'xml:id': 't1', date: 0, bpm: 120, beatLength: 0.25,
-        }, 'global')
-        mpm.insertInstruction<Dynamics>({
-            type: 'dynamics', 'xml:id': 'd1', date: 0, volume: VOLUME,
-        }, 'global')
+        const msm = new Alignment(notes, { numerator: 4, denominator: 4 })
+        const mpm = createMpm()
+        requireMap(mpm, 'tempo', 'global')
+            .addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+        requireMap(mpm, 'dynamics', 'global')
+            .addDynamics({ id: 'd1', date: 0, volume: VOLUME })
         return { msm, mpm }
     }
 
@@ -288,18 +288,17 @@ describe('a beat grid that is not a power of two', () => {
             beatLength: TRIPLET,
             scaleTolerance: 0,
         })
-        type Transformable = { transform(msm: MSM, mpm: MPM): void }
+        type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
         ;(transformer as unknown as Transformable).transform(msm, mpm)
 
-        const def = mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', 'global')
-            .find(d => d.name === 'triplets')!
+        const def = getDefinitions(mpm, 'accentuationPatternDef', 'global')
+            .find(d => d.getName() === 'triplets')!
 
         // Seven samples, and an accentuation for every one but the last — which only names where
         // the one before it transitions to. The accumulating loop lost the samples at 3 and 6
         // beats, which is where the drift first shows.
-        expect(def.children).toHaveLength(6)
-        expect(def.children.map(a => a.beat)).toEqual(
-            [0, 1, 2, 3, 4, 5].map(index => 4 * index * TRIPLET + 1)
-        )
+        const beats = def.getAllAccentuations().map(({ key: [beat] }) => beat)
+        expect(beats).toHaveLength(6)
+        expect(beats).toEqual([0, 1, 2, 3, 4, 5].map(index => 4 * index * TRIPLET + 1))
     })
 })

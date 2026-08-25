@@ -1,5 +1,14 @@
-import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM } from "../../mpm";
-import { MSM } from "../../msm";
+import {
+    AccentuationPatternDef,
+    ensureDefaultStyle,
+    getDefinitions,
+    getInstructions,
+    insertDefinition,
+    Mpm,
+    requireMap,
+    unwrap,
+} from "../../mpm";
+import { Alignment } from "../../alignment";
 import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
@@ -18,6 +27,22 @@ export interface InsertMetricalAccentuationOptions extends ScopedTransformationO
 type Velocity = {
     beat: number
     avgVelocityChange: number
+}
+
+/**
+ * One fitted accentuation, before it is an `<accentuation>` child of anything.
+ *
+ * espressivo's `AccentuationPatternDef.addAccentuation` takes the four numbers positionally and
+ * owns the element from then on, so the fit passes this record around and the def is built in
+ * exactly one place ({@link InsertMetricalAccentuation.buildDef}). `id` is optional because the
+ * neutral pattern's single accentuation has never carried one.
+ */
+type FittedAccentuation = {
+    id?: string
+    beat: number
+    value: number
+    transitionFrom: number
+    transitionTo: number
 }
 
 export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetricalAccentuationOptions> {
@@ -56,7 +81,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
      */
     private extractVelocities(
         { from: start, to: end, beatLength }: InsertMetricalAccentuationOptions,
-        msm: MSM,
+        msm: Alignment,
         residual: Residual
     ): Velocity[] {
         const velocities: Velocity[] = []
@@ -75,7 +100,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 .reduce((acc, note) => acc + residual.of(note)!.velocity!, 0) / notesAtDate.length
 
             velocities.push({
-                // A score may carry no time signature, and `MSM.build()` writes out 4/4 when it
+                // A score may carry no time signature, and `Alignment.build()` writes out 4/4 when it
                 // does not. Beat numbers here have to be counted in the same bar the score will
                 // be published in, or the pattern would be indexed against a meter nobody sees.
                 beat: (msm.timeSignature?.denominator || 4) * beat + 1,
@@ -89,7 +114,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         return Math.max(...velocities.map(v => Math.abs(v.avgVelocityChange)))
     }
 
-    private calculateAccentuations(velocities: Velocity[], neutralEnd?: boolean): Accentuation[] {
+    private calculateAccentuations(velocities: Velocity[], neutralEnd?: boolean): FittedAccentuation[] {
         const scale = this.calculateScale(velocities)
         if (scale === 0) return []
 
@@ -104,32 +129,46 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
                 const scaled = v.avgVelocityChange / scale
                 return ({
-                    type: 'accentuation' as const,
-                    'xml:id': 'accentuation_' + v4(),
+                    id: 'accentuation_' + v4(),
                     beat: v.beat,
                     value: scaled,
-                    'transition.from': scaled,
-                    'transition.to': transitionTo
+                    transitionFrom: scaled,
+                    transitionTo
                 })
             })
             .filter(a => a !== null)
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        if (!mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', this.options.scope)
-            .find(def => def.name === 'neutral')) {
-            mpm.insertDefinition({
-                type: 'accentuationPatternDef',
-                name: 'neutral',
-                length: 0.25,
-                children: [{
-                    type: 'accentuation',
-                    beat: 1,
-                    value: 0,
-                    "transition.from": 0,
-                    "transition.to": 0
-                }]
-            }, this.options.scope)
+    /** An `accentuationPatternDef` carrying these accentuations. */
+    private buildDef(
+        name: string,
+        length: number,
+        accentuations: readonly FittedAccentuation[],
+    ): AccentuationPatternDef {
+        const def = unwrap(AccentuationPatternDef.fromNameLength(name, length))
+        for (const accentuation of accentuations) {
+            def.addAccentuation(
+                accentuation.beat,
+                accentuation.value,
+                accentuation.transitionFrom,
+                accentuation.transitionTo,
+                accentuation.id,
+            )
+        }
+        return def
+    }
+
+    protected transform(msm: Alignment, mpm: Mpm) {
+        if (!getDefinitions(mpm, 'accentuationPatternDef', this.options.scope)
+            .find(def => def.getName() === 'neutral')) {
+            insertDefinition(
+                mpm,
+                'accentuationPatternDef',
+                this.buildDef('neutral', 0.25, [
+                    { beat: 1, value: 0, transitionFrom: 0, transitionTo: 0 }
+                ]),
+                this.options.scope
+            )
         }
 
         const cell = {
@@ -139,7 +178,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             neutralEnd: this.options.neutralEnd
         }
 
-        const nextCell = mpm.getInstructions('accentuationPattern', this.options.scope)
+        const nextCell = getInstructions(mpm, 'accentuationPattern', this.options.scope)
             .find(c => c.date > this.options.from);
 
         // What the dynamics curve leaves unexplained, per note — the quantity this used to read
@@ -214,47 +253,43 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             acceptedThrough = currentCell.end
         }
 
-        const accentuationPatternDef: AccentuationPatternDef = {
-            type: 'accentuationPatternDef',
-            name: this.options.name,
-            length: ((cell.end - cell.start) / PULSES_PER_WHOLE) * (msm.timeSignature?.denominator || 4),
-            children: accentuations,
-        }
+        const accentuationPatternDef = this.buildDef(
+            this.options.name,
+            ((cell.end - cell.start) / PULSES_PER_WHOLE) * (msm.timeSignature?.denominator || 4),
+            accentuations,
+        )
 
-        mpm.insertDefinition(accentuationPatternDef, this.options.scope)
+        insertDefinition(mpm, 'accentuationPatternDef', accentuationPatternDef, this.options.scope)
 
         const loop = acceptedThrough > cell.end
-        const newPattern: AccentuationPattern = {
-            type: 'accentuationPattern',
-            'name.ref': accentuationPatternDef.name,
-            "xml:id": generateId('accentuationPattern', cell.start, mpm),
+        const map = requireMap(mpm, 'accentuationPattern', this.options.scope)
+        map.addAccentuationPattern({
+            accentuationPatternDefName: accentuationPatternDef.getName(),
+            id: generateId('accentuationPattern', cell.start, mpm),
             date: cell.start,
             scale,
             loop: loop || undefined,
-        }
-        mpm.insertInstruction(newPattern, this.options.scope)
+        })
 
         if (loop) {
-            mpm.insertInstruction({
-                type: 'accentuationPattern',
-                'name.ref': 'neutral',
+            map.addAccentuationPattern({
+                accentuationPatternDefName: 'neutral',
                 date: acceptedThrough,
-                "xml:id": generateId('accentuationPattern', acceptedThrough, mpm),
+                id: generateId('accentuationPattern', acceptedThrough, mpm),
                 scale: 0,
                 loop: undefined
-            }, this.options.scope)
+            })
         }
 
 
-        mpm.ensureDefaultStyle('accentuationPattern', this.options.scope)
+        ensureDefaultStyle(mpm, 'accentuationPattern', this.options.scope)
     }
 
-
     // `accentuationAt` used to live here: a private evaluator of an `<accentuationPatternDef>`
-    // at a beat, with no caller since the reduction stopped carrying its own remainder. What it
-    // computed is now espressivo's answer, read back through `deriveResidual`, so a second
-    // implementation of the renderer's arithmetic could only ever drift from it. It also held
-    // one of issue #46's truthiness rows — `last["transition.to"] || last.value`, which reads a
-    // pattern ending at 0 as one ending at its own value — and deleting it is the honest way to
-    // close that row.
+    // at a beat, with no caller since the residual became derived. What it computed is now
+    // espressivo's answer, read back through `deriveResidual`, so a second implementation of the
+    // renderer's arithmetic could only ever drift from it. It also held one of issue #46's
+    // truthiness rows — `transitionTo || value` on the last accentuation, which reads a pattern
+    // ending at 0 as one ending at its own value — and deleting it is the honest way to close
+    // that row.
 }

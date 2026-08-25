@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM } from "../../src/msm"
-import { MPM, Ornament, Tempo } from "../../src/mpm"
+import { FrameDomain } from "espressivo"
+import { Alignment } from "../../src/alignment"
+import {
+    InstructionOptions, Mpm, OrnamentDraft, createMpm, fillInAt, getInstructions,
+    ornamentDraftOf, requireMap, setOrnamentDraft,
+} from "../../src/mpm"
 import { TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
 import { deriveResidual } from "../../src/residual"
 
@@ -25,30 +29,30 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
  * Call the protected `transform` method for testing, the way the other transformer tests do.
  * Calling it directly type-checks only as long as nobody type-checks the tests.
  */
-const callTransform = (transformer: TranslatePhysicalTimeToTicks, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const callTransform = (transformer: TranslatePhysicalTimeToTicks, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const msmFixture = new MSM(
+const msmFixture = new Alignment(
     [
         {
-            ...generateNote(0, 0.5),    // half note ...
-            'midi.onset': 0,            
-            'midi.duration': 2,         // lasting 2 seconds (i.e. 60bpm)
-            'midi.velocity': 100
+            ...generateNote(0, 0.5),        // half note ...
+            'milliseconds.date': 0,
+            'milliseconds.date.end': 2000,  // lasting 2000 ms (i.e. 60bpm)
+            velocity: 100
         },
         {
-            ...generateNote(0.5, 0.25), // quarter note ...
-            'midi.onset': 2,           
-            'midi.duration': 1,         // lasting 1 seconds (i.e. 60bpm too)
-            'midi.velocity': 100
+            ...generateNote(0.5, 0.25),     // quarter note ...
+            'milliseconds.date': 2000,
+            'milliseconds.date.end': 3000,  // lasting 1000 ms (i.e. 60bpm too)
+            velocity: 100
         },
         {
             ...generateNote(0.75, 0.25),
-            'midi.onset': 3,
-            'midi.duration': 1,
-            'midi.velocity': 100
+            'milliseconds.date': 3000,
+            'milliseconds.date.end': 4000,
+            velocity: 100
         }
     ],
     { numerator: 4, denominator: 4 }
@@ -59,14 +63,13 @@ const msmFixture = new MSM(
 // these ticks — is now `deriveResidual`'s to answer, and it is asserted where the conversion
 // lives. This transformer no longer touches the score at all.
 test('at 60bpm a recorded onset lands on the tick the beat length implies', () => {
-    const mpm = new MPM()
-    mpm.insertInstructions([{
-        'xml:id': 'tempo_el',
-        type: 'tempo',
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({
+        id: 'tempo_el',
         bpm: 60,
         beatLength: 0.25,
         date: 0
-    } as Tempo], 'global')
+    })
 
     const residual = deriveResidual(msmFixture, mpm)
 
@@ -77,44 +80,43 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     // Arrange: a piece under a single constant tempo, so the tick/ms ratio is known exactly.
     // At 60 bpm with beatLength 0.25 a quarter note (720 ticks) lasts 1000 ms, i.e. 0.72
     // ticks per millisecond.
-    const msm = new MSM([
-        { ...generateNote(0, 0.25), 'midi.onset': 0, 'midi.duration': 1, 'midi.velocity': 100 },
-        { ...generateNote(0.25, 0.25), 'midi.onset': 1, 'midi.duration': 1, 'midi.velocity': 100 },
-        { ...generateNote(0.5, 0.25), 'midi.onset': 2, 'midi.duration': 1, 'midi.velocity': 100 },
+    const msm = new Alignment([
+        { ...generateNote(0, 0.25), 'milliseconds.date': 0, 'milliseconds.date.end': 1000, velocity: 100 },
+        { ...generateNote(0.25, 0.25), 'milliseconds.date': 1000, 'milliseconds.date.end': 2000, velocity: 100 },
+        { ...generateNote(0.5, 0.25), 'milliseconds.date': 2000, 'milliseconds.date.end': 3000, velocity: 100 },
     ], { numerator: 4, denominator: 4 })
 
-    const mpm = new MPM()
-    mpm.insertInstructions([{
-        type: 'tempo',
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({
         date: 0,
-        'xml:id': 'tempo_1',
+        id: 'tempo_1',
         beatLength: 0.25,
         bpm: 60,
-    }] as Tempo[], 'global')
+    })
 
-    const physicalArpeggios: Ornament[] = [
-        {
-            type: 'ornament',
-            date: 720,
-            'xml:id': 'ornament_720',
-            "frame.start": -50,
-            frameLength: 100,
-            'time.unit': 'milliseconds',
-            'note.order': 'ascending pitch',
-            'name.ref': 'arpeggio'
-        },
-        {
-            type: 'ornament',
-            date: 1440,
-            'xml:id': 'ornament_1440',
-            "frame.start": -25,
-            frameLength: 50,
-            'time.unit': 'milliseconds',
-            'note.order': 'ascending pitch',
-            'name.ref': 'arpeggio'
-        }
+    // The frame is not an `<ornament>` attribute — it describes the `<temporalSpread>` of the def
+    // the `@name.ref` points at, and until `StylizeOrnamentation` builds that def it is parked on
+    // the element as a draft. So the fixture is written in two halves, the instruction and the
+    // draft, which is exactly how `InsertTemporalSpread` writes one.
+    const physicalArpeggios: [InstructionOptions<'ornament'>, OrnamentDraft][] = [
+        [
+            { date: 720, id: 'ornament_720', noteOrder: 'ascending pitch', nameRef: 'arpeggio' },
+            { frameStart: -50, frameLength: 100, frameDomain: FrameDomain.Milliseconds },
+        ],
+        [
+            { date: 1440, id: 'ornament_1440', noteOrder: 'ascending pitch', nameRef: 'arpeggio' },
+            { frameStart: -25, frameLength: 50, frameDomain: FrameDomain.Milliseconds },
+        ]
     ]
-    mpm.insertInstructions(physicalArpeggios, 'global')
+    const ornaments = requireMap(mpm, 'ornament', 'global')
+    for (const [options, draft] of physicalArpeggios) {
+        setOrnamentDraft(fillInAt(ornaments, options, {
+            localName: 'ornament',
+            add: o => ornaments.addOrnamentV3(o),
+            read: i => ornaments.getOrnamentOptionsOf(i),
+            update: (i, patch) => ornaments.updateOrnamentAt(i, patch),
+        }), draft)
+    }
 
     // Act
     const translate = new TranslatePhysicalTimeToTicks({
@@ -123,8 +125,9 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     callTransform(translate, msm, mpm)
 
     // Assert
-    const transformed = mpm.getInstructions('ornament', 'global')
-    expect(transformed.every(arpeggio => arpeggio["time.unit"] === 'ticks')).toBeTruthy()
-    expect(transformed.map(a => a["frame.start"])).toEqual([-36, -18])
-    expect(transformed.map(a => a.frameLength)).toEqual([72, 36])
+    const drafts = getInstructions(mpm, 'ornament', 'global')
+        .map(arpeggio => ornamentDraftOf(arpeggio.element))
+    expect(drafts.every(draft => draft.frameDomain === FrameDomain.Ticks)).toBeTruthy()
+    expect(drafts.map(d => d.frameStart)).toEqual([-36, -18])
+    expect(drafts.map(d => d.frameLength)).toEqual([72, 36])
 })

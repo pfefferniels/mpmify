@@ -1,12 +1,12 @@
-import { MPM, Ornament } from "../../mpm"
-import { MSM, MsmNote } from "../../msm"
+import { InstructionOptions, Mpm, fillInAt, requireMap, setOrnamentDraft } from "../../mpm"
+import { Alignment, AlignedNote } from "../../alignment"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 
 /**
- * The velocity ramp across an arpeggio, in the normalized units an `<ornament>`'s
- * `transition.from`/`transition.to` use. Named apart from the MPM `dynamicsGradient` element
- * of `mpm/types.ts`, which it is fitted into but is not.
+ * The velocity ramp across an arpeggio, in the normalized units a `<dynamicsGradient>`'s
+ * `transition.from`/`transition.to` use. Named apart from espressivo's `DynamicsGradient`, the
+ * `<ornamentDef>` child it is fitted into but is not.
  */
 export type GradientRange = { from: number, to: number }
 export type DatedGradientRange = Map<number, GradientRange>
@@ -39,13 +39,13 @@ export type InsertDynamicsGradientOptions = ScopedTransformationOptions
 
 /**
  * Interpolates arpeggiated chords as ornaments, inserts them as physical
- * values into the MPM and substracts accordingly from the MIDI onset, so
+ * values into the MPM and substracts accordingly from the recorded onsets, so
  * that after the transformation all notes of the chord will have the same
  * onset.
- * 
- * @note Inserting the dynamics gradient should always take place before 
+ *
+ * @note Inserting the dynamics gradient should always take place before
  * inserting temporal spread, since temporal spread will destroy the original
- * order of MIDI onsets.
+ * order of the recorded onsets.
  */
 export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGradientOptions> {
     name = 'InsertDynamicsGradient'
@@ -68,7 +68,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
      * its only bulk caller was already iterating exactly that map, so the whole score was
      * regrouped once per chord in it.
      */
-    private applyGradient = (mpm: MPM, date: number, chord: MsmNote[], gradient?: GradientRange) => {
+    private applyGradient = (mpm: Mpm, date: number, chord: AlignedNote[], gradient?: GradientRange) => {
         let arpeggioNotes = chord
         if (arpeggioNotes.length === 0) return
 
@@ -91,13 +91,13 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
         // only consider notes with a defined onset time
         arpeggioNotes = arpeggioNotes
-            .filter(note => isDefined(note['midi.onset']))
-            .sort((a, b) => a['midi.onset'] - b['midi.onset'])
+            .filter(note => isDefined(note['milliseconds.date']))
+            .sort((a, b) => a['milliseconds.date'] - b['milliseconds.date'])
 
         // The dynamics gradient is the transition
         // between first and last arpeggio note
-        const firstVel = arpeggioNotes[0]["midi.velocity"]
-        const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
+        const firstVel = arpeggioNotes[0].velocity
+        const lastVel = arpeggioNotes[arpeggioNotes.length - 1].velocity
 
         const diffVel = lastVel - firstVel
         if (diffVel === 0) return
@@ -108,23 +108,36 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
         if (scale === 0) return
 
-        const ornament: Ornament = {
-            'type': 'ornament',
-            'xml:id': generateId('ornament', date, mpm),
+        // `fillInAt`, not `addOrnamentV3`: `InsertTemporalSpread` describes the other half of
+        // this same `<ornament>`, and whichever runs second has to find the first's element.
+        const map = requireMap(mpm, 'ornament', this.options.scope)
+        const options: InstructionOptions<'ornament'> = {
+            id: generateId('ornament', date, mpm),
             date,
-            'name.ref': 'neutralArpeggio',
-            'transition.from': gradient.from,
-            'transition.to': gradient.to,
+            nameRef: 'neutralArpeggio',
             scale
         }
-        mpm.insertInstruction(ornament, this.options.scope)
+        const element = fillInAt(map, options, {
+            localName: 'ornament',
+            add: o => map.addOrnamentV3(o),
+            read: i => map.getOrnamentOptionsOf(i),
+            update: (i, patch) => map.updateOrnamentAt(i, patch),
+        })
+
+        // The ramp's two ends belong on the `<dynamicsGradient>` of the def this ornament will
+        // come to name, and MPM has no place for them on the instruction. They travel parked on
+        // the element until `StylizeOrnamentation` decides which ornaments share a definition.
+        setOrnamentDraft(element, {
+            transitionFrom: gradient.from,
+            transitionTo: gradient.to
+        })
 
         arpeggioNotes.forEach(note => {
-            note['midi.velocity'] = standard
+            note.velocity = standard
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const chords = msm.asChords(this.options?.scope)
 
         if (isSingleGradient(this.options)) {
@@ -145,15 +158,15 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
      * Rewrite the chord's velocities so they rise or fall monotonically in onset order, in
      * whichever direction the chord already leans.
      */
-    private sortVelocities(chord: MsmNote[]): ArpeggioDirection {
+    private sortVelocities(chord: AlignedNote[]): ArpeggioDirection {
         const direction = directionOf(chord)
 
-        const velocities = [...chord.map(note => note['midi.velocity'])];
+        const velocities = [...chord.map(note => note.velocity)];
         velocities.sort((a, b) => direction === 'crescendo' ? a - b : b - a);
         chord
-            .sort((a, b) => a["midi.onset"] - b["midi.onset"])
+            .sort((a, b) => a['milliseconds.date'] - b['milliseconds.date'])
             .forEach((note, i) => {
-                note["midi.velocity"] = velocities[i];
+                note.velocity = velocities[i];
             })
 
         return direction;
@@ -168,16 +181,16 @@ export type ArpeggioDirection = 'crescendo' | 'descrescendo'
  *
  * Sorts the chord by onset, which the callers rely on.
  */
-const directionOf = (chord: MsmNote[]): ArpeggioDirection => {
-    chord.sort((a, b) => a["midi.onset"] - b["midi.onset"])
+const directionOf = (chord: AlignedNote[]): ArpeggioDirection => {
+    chord.sort((a, b) => a['milliseconds.date'] - b['milliseconds.date'])
 
     let loudestPos = 0;
     let quietestPos = 0;
     chord.forEach((note, index) => {
-        if (note['midi.velocity'] > chord[loudestPos]['midi.velocity']) {
+        if (note.velocity > chord[loudestPos].velocity) {
             loudestPos = index;
         }
-        if (note['midi.velocity'] < chord[quietestPos]['midi.velocity']) {
+        if (note.velocity < chord[quietestPos].velocity) {
             quietestPos = index;
         }
     });

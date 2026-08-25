@@ -1,4 +1,4 @@
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 
 export const PPQ = 720
 /** One quarter note, the beat these scores are built on. */
@@ -30,12 +30,12 @@ export interface ScoreSpec {
  * MPM that the renderer ignores shows up as a flat performance rather than hiding behind
  * onsets the score already carried.
  */
-export const buildScore = (spec: ScoreSpec): MSM => {
+export const buildScore = (spec: ScoreSpec): Alignment => {
     const beatTicks = spec.beatTicks ?? QUARTER
     const pitches = spec.pitches ?? [67]
     const gate = spec.gate ?? 1
 
-    const notes: MsmNote[] = []
+    const notes: AlignedNote[] = []
     for (let beat = 0; beat < spec.beats; beat++) {
         pitches.forEach((pitch, voice) => {
             const part = spec.separateParts ? voice + 1 : 1
@@ -48,11 +48,11 @@ export const buildScore = (spec: ScoreSpec): MSM => {
                 accidentals: ACCIDENTALS[pitch % 12],
                 octave: Math.floor(pitch / 12) - 1,
                 'midi.pitch': pitch,
-            } as MsmNote)
+            } as AlignedNote)
         })
     }
 
-    return new MSM(notes, spec.timeSignature ?? { numerator: 4, denominator: 4 })
+    return new Alignment(notes, spec.timeSignature ?? { numerator: 4, denominator: 4 })
 }
 
 /** The date of the last note — the `to` every fitting window ends at. */

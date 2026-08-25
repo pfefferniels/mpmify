@@ -1,5 +1,5 @@
-import { MPM, MSM, AbstractTransformer, generateId } from 'mpmify'
-import type { Tempo, Scope, ScopedTransformationOptions } from 'mpmify'
+import { Alignment, AbstractTransformer, generateId, getInstructions, removeInstruction, requireMap } from 'mpmify'
+import type { InstructionOptions, Mpm, Scope, ScopedTransformationOptions } from 'mpmify'
 
 interface InsertTempoOptions extends ScopedTransformationOptions {
     from: number
@@ -17,20 +17,9 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
 
     constructor(options?: InsertTempoOptions) {
         super(options || { scope: 'global', from: 0, to: 0, bpm: 120, beatLength: 0.25 })
-        if (options) {
-            this.argumentation = {
-                id: this.id,
-                type: 'simpleArgumentation',
-                conclusion: {
-                    id: this.id,
-                    motivation: 'move',
-                    certainty: 'authentic'
-                }
-            }
-        }
     }
 
-    public run(msm: MSM, mpm: MPM) {
+    public run(msm: Alignment, mpm: Mpm) {
         this._boundaryId = undefined
         super.run(msm, mpm)
         if (this._boundaryId) {
@@ -38,31 +27,29 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
         }
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         msm.shiftToFirstOnset()
         const { from, to, bpm, transitionTo, meanTempoAt, beatLength } = this.options
         const scope = this.options.scope
 
         this.removeAffectedTempoInstructions(mpm, scope, from, to)
 
-        const tempo = {
-            type: 'tempo' as const,
-            'xml:id': generateId('tempo', from, mpm),
+        const tempo: InstructionOptions<'tempo'> = {
+            id: generateId('tempo', from, mpm),
             date: from,
-            endDate: to,
             bpm,
             beatLength,
             ...(transitionTo !== undefined ? {
-                'transition.to': transitionTo,
+                transitionTo,
                 meanTempoAt: meanTempoAt ?? 0.5
             } : {})
         }
 
-        mpm.insertInstruction(tempo as Tempo, scope, true)
+        requireMap(mpm, 'tempo', scope).addTempo(tempo)
     }
 
-    private removeAffectedTempoInstructions(mpm: MPM, scope: Scope, from: number, to: number) {
-        const existing = mpm.getInstructions('tempo', scope)
+    private removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, from: number, to: number) {
+        const existing = getInstructions(mpm, 'tempo', scope)
             .slice()
             .sort((a, b) => a.date - b.date)
         if (existing.length === 0) return
@@ -75,30 +62,29 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
             if (effectiveIndex !== -1) {
                 const effectiveTempo = existing[effectiveIndex]
                 if (isCovered(effectiveTempo.date)) {
-                    const restore: Tempo = {
-                        type: 'tempo',
-                        'xml:id': generateId('tempo', boundary, mpm),
+                    const restore: InstructionOptions<'tempo'> = {
+                        id: generateId('tempo', boundary, mpm),
                         date: boundary,
                         beatLength: effectiveTempo.beatLength,
                         bpm: effectiveTempo.bpm
                     }
-                    this._boundaryId = restore['xml:id']
+                    this._boundaryId = restore.id
                     for (const t of existing) {
-                        if (isCovered(t.date)) mpm.removeInstruction(t)
+                        if (isCovered(t.date)) removeInstruction(mpm, t)
                     }
-                    mpm.insertInstruction(restore, scope, false)
+                    requireMap(mpm, 'tempo', scope).addTempo(restore)
                     return
                 }
             }
         }
 
         for (const t of existing) {
-            if (isCovered(t.date)) mpm.removeInstruction(t)
+            if (isCovered(t.date)) removeInstruction(mpm, t)
         }
     }
 }
 
-function findEffectiveTempoIndex(tempos: Tempo[], date: number): number {
+function findEffectiveTempoIndex(tempos: readonly { date: number }[], date: number): number {
     let result = -1
     for (let i = 0; i < tempos.length; i++) {
         if (tempos[i].date <= date) result = i

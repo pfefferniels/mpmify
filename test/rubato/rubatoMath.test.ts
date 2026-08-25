@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { Rubato } from "../../src/mpm"
-import { calculateRubatoOnDate } from "../../src/transformers/rubato/rubatoMath"
+import { calculateRubatoOnDate, RubatoFrame } from "../../src/transformers/rubato/rubatoMath"
 
 /**
  * The warp has to agree with the renderer, and it did not.
@@ -17,9 +16,7 @@ import { calculateRubatoOnDate } from "../../src/transformers/rubato/rubatoMath"
  * Every expectation here is what espressivo resolves the window to, evaluated at the midpoint of
  * a 720-tick frame with the identity intensity.
  */
-const rubato = (lateStart?: number, earlyEnd?: number): Rubato => ({
-    type: 'rubato',
-    'xml:id': 'r0',
+const rubato = (lateStart?: number, earlyEnd?: number): RubatoFrame => ({
     date: 0,
     frameLength: 720,
     intensity: 1,
@@ -43,8 +40,8 @@ test.each([
 test('an absent @intensity is the identity, not NaN', () => {
     // `Math.pow(x, undefined)` is NaN, and the frames `CombineAdjacentRubatos` writes to close a
     // loop carry no @intensity by design — so every date under one used to come back NaN.
-    const withoutIntensity: Rubato = {
-        type: 'rubato', 'xml:id': 'r1', date: 0, frameLength: 720, lateStart: 0.25, earlyEnd: 1,
+    const withoutIntensity: RubatoFrame = {
+        date: 0, frameLength: 720, lateStart: 0.25, earlyEnd: 1,
     }
     const answer = calculateRubatoOnDate(360, withoutIntensity)
     expect(Number.isNaN(answer)).toBe(false)
@@ -54,6 +51,11 @@ test('an absent @intensity is the identity, not NaN', () => {
 test('an absent @frameLength leaves the date alone rather than answering NaN', () => {
     // `@frameLength` is the one rubato parameter with no default: espressivo's `resolveRubato`
     // rejects the instruction outright. It used to divide by `undefined`.
-    const noFrame = { type: 'rubato', 'xml:id': 'r2', date: 0 } as unknown as Rubato
+    //
+    // The fixture needs no cast any more. mpmify's own record declared `frameLength` as a
+    // required number while a parsed document handed back `undefined` for it, so stating this
+    // case at all meant lying to the compiler; espressivo types it optional, which is what a
+    // `<rubato>` that inherits its frame from a `rubatoDef` actually looks like.
+    const noFrame: RubatoFrame = { date: 0 }
     expect(calculateRubatoOnDate(360, noFrame)).toBe(360)
 })

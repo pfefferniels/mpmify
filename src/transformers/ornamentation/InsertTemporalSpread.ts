@@ -1,5 +1,6 @@
-import { MPM, Ornament } from "../../mpm"
-import { MSM, MsmNote } from "../../msm"
+import { AddOrnamentOptions, FrameDomain, NoteOffShift } from "espressivo"
+import { Mpm, OrnamentDraft, fillInAt, requireMap, setOrnamentDraft } from "../../mpm"
+import { Alignment } from "../../alignment"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 
@@ -69,7 +70,7 @@ export type InsertTemporalSpreadOptions =
 
 /**
  * Interpolates arpeggiated chords as ornaments, inserts them as physical
- * values into the MPM and substracts accordingly from the MIDI onset, so
+ * values into the MPM and substracts accordingly from the recorded onsets, so
  * that after the transformation all notes of the chord will have the same
  * onset.
  */
@@ -86,8 +87,11 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        const ornaments: Ornament[] = []
+    protected transform(msm: Alignment, mpm: Mpm) {
+        // Each ornament is written in two goes: what MPM lets an `<ornament>` say, and the
+        // `<temporalSpread>` fields that have no place on one and are parked on its element for
+        // `StylizeOrnamentation` to collect.
+        const ornaments: { options: AddOrnamentOptions, draft: OrnamentDraft }[] = []
 
         const chords = msm.asChords(this.options.scope)
         for (const [date, chordNotes] of chords) {
@@ -97,12 +101,12 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             }
 
             // only consider notes with a defined onset time
-            const arpeggioNotes = chordNotes.filter(note => isDefined(note['midi.onset']))
+            const arpeggioNotes = chordNotes.filter(note => isDefined(note['milliseconds.date']))
 
             // Less than two notes cannot be arpeggiated
             if (arpeggioNotes.length < 2) continue
 
-            const sortedByOnset = arpeggioNotes.sort((a, b) => a['midi.onset'] - b['midi.onset'])
+            const sortedByOnset = arpeggioNotes.sort((a, b) => a['milliseconds.date'] - b['milliseconds.date'])
 
             // detecting the direction of the arpeggiated notes.
             const arpeggioDirection = determineSortDirection(sortedByOnset.map(note => note["midi.pitch"]))
@@ -111,48 +115,47 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             else if (arpeggioDirection === -1) noteOrder = 'descending pitch'
             else noteOrder = sortedByOnset.map(note => `#${note["xml:id"]}`).join(' ')
 
-            // the arpeggio's duration is the time distance between first and last onset
-            const duration = sortedByOnset[sortedByOnset.length - 1]["midi.onset"] - sortedByOnset[0]["midi.onset"]
+            // the arpeggio's duration is the time distance between first and last onset, in ms
+            const duration = sortedByOnset[sortedByOnset.length - 1]['milliseconds.date'] - sortedByOnset[0]['milliseconds.date']
             if ('durationThreshold' in this.options) {
-                if (duration * 1000 <= (this.options?.durationThreshold || 0)) continue
+                if (duration <= (this.options?.durationThreshold || 0)) continue
             }
 
             // by default, no offset shifting is applied
-            let noteOffShift: boolean | 'monophonic' = false
+            let noteOffShift: NoteOffShift = NoteOffShift.False
             const firstNote = sortedByOnset[0]
             const lastNote = sortedByOnset[sortedByOnset.length - 1]
 
-            const offsetOf = (note: MsmNote) => {
-                return note['midi.onset'] + note['midi.duration']
-            }
-
-            const sortedByOffset = sortedByOnset.slice().sort((a, b) => offsetOf(a) - offsetOf(b))
+            const sortedByOffset = sortedByOnset.slice()
+                .sort((a, b) => a['milliseconds.date.end'] - b['milliseconds.date.end'])
             const sameOrder = sortedByOnset.every((note, i) => note === sortedByOffset[i])
 
             const offsetScaleTolerance = 0.8
             const minOffsetDistance = duration * offsetScaleTolerance
-            if (offsetOf(lastNote) - offsetOf(firstNote) > minOffsetDistance && sameOrder) {
-                noteOffShift = true
+            if (lastNote['milliseconds.date.end'] - firstNote['milliseconds.date.end'] > minOffsetDistance && sameOrder) {
+                noteOffShift = NoteOffShift.True
             }
 
-            const monophonicTolerance = 20 / 1000 // in ms
+            // in ms: how far a release may sit from the next onset and still count as one
+            // note giving way to the next
+            const monophonicTolerance = 20
             let isMonophonic = true
             for (let i = 1; i < sortedByOnset.length; i++) {
                 const prev = sortedByOnset[i - 1]
                 const curr = sortedByOnset[i]
 
-                if (Math.abs(offsetOf(prev) - curr["midi.onset"]) > monophonicTolerance) {
+                if (Math.abs(prev['milliseconds.date.end'] - curr['milliseconds.date']) > monophonicTolerance) {
                     isMonophonic = false;
                     break;
                 }
             }
 
             if (isMonophonic) {
-                noteOffShift = 'monophonic'
+                noteOffShift = NoteOffShift.Monophonic
             }
 
             // define the frame start based on the given option
-            const frameLength = duration * 1000
+            const frameLength = duration
             let frameStart: number, newOnset: number
 
             const placement = this.options.placement
@@ -163,45 +166,62 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             }
             else if (placement === 'on-beat') {
                 frameStart = 0
-                newOnset = sortedByOnset[0]['midi.onset']
+                newOnset = sortedByOnset[0]['milliseconds.date']
             }
             else if (placement === 'before-beat') {
                 frameStart = -frameLength
-                newOnset = sortedByOnset[sortedByOnset.length - 1]['midi.onset']
+                newOnset = sortedByOnset[sortedByOnset.length - 1]['milliseconds.date']
             }
             else {
                 // the estimated onset is the average of all onsets
-                newOnset = sortedByOnset.map(note => note['midi.onset']).reduce((a, b) => a + b, 0) / arpeggioNotes.length
+                newOnset = sortedByOnset.map(note => note['milliseconds.date']).reduce((a, b) => a + b, 0) / arpeggioNotes.length
 
                 // frame start is the distance between the first note's onset and the estimated onset
-                frameStart = (sortedByOnset[0]['midi.onset'] - newOnset) * 1000
+                frameStart = sortedByOnset[0]['milliseconds.date'] - newOnset
             }
 
             // determine the ornament's intensity
             const normalizedOnsets = sortedByOnset
-                .map(note => note['midi.onset'])
-                .map(onset => (onset - firstNote['midi.onset']) / duration)
+                .map(note => note['milliseconds.date'])
+                .map(onset => (onset - firstNote['milliseconds.date']) / duration)
 
             const intensity = determineIntensity(normalizedOnsets)
 
             ornaments.push({
-                'type': 'ornament',
-                'xml:id': generateId('ornament', date, mpm),
-                date,
-                'name.ref': 'neutralArpeggio',
-                'noteoff.shift': noteOffShift,
-                'note.order': noteOrder,
-                'frame.start': frameStart,
-                'frameLength': frameLength,
-                'time.unit': 'milliseconds',
-                'intensity': intensity === 1 ? undefined : intensity
+                options: {
+                    id: generateId('ornament', date, mpm),
+                    date,
+                    nameRef: 'neutralArpeggio',
+                    noteOrder
+                },
+                draft: {
+                    noteOffShift,
+                    frameStart,
+                    frameLength,
+                    frameDomain: FrameDomain.Milliseconds,
+                    intensity: intensity === 1 ? undefined : intensity
+                }
             })
 
+            // The spread is now the ornament's to render, so the chord is collapsed onto one
+            // onset. Each release travels the same distance as its onset: what is taken out here
+            // is the stagger, not the length the note was held for.
             sortedByOnset.forEach(note => {
-                note['midi.onset'] = newOnset
+                note['milliseconds.date.end'] += newOnset - note['milliseconds.date']
+                note['milliseconds.date'] = newOnset
             })
         }
 
-        mpm.insertInstructions(ornaments, this.options.scope)
+        // `fillInAt`, not `addOrnamentV3`: `InsertDynamicsGradient` may already have written
+        // the ornament at this date, and the two describe one element between them.
+        const map = requireMap(mpm, 'ornament', this.options.scope)
+        for (const { options, draft } of ornaments) {
+            setOrnamentDraft(fillInAt(map, options, {
+            localName: 'ornament',
+            add: o => map.addOrnamentV3(o),
+            read: i => map.getOrnamentOptionsOf(i),
+            update: (i, patch) => map.updateOrnamentAt(i, patch),
+        }), draft)
+        }
     }
 }

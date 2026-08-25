@@ -1,5 +1,5 @@
-import { MPM } from "../../mpm"
-import { MSM, MsmNote } from "../../msm"
+import { Mpm } from "../../mpm"
+import { Alignment, AlignedNote } from "../../alignment"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
 export interface RangeChoice {
@@ -36,8 +36,8 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
         })
     }
 
-    protected transform(msm: MSM, _: MPM) {
-        let affected: MsmNote[] = []
+    protected transform(msm: Alignment, _: Mpm) {
+        let affected: AlignedNote[] = []
 
         // (1) range mode
         if ('from' in this.options && 'to' in this.options) {
@@ -73,8 +73,8 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
         // The removals are collected and applied in one pass. Splicing each variant out
         // individually was a `indexOf` scan plus a shift of the tail per note — quadratic in the
         // score, and every note of every chosen group paid it.
-        const discarded = new Set<MsmNote>()
-        const chosen: MsmNote[] = []
+        const discarded = new Set<AlignedNote>()
+        const chosen: AlignedNote[] = []
 
         for (const [_, notes] of equivalents) {
             const prototype = notes.find(note => note.source === timingPreference)
@@ -83,7 +83,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
             if (velocityPreference !== timingPreference) {
                 const velocitySource = notes.find(note => note.source === velocityPreference);
                 if (velocitySource) {
-                    prototype['midi.velocity'] = velocitySource['midi.velocity']
+                    prototype.velocity = velocitySource.velocity
                 }
             }
 
@@ -107,7 +107,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
             // comparison was `undefined < number`, false, and every pedal fell through to the
             // source test regardless of the range. Once that is said plainly the two branches
             // are the same filter, so there is one. Giving pedals a symbolic position is a
-            // change of its own; they carry `midi.onset` only.
+            // change of its own; they are placed in milliseconds only.
             //
             // The range branch also spliced out of the array it was iterating, which skips the
             // element after each removal — two adjacent pedals from the rejected source left the

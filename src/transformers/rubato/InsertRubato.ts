@@ -1,5 +1,6 @@
-import { MPM, Rubato } from "../../mpm"
-import { MSM, MsmNote } from "../../msm"
+import type { AddRubatoOptions } from "espressivo"
+import { Mpm, requireMap } from "../../mpm"
+import { Alignment, AlignedNote } from "../../alignment"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp } from "../../utils/utils"
 import { PULSES_PER_QUARTER } from "../../ppq"
@@ -17,7 +18,7 @@ export { calculateRubatoOnDate } from "./rubatoMath"
  * (see `residual/index.ts`), and one of those summed into the mean turns it, every scaled date
  * derived from it and the fitted @intensity into NaN.
  */
-const avarageTickDate = (notes: MsmNote[], residual: Residual) => {
+const avarageTickDate = (notes: AlignedNote[], residual: Residual) => {
     let sum = 0
     for (const note of notes) {
         const time = residual.of(note)
@@ -48,7 +49,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         // Where the notes fell under the tempo, with rubato held out — this is what fits it.
         // Holding it out also means a second call over a looping frame reads the same raw
         // positions the first one did, rather than positions the first call has compensated.
@@ -103,9 +104,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
         const intensity = determineIntensity(scaledDates)
 
-        const rubato: Rubato = {
-            type: 'rubato',
-            'xml:id': generateId('rubato', frame.date, mpm),
+        const rubato: AddRubatoOptions = {
+            id: generateId('rubato', frame.date, mpm),
             date: frame.date,
             frameLength: frame.length,
             intensity,
@@ -113,7 +113,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             lateStart,
         }
 
-        mpm.insertInstruction(rubato, this.options.scope)
+        requireMap(mpm, 'rubato', this.options.scope).addRubato(rubato)
     }
 
 }

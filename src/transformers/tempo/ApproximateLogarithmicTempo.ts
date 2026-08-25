@@ -1,7 +1,15 @@
 import { v4 } from "uuid";
 import type { Tempo as ResolvedTempo } from "espressivo";
-import { MPM, Scope, Tempo } from "../../mpm";
-import { MSM, MsmNote } from "../../msm";
+import {
+    getInstructions,
+    Instruction,
+    InstructionOptions,
+    Mpm,
+    removeInstruction,
+    requireMap,
+    Scope,
+} from "../../mpm";
+import { Alignment, AlignedNote } from "../../alignment";
 import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { clamp } from "../../utils/utils";
@@ -17,8 +25,10 @@ export type TempoSegment = {
     beatLength: number
 }
 
+/** An anchor the caller places at a score date nothing sounds at — a rest, or a tied-over beat. */
 export type SilentOnset = {
     date: number
+    /** When it falls, in milliseconds, on the same timeline as a note's `milliseconds.date`. */
     onset: number
 }
 
@@ -115,12 +125,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
     }
 
     /**
-     * Preview the fitted tempos without touching MSM/MPM.
+     * Preview the fitted tempos without touching the alignment or the MPM.
      * When `options.continue` is true and an MPM is provided,
      * the chain is reconstructed so boundary tempos are shared
      * (matching the jointly-fitted result from `insert`).
      */
-    static preview(options: ApproximateLogarithmicTempoOptions, msm: MSM, mpm?: MPM): TempoWithEndDate[] {
+    static preview(options: ApproximateLogarithmicTempoOptions, msm: Alignment, mpm?: Mpm): TempoWithEndDate[] {
         const notes = msm.notesInPart(options.scope);
         const newSegment: TempoSegment = { from: options.from, to: options.to, beatLength: options.beatLength };
 
@@ -135,7 +145,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         return fitSegments(segments, notes, options.silentOnsets);
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         if (!msm.timeSignature) {
             console.warn('A time signature must be given to interpolate a tempo map.')
             return
@@ -174,26 +184,32 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // so we can clean up spurious restoration instructions afterward.
         const chainEnd = segments[segments.length - 1].to;
         const existedAtChainEnd = this.options.continue && segments.length > 1
-            && mpm.getInstructions('tempo', this.options.scope).some(t => t.date === chainEnd);
+            && getInstructions(mpm, 'tempo', this.options.scope).some(t => t.date === chainEnd);
 
         this.removeAffectedTempoInstructions(mpm, this.options.scope, replacementRanges);
 
         // Insert fitted tempos. `endDate` is the segment the curve was fitted over — a working
         // field, not an MPM attribute; it used to be written into the document. See old-bugs.md.
+        //
+        // `addTempo` appends rather than merging, and here that is the same thing. The
+        // replacement ranges are `[from, to)` of the chain's own segments, so they tile
+        // [chain start, chain end) exactly; every date written below is one of those `from`s and
+        // so was just cleared. The only date the removal restores to is the chain end, which is
+        // no segment's start.
+        const map = requireMap(mpm, 'tempo', this.options.scope)
         for (const fitted of tempos) {
             const { endDate: _fittingWindow, ...tempo } = fitted;
-            tempo['xml:id'] = generateId('tempo', tempo.date, mpm);
-            mpm.insertInstruction(tempo, this.options?.scope, true);
+            map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
         }
 
         // When using continue, removeAffectedTempoInstructions may restore a
         // continuation at the chain end for an instruction that was part of the
         // old chain.  This is now superseded by the re-fitted chain, so remove it.
         if (this.options.continue && segments.length > 1 && !existedAtChainEnd) {
-            const restored = mpm.getInstructions('tempo', this.options.scope)
+            const restored = getInstructions(mpm, 'tempo', this.options.scope)
                 .find(t => t.date === chainEnd);
             if (restored) {
-                mpm.removeInstruction(restored);
+                removeInstruction(mpm, restored);
             }
         }
 
@@ -214,23 +230,22 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
      * `removeAffectedTempoInstructions` restored, or one that was there all along — and is
      * left alone.
      */
-    private closeTransition(mpm: MPM, last: TempoWithEndDate) {
-        const target = last['transition.to'];
+    private closeTransition(mpm: Mpm, last: TempoWithEndDate) {
+        const target = last.transitionTo;
         if (target === undefined || last.endDate <= last.date) return;
 
-        const existing = mpm.getInstructions('tempo', this.options.scope);
+        const existing = getInstructions(mpm, 'tempo', this.options.scope);
         if (existing.some(tempo => tempo.date === last.endDate)) return;
 
-        mpm.insertInstruction({
-            type: 'tempo',
-            'xml:id': generateId('tempo', last.endDate, mpm),
+        requireMap(mpm, 'tempo', this.options.scope).addTempo({
+            id: generateId('tempo', last.endDate, mpm),
             date: last.endDate,
             bpm: target,
             beatLength: last.beatLength
-        }, this.options.scope);
+        });
     }
 
-    removeAffectedTempoInstructions(mpm: MPM, scope: Scope, segments: TempoSegment[]) {
+    removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, segments: TempoSegment[]) {
         if (segments.length === 0) return;
 
         const sortedRanges = segments
@@ -249,7 +264,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
             }
         }
 
-        const existing = mpm.getInstructions('tempo', scope)
+        const existing = getInstructions(mpm, 'tempo', scope)
             .slice()
             .sort((a, b) => a.date - b.date);
         if (existing.length === 0) return;
@@ -257,7 +272,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         const isCovered = (date: number) =>
             sortedRanges.some(range => date >= range.from && date < range.to);
 
-        const restoreAtBoundaries: Tempo[] = [];
+        const restoreAtBoundaries: InstructionOptions<'tempo'>[] = [];
         for (const range of sortedRanges) {
             const boundary = range.to;
 
@@ -282,8 +297,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
             const bpmAtBoundary = getTempoAt(boundary, tempoWithEndDate);
 
             restoreAtBoundaries.push({
-                type: 'tempo',
-                'xml:id': `tempo_${v4()}`,
+                id: `tempo_${v4()}`,
                 date: boundary,
                 beatLength: effectiveTempo.beatLength,
                 bpm: bpmAtBoundary
@@ -292,13 +306,14 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
 
         for (const tempo of existing) {
             if (isCovered(tempo.date)) {
-                mpm.removeInstruction(tempo)
+                removeInstruction(mpm, tempo)
             }
         }
 
+        // The map is there: `existing` was non-empty, or this returned above.
+        const map = requireMap(mpm, 'tempo', scope)
         for (const tempo of restoreAtBoundaries) {
-            tempo['xml:id'] = generateId('tempo', tempo.date, mpm);
-            mpm.insertInstruction(tempo, scope, false);
+            map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
         }
     }
 }
@@ -310,8 +325,8 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
  * contiguous chain of segments ending at `from` with matching `beatLength`.
  * Stops when beatLength changes or there is a gap in the chain.
  */
-function reconstructChain(mpm: MPM, scope: Scope, from: number, beatLength: number): TempoSegment[] {
-    const allInstructions = mpm.getInstructions('tempo', scope)
+function reconstructChain(mpm: Mpm, scope: Scope, from: number, beatLength: number): TempoSegment[] {
+    const allInstructions = getInstructions(mpm, 'tempo', scope)
         .filter(t => t.date < from)
         .sort((a, b) => a.date - b.date);
 
@@ -346,7 +361,7 @@ function reconstructChain(mpm: MPM, scope: Scope, from: number, beatLength: numb
     return chain;
 }
 
-const findEffectiveTempoIndex = (tempos: Tempo[], date: number): number => {
+const findEffectiveTempoIndex = (tempos: Instruction<'tempo'>[], date: number): number => {
     let found = -1;
     for (let i = 0; i < tempos.length; i++) {
         if (tempos[i].date <= date) found = i;
@@ -418,7 +433,7 @@ const findEffectiveTempoIndex = (tempos: Tempo[], date: number): number => {
  */
 function fitSegments(
     segments: TempoSegment[],
-    notes: MsmNote[],
+    notes: AlignedNote[],
     silentOnsets: SilentOnset[]
 ): TempoWithEndDate[] {
     if (segments.length === 0) return [];
@@ -445,8 +460,7 @@ function fitSegments(
         const distTicks = onsetPairs[onsetPairs.length - 1].date - onsetPairs[0].date;
         const bpm = 60000 * distTicks / (elapsed * beatLengthTicks);
         return chainSegments.map(seg => ({
-            type: 'tempo' as const,
-            'xml:id': `tempo_${v4()}`,
+            id: `tempo_${v4()}`,
             bpm, date: seg.from, endDate: seg.to, beatLength
         }));
     }
@@ -532,15 +546,14 @@ function fitSegments(
         const hasTransition = Math.abs(bestTau[k] - bestTau[k + 1]) > 0.01;
 
         const t: TempoWithEndDate = {
-            type: 'tempo',
-            'xml:id': `tempo_${v4()}`,
+            id: `tempo_${v4()}`,
             bpm: bestTau[k],
             date: chainSegments[k].from,
             endDate: chainSegments[k].to,
             beatLength,
             ...(hasTransition
                 ? {
-                    'transition.to': bestTau[k + 1],
+                    transitionTo: bestTau[k + 1],
                     // Keep the optimized segment shape, so chain-level smoothing
                     // survives into the exported meanTempoAt parameter.
                     meanTempoAt: bestShapes[k]
@@ -586,7 +599,7 @@ function normalizeChainedSegments(segments: TempoSegment[]): TempoSegment[] {
  * The observed (score position, physical time) pairs over `range`.
  *
  * A chord is one onset, and which millisecond it happened at is a question about the chord and
- * not about whichever of its notes the MSM happens to list first. The notes of a chord are not
+ * not about whichever of its notes the alignment happens to list first. The notes of a chord are not
  * played together — spread and asynchrony are the point of a performance model — so taking the
  * first was taking an arbitrary member of a spread that can be tens of milliseconds wide. The
  * median is the answer that does not move when one voice is early, and on a two-note chord it is
@@ -596,15 +609,15 @@ function normalizeChainedSegments(segments: TempoSegment[]): TempoSegment[] {
  * placed, and the fit should believe it.
  */
 function extractOnsetPairs(
-    range: TempoSegment, notes: MsmNote[], silentOnsets: SilentOnset[]
+    range: TempoSegment, notes: AlignedNote[], silentOnsets: SilentOnset[]
 ): OnsetPair[] {
     const sounding = new Map<number, number[]>();
 
     for (const n of notes) {
-        if (n.date >= range.from && n.date <= range.to && n["midi.onset"] !== undefined) {
+        if (n.date >= range.from && n.date <= range.to && n['milliseconds.date'] !== undefined) {
             const at = sounding.get(n.date);
-            if (at) at.push(n["midi.onset"] * 1000);
-            else sounding.set(n.date, [n["midi.onset"] * 1000]);
+            if (at) at.push(n['milliseconds.date']);
+            else sounding.set(n.date, [n['milliseconds.date']]);
         }
     }
 
@@ -613,7 +626,7 @@ function extractOnsetPairs(
 
     for (const s of silentOnsets) {
         if (s.date >= range.from && s.date <= range.to) {
-            pairMap.set(s.date, s.onset * 1000);
+            pairMap.set(s.date, s.onset);
         }
     }
 
@@ -856,13 +869,11 @@ function segmentCurve(
     tau0: number, tau1: number, im: number, spanTicks: number, beatLength: number
 ): ResolvedTempo {
     return resolveSpan({
-        type: 'tempo',
-        'xml:id': '',
         date: 0,
         endDate: spanTicks,
         beatLength,
         bpm: tau0,
-        'transition.to': tau1,
+        transitionTo: tau1,
         meanTempoAt: im
     });
 }

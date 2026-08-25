@@ -1,5 +1,6 @@
-import { MPM } from "../../mpm";
-import { MSM } from "../../msm";
+import { FrameDomain } from "espressivo";
+import { getInstructions, Mpm, ornamentDraftOf, scopesOf, setOrnamentDraft } from "../../mpm";
+import { Alignment } from "../../alignment";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dateAtMilliseconds, millisecondsAt } from "./tempoCalculations";
 import { placeTempos, PlacedTempo, segmentAtMs } from "./placedTempos";
@@ -13,7 +14,7 @@ export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptio
     translatePhysicalModifiers: boolean
 
     /**
-     * Defines whether the pedal instruction in the MSM should be 
+     * Defines whether the pedal instruction in the alignment should be 
      * translated to tick time as well.
      * @todo not yet implemented
      */
@@ -43,7 +44,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
     }
 
@@ -90,13 +91,19 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      * given MPM and translates them into tick values.
      * @todo Currently, only ornaments are taken into account.
      */
-    translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
-        for (const scope of mpm.scopes()) {
+    translatePhysicalMPMModifiers(mpm: Mpm, msm: Alignment) {
+        for (const scope of scopesOf(mpm)) {
             const segments = placeTempos(msm, mpm, scope)
 
-            const ornaments = mpm.getInstructions('ornament', scope)
+            const ornaments = getInstructions(mpm, 'ornament', scope)
             for (const ornament of ornaments) {
-                if (ornament["time.unit"] === 'ticks') {
+                // The frame is not an `<ornament>` attribute and never was — it belongs to the
+                // `<temporalSpread>` of the def `StylizeOrnamentation` will build, and until then
+                // it is parked on the element as a draft. So it is read and written there rather
+                // than through the instruction, which espressivo's options type has no field for.
+                const draft = ornamentDraftOf(ornament.element)
+
+                if (draft.frameDomain === FrameDomain.Ticks) {
                     // the job is done already
                     continue
                 }
@@ -106,15 +113,15 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
                 // absence wrote a `NaN` frame plus a `time.unit` claiming it had been converted —
                 // which is what turned every gradient-only ornament into one that
                 // `StylizeOrnamentation` would go on to discard.
-                if (ornament["frame.start"] === undefined || ornament.frameLength === undefined) {
+                if (draft.frameStart === undefined || draft.frameLength === undefined) {
                     continue
                 }
 
                 const ornamentMs = this.ticksToMs(ornament.date, segments)
                 if (ornamentMs === undefined) continue
 
-                const frameStartMs = ornamentMs + ornament["frame.start"]
-                const frameEndMs = frameStartMs + ornament.frameLength
+                const frameStartMs = ornamentMs + draft.frameStart
+                const frameEndMs = frameStartMs + draft.frameLength
 
                 const frameStartTicks = this.msToTicks(frameStartMs, segments)
                 const frameEndTicks = this.msToTicks(frameEndMs, segments)
@@ -124,9 +131,11 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
                 // performs; a `NaN` one does not.
                 if (frameStartTicks === undefined || frameEndTicks === undefined) continue
 
-                ornament["frame.start"] = frameStartTicks - ornament.date
-                ornament['frameLength'] = frameEndTicks - frameStartTicks
-                ornament['time.unit'] = 'ticks'
+                setOrnamentDraft(ornament.element, {
+                    frameStart: frameStartTicks - ornament.date,
+                    frameLength: frameEndTicks - frameStartTicks,
+                    frameDomain: FrameDomain.Ticks,
+                })
             }
         }
     }

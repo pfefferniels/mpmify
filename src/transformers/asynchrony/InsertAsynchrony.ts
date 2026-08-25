@@ -1,6 +1,6 @@
 import { v4 } from "uuid"
-import { MPM, Scope } from "../../mpm"
-import { ChordMap, MSM, MsmNote } from "../../msm"
+import { Mpm, requireMap, Scope } from "../../mpm"
+import { Alignment, AlignedNote, ChordMap } from "../../alignment"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
@@ -20,8 +20,8 @@ export type InsertAsynchronyOptions = TransformationOptions
 /**
  * The onsets of a chord, in ascending order, with the ones that were never performed left out.
  */
-const performedOnsets = (chord: MsmNote[]) => chord
-    .map(note => note['midi.onset'])
+const performedOnsets = (chord: AlignedNote[]) => chord
+    .map(note => note['milliseconds.date'])
     .filter(onset => isDefined(onset))
     .sort((a, b) => a - b)
 
@@ -33,7 +33,7 @@ const performedOnsets = (chord: MsmNote[]) => chord
  * since `asChords` groups in whatever order the notes arrive — puts the noise this transformer
  * exists to describe into its own answer.
  */
-const chordOnset = (chord: MsmNote[] | undefined): number | undefined => {
+const chordOnset = (chord: AlignedNote[] | undefined): number | undefined => {
     if (!chord) return undefined
     const onsets = performedOnsets(chord)
     if (onsets.length === 0) return undefined
@@ -53,7 +53,7 @@ const chordOnset = (chord: MsmNote[] | undefined): number | undefined => {
  * rest of the piece keeps, so the reference is every note that is not in `part`, and a two-staff
  * score — where that is exactly the other staff — keeps the answer it had.
  */
-const referenceChords = (msm: MSM, part: number): ChordMap => {
+const referenceChords = (msm: Alignment, part: number): ChordMap => {
     return msm.allNotes.reduce((chords, note) => {
         if (note.part - 1 === part) return chords
 
@@ -67,7 +67,7 @@ const referenceChords = (msm: MSM, part: number): ChordMap => {
 /**
  * This transformer inserts <asynchrony> instructions for a
  * given range and part and substracts the shift from
- * the affected MSM notes. Since it only modifies physical
+ * the affected notes. Since it only modifies physical
  * attributes it should be applied before translating
  * physical time to tick time.
  *
@@ -89,7 +89,7 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const part = this.options.part as Scope
         const chords = Array
             .from(msm.asChords(part))
@@ -119,31 +119,36 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
         // Nothing paired up: no date in the range is sounded by both this part and the rest.
         // There is no asynchrony to report, and `0 / 0` is not a way of saying so — it went into
         // `@milliseconds.offset` and into every onset in the range, after which every tick
-        // computation downstream was NaN too (issue #45). Since a75cb0d `view.ts` refuses to
-        // write a non-finite attribute, so this throws rather than corrupts; neither is an
-        // answer, and writing no instruction is.
+        // computation downstream was NaN too (issue #45). The audit in `Transformer.run` refuses
+        // a non-finite attribute now, so this throws rather than corrupts; neither is an answer,
+        // and writing no instruction is.
         if (shifts.length === 0) return
 
+        // A difference of two recorded onsets, so already the milliseconds `@milliseconds.offset`
+        // is stated in.
         const averageShift = shifts.reduce((acc, shift) => acc + shift, 0) / shifts.length
 
-        mpm.insertInstruction({
-            'xml:id': 'asynchrony_' + v4(),
-            type: 'asynchrony',
+        const map = requireMap(mpm, 'asynchrony', part)
+
+        map.addAsynchrony({
+            id: 'asynchrony_' + v4(),
             date: this.options.from,
-            'milliseconds.offset': averageShift
-        }, part)
+            millisecondsOffset: averageShift
+        })
 
-        mpm.insertInstruction({
-            'xml:id': 'asynchrony_' + v4(),
-            type: 'asynchrony',
+        map.addAsynchrony({
+            id: 'asynchrony_' + v4(),
             date: this.options.to,
-            'milliseconds.offset': 0
-        }, part)
+            millisecondsOffset: 0
+        })
 
-        // Move the onsets by the average shift
+        // Move the notes by the average shift. Both ends, not just the onset: the instruction
+        // displaces the whole note, so a release left where it was would shorten every note the
+        // part is early on and lengthen every one it is late on.
         for (const [, chord] of chords) {
             for (const note of chord) {
-                note['midi.onset'] -= averageShift
+                note['milliseconds.date'] -= averageShift
+                note['milliseconds.date.end'] -= averageShift
             }
         }
     }

@@ -1,4 +1,4 @@
-import { MSM, MsmNote, MsmPedal } from "mpmify"
+import { Alignment, AlignedNote, AlignedPedal } from "mpmify"
 import { v4 } from "uuid";
 
 /**
@@ -74,7 +74,7 @@ export const asMSM = (mei: string, msmXml: string) => {
     }
 
     // Collect notes with performance data
-    const msmNotes: MsmNote[] = []
+    const msmNotes: AlignedNote[] = []
     for (const note of originalNotes) {
         const noteId = note.getAttribute('xml:id')
         const whens = noteId ? (whensByRefId.get(noteId) || []) : []
@@ -99,10 +99,11 @@ export const asMSM = (mei: string, msmXml: string) => {
                 'accidentals': Number(note.getAttribute('accidentals')),
                 'midi.pitch': Number(note.getAttribute('midi.pitch')),
 
-                // performance stuff
-                'midi.onset': +absolute / 1000,
-                'midi.duration': +duration / 1000,
-                'midi.velocity': +velocity,
+                // performance stuff. the MEI states both in milliseconds already, and MSM wants
+                // an absolute release rather than a length
+                'milliseconds.date': +absolute,
+                'milliseconds.date.end': +absolute + (+duration),
+                velocity: +velocity,
                 source
             })
         }
@@ -117,25 +118,25 @@ export const asMSM = (mei: string, msmXml: string) => {
             const type = when.getAttribute('type') === 'sustain' ? 'sustain' : 'soft'
             const source = when.closest('recording')?.getAttribute('source') || undefined
 
-            // find the closest following MSM note by midi.onset (>= pedalOnset)
-            const pedalOnset = +absolute / 1000
-            const followingNotes = msmNotes.filter(n => typeof n['midi.onset'] === 'number' && n['midi.onset'] >= pedalOnset)
-            const closest = followingNotes.sort((a, b) => (a['midi.onset']! - b['midi.onset']!))[0]
+            // find the closest following MSM note by onset (>= pedalOnset)
+            const pedalOnset = +absolute
+            const followingNotes = msmNotes.filter(n => typeof n['milliseconds.date'] === 'number' && n['milliseconds.date'] >= pedalOnset)
+            const closest = followingNotes.sort((a, b) => (a['milliseconds.date'] - b['milliseconds.date']))[0]
             const xmlId = closest ? `${type}-${closest.date}` : `pedal-${index}`
 
-            const msmPedal: MsmPedal = {
+            const msmPedal: AlignedPedal = {
                 'xml:id': xmlId,
-                'midi.onset': pedalOnset,
-                'midi.duration': +duration / 1000,
+                'milliseconds.date': pedalOnset,
+                'milliseconds.date.end': pedalOnset + (+duration),
                 'type': type,
                 source
             }
             return msmPedal
         })
-        .filter((pedal) => pedal !== null) as MsmPedal[]
+        .filter((pedal) => pedal !== null) as AlignedPedal[]
 
     const timeSignature = msmDoc.querySelector('timeSignature')
-    const newMSM = new MSM(msmNotes, {
+    const newMSM = new Alignment(msmNotes, {
         numerator: Number(timeSignature?.getAttribute('numerator') || 4),
         denominator: Number(timeSignature?.getAttribute('denominator') || 4)
     })

@@ -1,135 +1,67 @@
 /**
- * The record shapes mpmify's transformers speak.
+ * The names mpmify uses for what espressivo already models, and nothing else.
  *
- * These were mpm-ts's `Dated.ts` / `Header.ts` types; they moved here unchanged when the
- * document model became espressivo's. Every key is the MPM attribute name it stands for —
- * `'name.ref'`, `'transition.to'`, `'xml:id'` — which is what lets `view.ts` map a record
- * property straight onto an attribute of the live element it wraps.
+ * There is no record model here. `Add<X>Options` is the exact set of attributes espressivo's
+ * `add<X>` writes, and `get<X>OptionsOf` reads an element back into one, so an instruction's
+ * shape is espressivo's answer and this file only says which of its types goes with which name.
  *
- * Nothing here is a data holder any more. A value of one of these types is a *view* over an
- * `Element` in the espressivo tree: reading a property reads the attribute, writing one writes
- * it. See `view.ts`.
+ * Three things are mpmify's own and stay:
+ *
+ * - **`Scope`.** The alignment names a part `'global'` or by index; espressivo names it with a `Global`
+ *   or `Part` object. `document.ts` converts.
+ * - **The element names.** MPM calls the element `<tempo>` and the map it lives in `tempoMap`,
+ *   and mpmify asks its questions in element names. {@link mapNames} is that one-line pairing,
+ *   `satisfies`-checked against espressivo's `MapKind`, so a map it renames stops compiling
+ *   here rather than failing at runtime.
+ * - **{@link Instruction}**, the result of a query: espressivo's options for an element,
+ *   together with the element they were read from.
  */
+import type {
+    AddAccentuationPatternOptions,
+    AddArticulationOptions,
+    AddAsynchronyOptions,
+    AddDynamicsOptions,
+    AddMovementOptions,
+    AddOrnamentOptions,
+    AddRubatoOptions,
+    AddTempoOptions,
+    AccentuationPatternDef,
+    ArticulationDef,
+    Element,
+    MapKind,
+    MapOfKind,
+    OrnamentDef,
+    StyleKind,
+} from 'espressivo'
 
 /**
- * A part can be specified as either a given part number or global. Used in both MSM and MPM.
+ * A part can be specified as either a given part number or global. Used by the alignment and
+ * the MPM alike.
  */
 export type Scope = number | 'global'
 
-interface Typed<T extends string> {
-    type: T
+// ── instructions ──────────────────────────────────────────────────
+
+/** The espressivo options record each instruction type is written from and read back into. */
+export interface OptionsOfType {
+    tempo: AddTempoOptions
+    dynamics: AddDynamicsOptions
+    movement: AddMovementOptions
+    articulation: AddArticulationOptions
+    rubato: AddRubatoOptions
+    ornament: AddOrnamentOptions
+    accentuationPattern: AddAccentuationPatternOptions
+    asynchrony: AddAsynchronyOptions
 }
 
-interface WithXmlId {
-    'xml:id': string
-}
-
-interface WithCorresp {
-    /** Space-separated argumentation ids; written by `AbstractTransformer.run`. */
-    corresp?: string
-}
-
-export interface Style extends WithXmlId, Typed<'style'> {
-    date: number
-    'name.ref': string
-    defaultArticulation?: string
-}
-
-export interface DatedInstruction<T extends string> extends Typed<T>, WithCorresp {
-    date: number
-
-    // optionally, a particular note can be specified
-    noteid?: string
-
-    // all instructions can be referencing a definition
-    'name.ref'?: string
-}
-
-/** Maps the <dynamics> element of MPM */
-export interface Dynamics extends DatedInstruction<'dynamics'>, WithXmlId {
-    'volume': number | string
-    'transition.to'?: number
-    'protraction'?: number
-    'curvature'?: number
-}
-
-/** Maps the <movement> element of MPM */
-export interface Movement extends DatedInstruction<'movement'>, WithXmlId {
-    'position': number
-    'controller': 'sustain' | 'soft'
-    'transition.to'?: number
-    'protraction'?: number
-    'curvature'?: number
-}
-
-/** Maps the <tempo> element of MPM */
-export interface Tempo extends DatedInstruction<'tempo'>, WithXmlId {
-    'bpm': number
-    'beatLength': number
-    'transition.to'?: number
-    'meanTempoAt'?: number
-}
-
-/** Maps the <asynchrony> element of MPM */
-export interface Asynchrony extends DatedInstruction<'asynchrony'>, WithXmlId {
-    'milliseconds.offset': number
-}
-
-/** Maps the <articulation> element of MPM */
-export interface Articulation extends DatedInstruction<'articulation'>, WithXmlId {
-    relativeDuration?: number
-    relativeVelocity?: number
-    absoluteDuration?: number
-    absoluteDurationChange?: number
-}
-
-export type NoteOffShift = boolean | 'monophonic'
-
-/** Maps the <ornament> element of MPM */
-export interface Ornament extends DatedInstruction<'ornament'>, WithXmlId {
-    'name.ref': string
-    'note.order'?: string
-    'frameLength'?: number
-    'frame.start'?: number
-    'noteoff.shift'?: NoteOffShift,
-    'intensity'?: number
-    'transition.from'?: number
-    'transition.to'?: number
-    'time.unit'?: 'ticks' | 'milliseconds'
-    'scale'?: number
-}
-
-/** Maps the <rubato> element of MPM */
-export interface Rubato extends DatedInstruction<'rubato'>, WithXmlId {
-    frameLength: number
-    loop?: boolean
-    intensity?: number
-    lateStart?: number
-    earlyEnd?: number
-}
-
-/** Maps the <accentuationPattern> element of MPM */
-export interface AccentuationPattern extends DatedInstruction<'accentuationPattern'>, WithXmlId {
-    'name.ref': string
-    loop?: boolean
-    scale: number
-}
-
-export type AnyInstruction =
-    | Articulation
-    | Asynchrony
-    | Dynamics
-    | Movement
-    | Ornament
-    | Rubato
-    | Tempo
-    | AccentuationPattern
+export type InstructionType = keyof OptionsOfType
 
 /**
- * The instruction a given `InstructionType` names — so that a method taking the type as an
- * argument can return the record it stands for, rather than leaving the caller to assert it.
+ * What a given instruction type is written from — so a caller states the type once.
+ *
+ * Not `OptionsOf`, which `Transformer.ts` already uses for the options of a *transformer*.
  */
-export type InstructionOf<K extends InstructionType> = Extract<AnyInstruction, { type: K }>
+export type InstructionOptions<K extends InstructionType> = OptionsOfType[K]
 
 export const instructionTypes = [
     'articulation',
@@ -139,120 +71,83 @@ export const instructionTypes = [
     'ornament',
     'rubato',
     'tempo',
-    'accentuationPattern'
-] as const
+    'accentuationPattern',
+] as const satisfies readonly InstructionType[]
 
-export type InstructionType = typeof instructionTypes[number]
+/**
+ * One instruction as it stands in the document: everything it says, plus where it is.
+ *
+ * A **snapshot**, not a live view — the result of a query, the way a row is the result of a
+ * `SELECT`. Under mpm-ts these records *were* the document and assigning to one edited it,
+ * which made a value that looks like data silently not be. Reading is reading; writing is a
+ * call on the espressivo map, which says at the call site that the document changed.
+ *
+ * `element` is the identity that survives the snapshot — what `removeInstruction` finds the
+ * instruction by, and what the ornament draft hangs off. Do not read attributes off it
+ * directly; that is what the options are for.
+ */
+export type Instruction<K extends InstructionType> = InstructionOptions<K> & {
+    readonly type: K
+    readonly element: Element
+    readonly scope: Scope
+}
+
+/** Any instruction, as a union over the types — not an intersection of all of them. */
+export type AnyInstruction = { [K in InstructionType]: Instruction<K> }[InstructionType]
 
 /** Which `<dated>` map each instruction type lives in. */
 export const mapNames = {
-    'articulation': 'articulationMap',
-    'asynchrony': 'asynchronyMap',
-    'dynamics': 'dynamicsMap',
-    'movement': 'movementMap',
-    'ornament': 'ornamentationMap',
-    'rubato': 'rubatoMap',
-    'tempo': 'tempoMap',
-    'accentuationPattern': 'metricalAccentuationMap'
-} as const
+    articulation: 'articulationMap',
+    asynchrony: 'asynchronyMap',
+    dynamics: 'dynamicsMap',
+    movement: 'movementMap',
+    ornament: 'ornamentationMap',
+    rubato: 'rubatoMap',
+    tempo: 'tempoMap',
+    accentuationPattern: 'metricalAccentuationMap',
+} as const satisfies Record<InstructionType, MapKind>
 
-// ── Definitions (the <header> side) ────────────────────────────────
+/** The espressivo map class an instruction type is written through. */
+export type MapFor<K extends InstructionType> = MapOfKind[(typeof mapNames)[K]]
 
-export interface Definition<T extends string> extends Typed<T> {
-    name: string
+// ── definitions ───────────────────────────────────────────────────
+
+/** The espressivo class each definition type is. */
+export interface DefOfType {
+    articulationDef: ArticulationDef
+    ornamentDef: OrnamentDef
+    accentuationPatternDef: AccentuationPatternDef
 }
 
-export interface DynamicsGradient extends Typed<'dynamicsGradient'> {
-    'transition.from': number
-    'transition.to': number
+export type DefinitionType = keyof DefOfType
+export type DefOf<T extends DefinitionType> = DefOfType[T]
+
+export const definitionTypes = [
+    'ornamentDef',
+    'articulationDef',
+    'accentuationPatternDef',
+] as const satisfies readonly DefinitionType[]
+
+/**
+ * The style kind each definition type belongs to. espressivo names the `<header>` collection
+ * from this (`collectionNameOfKind`), so mpmify never spells `articulationStyles` itself.
+ */
+export const styleKinds = {
+    articulationDef: 'articulation',
+    ornamentDef: 'ornamentation',
+    accentuationPatternDef: 'metricalAccentuation',
+} as const satisfies Record<DefinitionType, StyleKind>
+
+/** A `<style>` switch: which `<styleDef>` is in force from a date. */
+export interface Style {
+    'xml:id': string
+    date: number
+    'name.ref': string
+    defaultArticulation?: string
 }
-
-export interface TemporalSpread extends Typed<'temporalSpread'> {
-    'frame.start': number
-    frameLength: number
-    'time.unit': 'ticks' | 'milliseconds'
-    'noteoff.shift': NoteOffShift
-    intensity?: number
-}
-
-export interface OrnamentDef extends Definition<'ornamentDef'> {
-    dynamicsGradient?: DynamicsGradient
-    temporalSpread?: TemporalSpread
-}
-
-export interface ArticulationDef extends Definition<'articulationDef'> {
-    relativeDuration?: number
-    relativeVelocity?: number
-    absoluteDuration?: number
-    absoluteDurationChange?: number
-}
-
-export interface Accentuation extends Typed<'accentuation'> {
-    beat: number
-    value: number
-    'transition.from': number
-    'transition.to': number
-}
-
-export interface AccentuationPatternDef extends Definition<'accentuationPatternDef'> {
-    children: Accentuation[]
-    length: number
-}
-
-export type AnyDefinition =
-    | OrnamentDef
-    | ArticulationDef
-    | AccentuationPatternDef
-
-export const definitionTypes = ['ornamentDef', 'articulationDef', 'accentuationPatternDef'] as const
-export type DefinitionType = typeof definitionTypes[number]
-
-/** Which `<header>` collection each definition type lives in. */
-export const styleNames = {
-    ornamentDef: 'ornamentationStyles',
-    articulationDef: 'articulationStyles',
-    accentuationPatternDef: 'metricalAccentuationStyles'
-} as const
 
 /**
  * The `<styleDef>` every mpmify-written definition goes into. mpmify has never written more
  * than one style per collection, and the `<style>` switches it emits all name this one.
  */
 export const DEFAULT_STYLE_NAME = 'performance_style'
-
-// ── Metadata ──────────────────────────────────────────────────────
-
-export type RelatedResource = {
-    uri: string
-    type: string
-}
-
-export interface Author extends Typed<'author'> {
-    number: number
-    text: string
-}
-
-export interface Comment extends Typed<'comment'> {
-    text: string
-}
-
-export interface Note extends Typed<'note'> {
-    text: string
-}
-
-export interface TransformationInfo extends Typed<'transformation'> {
-    'xml:id': string
-    name: string
-    cdata: string
-    children: Note[]
-}
-
-export interface AppInfo extends Typed<'appInfo'> {
-    version: string
-    name: string
-    url: string
-
-    children: TransformationInfo[]
-}
-
-export type Metadata = (Author | Comment | RelatedResource | AppInfo)[]

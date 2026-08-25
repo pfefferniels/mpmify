@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { expect, test } from 'vitest'
-import { MSM } from '../../src/msm'
-import { MPM } from '../../src/mpm'
+import { Alignment } from '../../src/alignment'
+import { Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm'
 import { InsertDynamicsGradient } from '../../src/transformers'
 
 /**
@@ -21,30 +21,39 @@ const generateNote = (position: number, duration: number, pitch: number, part: n
 })
 
 /** A rolled chord whose second note is the louder one. */
-const msmFixture = () => new MSM([
+const msmFixture = () => new Alignment([
     {
         ...generateNote(0, 0.25, 60),
-        'midi.onset': 1,
-        'midi.duration': 1,
-        'midi.velocity': 50
+        'milliseconds.date': 1000,
+        'milliseconds.date.end': 2000,
+        velocity: 50
     },
     {
         ...generateNote(0, 0.25, 67),
-        'midi.onset': 1.1,
-        'midi.duration': 1,
-        'midi.velocity': 100
+        'milliseconds.date': 1100,
+        'milliseconds.date.end': 2100,
+        velocity: 100
     }],
     { numerator: 1, denominator: 4 })
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: InsertDynamicsGradient, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const callTransform = (transformer: InsertDynamicsGradient, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
+/**
+ * The ramp the transformer fitted, read off the ornament it parked it on.
+ *
+ * The two ends are `<dynamicsGradient>` fields, not `<ornament>` attributes, so they are not part
+ * of the instruction and are read through the draft rather than off the options record.
+ */
+const gradientOf = (mpm: Mpm, index: number) =>
+    ornamentDraftOf(getInstructions(mpm, 'ornament', 'global')[index].element)
+
 test('it fits a rising chord to the crescendo gradient and flattens the velocities', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     callTransform(new InsertDynamicsGradient({
         scope: 'global',
@@ -53,43 +62,43 @@ test('it fits a rising chord to the crescendo gradient and flattens the velociti
         sortVelocities: true,
     }), msm, mpm)
 
-    const ornaments = mpm.getInstructions('ornament', 'global')
+    const ornaments = getInstructions(mpm, 'ornament', 'global')
     expect(ornaments).toHaveLength(1)
-    expect(ornaments[0]['transition.from']).toBe(-1)
-    expect(ornaments[0]['transition.to']).toBe(0)
+    expect(gradientOf(mpm, 0).transitionFrom).toBe(-1)
+    expect(gradientOf(mpm, 0).transitionTo).toBe(0)
     expect(ornaments[0].scale).toBe(50)
 
     // The gradient having explained the spread, every note carries the same velocity.
-    expect(msm.allNotes.map(n => n['midi.velocity'])).toEqual([100, 100])
+    expect(msm.allNotes.map(n => n.velocity)).toEqual([100, 100])
 })
 
 test('it works with the constructor defaults, which do not sort velocities', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     // `sortVelocities: false` used to leave the gradient unchosen and throw here.
     // See old-bugs.md.
     callTransform(new InsertDynamicsGradient(), msm, mpm)
 
-    const ornaments = mpm.getInstructions('ornament', 'global')
+    const ornaments = getInstructions(mpm, 'ornament', 'global')
     expect(ornaments).toHaveLength(1)
-    expect(ornaments[0]['transition.from']).toBe(-1)
-    expect(ornaments[0]['transition.to']).toBe(0)
+    expect(gradientOf(mpm, 0).transitionFrom).toBe(-1)
+    expect(gradientOf(mpm, 0).transitionTo).toBe(0)
 })
 
 test('a chord whose notes are equally loud gets no gradient', () => {
     const msm = msmFixture()
-    msm.allNotes[1]['midi.velocity'] = 50
-    const mpm = new MPM()
+    msm.allNotes[1].velocity = 50
+    const mpm = createMpm()
 
     callTransform(new InsertDynamicsGradient(), msm, mpm)
 
-    expect(mpm.getInstructions('ornament', 'global')).toHaveLength(0)
+    expect(getInstructions(mpm, 'ornament', 'global')).toHaveLength(0)
 })
 
 test('a single explicit gradient is fitted to the chord on its date', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     // The chord is looked up in the map `transform` builds once, rather than by regrouping the
     // whole score inside `applyGradient`. See issue #49.
@@ -100,7 +109,7 @@ test('a single explicit gradient is fitted to the chord on its date', () => {
         sortVelocities: false,
     }), msm, mpm)
 
-    const ornaments = mpm.getInstructions('ornament', 'global')
+    const ornaments = getInstructions(mpm, 'ornament', 'global')
     expect(ornaments).toHaveLength(1)
     expect(ornaments[0].date).toBe(0)
     expect(ornaments[0].scale).toBe(50)
@@ -108,7 +117,7 @@ test('a single explicit gradient is fitted to the chord on its date', () => {
 
 test('a single gradient on a date with no chord does nothing', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     callTransform(new InsertDynamicsGradient({
         scope: 'global',
@@ -117,5 +126,5 @@ test('a single gradient on a date with no chord does nothing', () => {
         sortVelocities: false,
     }), msm, mpm)
 
-    expect(mpm.getInstructions('ornament', 'global')).toHaveLength(0)
+    expect(getInstructions(mpm, 'ornament', 'global')).toHaveLength(0)
 })

@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "espressivo": "file:../meico-ts",
-    "js2xmlparser": "^5.0.0",
     "jsdom": "^22.1.0",
     "uuid": "^9.0.1"
   }

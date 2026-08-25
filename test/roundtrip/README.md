@@ -95,9 +95,8 @@ npm run test:roundtrip:report
 | `aligned.ts` | The same round trip on `test/fixtures/roundtrip` — an aligned MEI, no truth MPM |
 | `report.test.ts` | Opt-in: print what every case currently measures |
 
-`truth.ts` deliberately does **not** use mpmify's own `MPM` class. If the truth went through the
-same serializer as the fit, a bug in that serializer would corrupt both sides equally and the
-round trip would pass on wrong output. The only code the truth path shares with the code under
+`truth.ts` deliberately does **not** go through the same writing path as the fit. If it did, a bug
+in that path would corrupt both sides equally and the round trip would pass on wrong output. The only code the truth path shares with the code under
 test is espressivo's renderer — which is the point: the renderer is the arbiter of what an MPM
 document means, and the fit is being measured against that meaning.
 

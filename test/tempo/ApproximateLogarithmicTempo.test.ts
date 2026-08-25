@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
 import { describe, test, expect } from "vitest"
-import { MSM } from "../../src/msm"
-import { MPM, Tempo } from "../../src/mpm"
+import { Alignment } from "../../src/alignment"
+import { Instruction, Mpm, createMpm, getInstructions, requireMap } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { computeMillisecondsAt, TempoWithEndDate } from "../../src/transformers/tempo/tempoCalculations"
 
 /** Call the protected `transform` method for testing */
-function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: MPM) {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void };
+function callTransform(transformer: ApproximateLogarithmicTempo, msm: Alignment, mpm: Mpm) {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
     (transformer as unknown as Transformable).transform(msm, mpm);
 }
 
@@ -17,7 +17,7 @@ const BEAT = 720; // ticks per quarter note
 /**
  * Generate synthetic onset times by numerically integrating a tempo curve.
  * tempo(d) returns BPM at tick position d.
- * Returns onset pairs: [{date, onset_seconds}, ...]
+ * Returns onset pairs: [{date, onset_milliseconds}, ...]
  */
 function generateOnsets(
     tempoFn: (d: number) => number,
@@ -41,8 +41,8 @@ function generateOnsets(
                 const T1 = tempoFn(d1);
                 integral += 0.5 * (1 / T0 + 1 / T1) * (d1 - d0);
             }
-            // integral is in minutes (BPM * ticks cancel), convert to seconds
-            time += integral * 60 / BEAT;
+            // integral is in minutes (BPM * ticks cancel), convert to milliseconds
+            time += integral * 60000 / BEAT;
         }
     }
 
@@ -56,7 +56,7 @@ function imToExponent(im: number): number {
 /**
  * Build MSM notes from onset data
  */
-function buildMsm(onsets: { date: number; onset: number }[]): MSM {
+function buildMsm(onsets: { date: number; onset: number }[]): Alignment {
     const notes = onsets.map((o, i) => ({
         'xml:id': `n_1_${i}`,
         date: o.date,
@@ -66,12 +66,19 @@ function buildMsm(onsets: { date: number; onset: number }[]): MSM {
         duration: BEAT,
         accidentals: 0,
         'midi.pitch': 67,
-        'midi.onset': o.onset,
-        'midi.duration': 0.5,
-        'midi.velocity': 100
+        'milliseconds.date': o.onset,
+        'milliseconds.date.end': o.onset + 500,
+        velocity: 100
     }));
-    return new MSM(notes, { numerator: 4, denominator: 4 });
+    return new Alignment(notes, { numerator: 4, denominator: 4 });
 }
+
+/**
+ * `@bpm` and `@transition.to` are `number | string`, because MPM lets either be a style-relative
+ * name. The fitter only ever writes numbers, so a test that does arithmetic on one says so here
+ * rather than casting at the site.
+ */
+const bpmOf = (value: number | string | undefined): number => Number(value)
 
 /**
  * Run the fitter for a single segment and return tempo instructions
@@ -80,16 +87,16 @@ function fitAndGetTempos(
     onsets: { date: number; onset: number }[],
     from: number, to: number, beatLength: number,
     silentOnsets: SilentOnset[] = []
-): Tempo[] {
+): Instruction<'tempo'>[] {
     const msm = buildMsm(onsets);
-    const mpm = new MPM();
+    const mpm = createMpm();
     const transformer = new ApproximateLogarithmicTempo({
         scope: 'global',
         from, to, beatLength,
         silentOnsets
     });
     callTransform(transformer, msm, mpm);
-    return mpm.getInstructions('tempo', 'global')
+    return getInstructions(mpm, 'tempo', 'global')
         .sort((a, b) => a.date - b.date);
 }
 
@@ -99,12 +106,12 @@ function fitAndGetTempos(
  * fit writes one more instruction at the end of its span, holding the tempo the curve arrives
  * at. See issue #24.
  */
-function expectClosedAt(tempos: Tempo[], date: number) {
+function expectClosedAt(tempos: Instruction<'tempo'>[], date: number) {
     const closing = tempos[tempos.length - 1];
     const fitted = tempos[tempos.length - 2];
     expect(closing.date).toBe(date);
-    expect(closing.bpm).toBeCloseTo(fitted['transition.to']!, 6);
-    expect(closing['transition.to']).toBeUndefined();
+    expect(closing.bpm).toBeCloseTo(bpmOf(fitted.transitionTo), 6);
+    expect(closing.transitionTo).toBeUndefined();
     expect(closing.beatLength).toBe(fitted.beatLength);
 }
 
@@ -118,7 +125,7 @@ describe('ApproximateLogarithmicTempo', () => {
 
         expect(tempos).toHaveLength(1);
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
-        expect(tempos[0]['transition.to']).toBeUndefined();
+        expect(tempos[0].transitionTo).toBeUndefined();
     });
 
     test('linear accelerando 80 → 120 BPM', () => {
@@ -133,8 +140,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(77);
         expect(tempos[0].bpm).toBeLessThan(83);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(117);
-        expect(tempos[0]['transition.to']).toBeLessThan(123);
+        expect(tempos[0].transitionTo).toBeGreaterThan(117);
+        expect(tempos[0].transitionTo).toBeLessThan(123);
         expect(tempos[0].meanTempoAt).toBeDefined();
         expect(tempos[0].meanTempoAt!).toBeGreaterThan(0.4);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.6);
@@ -152,8 +159,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(117);
         expect(tempos[0].bpm).toBeLessThan(123);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(77);
-        expect(tempos[0]['transition.to']).toBeLessThan(83);
+        expect(tempos[0].transitionTo).toBeGreaterThan(77);
+        expect(tempos[0].transitionTo).toBeLessThan(83);
         expect(tempos[0].meanTempoAt!).toBeGreaterThan(0.4);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.6);
     });
@@ -174,9 +181,9 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(75);
         expect(tempos[0].bpm).toBeLessThan(95);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(105);
-        expect(tempos[0]['transition.to']).toBeLessThan(125);
-        expect(tempos[0]['transition.to']!).toBeGreaterThan(tempos[0].bpm);
+        expect(tempos[0].transitionTo).toBeGreaterThan(105);
+        expect(tempos[0].transitionTo).toBeLessThan(125);
+        expect(tempos[0].transitionTo!).toBeGreaterThan(bpmOf(tempos[0].bpm));
         expect(tempos[0].meanTempoAt).toBeDefined();
         expect(tempos[0].meanTempoAt!).toBeGreaterThan(0.1);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.9);
@@ -195,7 +202,7 @@ describe('ApproximateLogarithmicTempo', () => {
         }, 8);
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         // Fit first segment
         const t1 = new ApproximateLogarithmicTempo({
@@ -210,19 +217,19 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(76);
         expect(tempos[0].bpm).toBeLessThan(84);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(116);
-        expect(tempos[0]['transition.to']).toBeLessThan(124);
+        expect(tempos[0].transitionTo).toBeGreaterThan(116);
+        expect(tempos[0].transitionTo).toBeLessThan(124);
         expect(tempos[1].bpm).toBeGreaterThan(116);
         expect(tempos[1].bpm).toBeLessThan(124);
-        expect(tempos[1]['transition.to']).toBeGreaterThan(76);
-        expect(tempos[1]['transition.to']).toBeLessThan(84);
+        expect(tempos[1].transitionTo).toBeGreaterThan(76);
+        expect(tempos[1].transitionTo).toBeLessThan(84);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.5);
         expect(tempos[1].meanTempoAt!).toBeGreaterThan(0.5);
     });
@@ -239,8 +246,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(57);
         expect(tempos[0].bpm).toBeLessThan(63);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(117);
-        expect(tempos[0]['transition.to']).toBeLessThan(123);
+        expect(tempos[0].transitionTo).toBeGreaterThan(117);
+        expect(tempos[0].transitionTo).toBeLessThan(123);
     });
 
     test('meanTempoAt is in valid range for transitions', () => {
@@ -268,8 +275,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(78);
         expect(tempos[0].bpm).toBeLessThan(82);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(118);
-        expect(tempos[0]['transition.to']).toBeLessThan(122);
+        expect(tempos[0].transitionTo).toBeGreaterThan(118);
+        expect(tempos[0].transitionTo).toBeLessThan(122);
     });
 
     test('rit → acc valley keeps a rounded two-segment gesture (continue)', () => {
@@ -288,7 +295,7 @@ describe('ApproximateLogarithmicTempo', () => {
         }, 12);
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         const t1 = new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: halfTicks, beatLength: 0.25, silentOnsets: []
@@ -301,7 +308,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -312,7 +319,7 @@ describe('ApproximateLogarithmicTempo', () => {
         expect(tempos[1].meanTempoAt!).toBeGreaterThan(0.5);
         expect(tempos[0].meanTempoAt! + tempos[1].meanTempoAt!).toBeGreaterThan(0.85);
         expect(tempos[0].meanTempoAt! + tempos[1].meanTempoAt!).toBeLessThan(1.15);
-        expect(Math.abs(tempos[0]['transition.to']! - tempos[1].bpm)).toBeLessThan(2.5);
+        expect(Math.abs(bpmOf(tempos[0].transitionTo) - bpmOf(tempos[1].bpm))).toBeLessThan(2.5);
     });
 
     test('chained segments preserve inferred acc → rit direction (continue)', () => {
@@ -320,19 +327,19 @@ describe('ApproximateLogarithmicTempo', () => {
         const totalTicks = 8 * BEAT;
 
         const onsets = [
-            { date: 0 * BEAT, onset: 0.0 },
-            { date: 1 * BEAT, onset: 0.80 },
-            { date: 2 * BEAT, onset: 1.53 },
-            { date: 3 * BEAT, onset: 2.19 },
-            { date: 4 * BEAT, onset: 2.80 },
-            { date: 5 * BEAT, onset: 3.43 },
-            { date: 6 * BEAT, onset: 4.10 },
-            { date: 7 * BEAT, onset: 4.84 },
-            { date: 8 * BEAT, onset: 5.65 }
+            { date: 0 * BEAT, onset: 0 },
+            { date: 1 * BEAT, onset: 800 },
+            { date: 2 * BEAT, onset: 1530 },
+            { date: 3 * BEAT, onset: 2190 },
+            { date: 4 * BEAT, onset: 2800 },
+            { date: 5 * BEAT, onset: 3430 },
+            { date: 6 * BEAT, onset: 4100 },
+            { date: 7 * BEAT, onset: 4840 },
+            { date: 8 * BEAT, onset: 5650 }
         ];
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         const t1 = new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: halfTicks, beatLength: 0.25, silentOnsets: []
@@ -345,25 +352,24 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
         expectClosedAt(tempos, totalTicks);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(tempos[0].bpm);
-        expect(tempos[1]['transition.to']).toBeLessThan(tempos[1].bpm);
+        expect(tempos[0].transitionTo).toBeGreaterThan(bpmOf(tempos[0].bpm));
+        expect(tempos[1].transitionTo).toBeLessThan(bpmOf(tempos[1].bpm));
     });
 
     test('keeps existing tempos unchanged when fitting yields no segments', () => {
-        const msm = new MSM([], { numerator: 4, denominator: 4 });
-        const mpm = new MPM();
-        mpm.insertInstruction({
-            type: 'tempo',
-            'xml:id': 'tempo_existing',
+        const msm = new Alignment([], { numerator: 4, denominator: 4 });
+        const mpm = createMpm();
+        requireMap(mpm, 'tempo', 'global').addTempo({
+            id: 'tempo_existing',
             date: 0,
             bpm: 88,
             beatLength: 0.25
-        }, 'global');
+        });
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global',
@@ -372,7 +378,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         expect(tempos).toHaveLength(1);
         expect(tempos[0].date).toBe(0);
         expect(tempos[0].bpm).toBe(88);
@@ -381,32 +387,28 @@ describe('ApproximateLogarithmicTempo', () => {
     test('treats overlap as half-open and keeps touching end boundary instructions', () => {
         const msm = buildMsm([
             { date: BEAT, onset: 0 },
-            { date: 2 * BEAT, onset: 1 }
+            { date: 2 * BEAT, onset: 1000 }
         ]);
-        const mpm = new MPM();
-        mpm.insertInstructions([
-            {
-                type: 'tempo',
-                'xml:id': 'tempo_1',
-                date: 0,
-                bpm: 90,
-                beatLength: 0.25
-            },
-            {
-                type: 'tempo',
-                'xml:id': 'tempo_2',
-                date: BEAT,
-                bpm: 91,
-                beatLength: 0.25
-            },
-            {
-                type: 'tempo',
-                'xml:id': 'tempo_boundary',
-                date: 2 * BEAT,
-                bpm: 150,
-                beatLength: 0.25
-            }
-        ], 'global');
+        const mpm = createMpm();
+        const tempi = requireMap(mpm, 'tempo', 'global');
+        tempi.addTempo({
+            id: 'tempo_1',
+            date: 0,
+            bpm: 90,
+            beatLength: 0.25
+        });
+        tempi.addTempo({
+            id: 'tempo_2',
+            date: BEAT,
+            bpm: 91,
+            beatLength: 0.25
+        });
+        tempi.addTempo({
+            id: 'tempo_boundary',
+            date: 2 * BEAT,
+            bpm: 150,
+            beatLength: 0.25
+        });
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global',
@@ -415,7 +417,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         const touchingBoundary = tempos.find(t => t.date === 2 * BEAT);
         expect(touchingBoundary).toBeDefined();
         expect(touchingBoundary!.bpm).toBe(150);
@@ -425,25 +427,22 @@ describe('ApproximateLogarithmicTempo', () => {
     test('restores a continuation tempo at segment end when removed tempo extends beyond', () => {
         const msm = buildMsm([
             { date: 0, onset: 0 },
-            { date: BEAT, onset: 1 }
+            { date: BEAT, onset: 1000 }
         ]);
-        const mpm = new MPM();
-        mpm.insertInstructions([
-            {
-                type: 'tempo',
-                'xml:id': 'tempo_1',
-                date: 0,
-                bpm: 50,
-                beatLength: 0.25
-            },
-            {
-                type: 'tempo',
-                'xml:id': 'tempo_2',
-                date: BEAT / 2,
-                bpm: 200,
-                beatLength: 0.25
-            }
-        ], 'global');
+        const mpm = createMpm();
+        const tempi = requireMap(mpm, 'tempo', 'global');
+        tempi.addTempo({
+            id: 'tempo_1',
+            date: 0,
+            bpm: 50,
+            beatLength: 0.25
+        });
+        tempi.addTempo({
+            id: 'tempo_2',
+            date: BEAT / 2,
+            bpm: 200,
+            beatLength: 0.25
+        });
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global',
@@ -452,7 +451,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         const continuation = tempos.find(t => t.date === BEAT);
         expect(continuation).toBeDefined();
         expect(continuation!.bpm).toBeCloseTo(200, 4);
@@ -463,7 +462,7 @@ describe('ApproximateLogarithmicTempo', () => {
         const onsets = generateOnsets(() => 100, 4);
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: totalTicks, beatLength: 0.25,
@@ -471,7 +470,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         expect(tempos).toHaveLength(1);
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
     });
@@ -480,19 +479,19 @@ describe('ApproximateLogarithmicTempo', () => {
         // Models the actual Träumerei pipeline:
         //
         // The segment for m2.2 covers dates 3600–5760 (beatLength=0.25).
-        // info.json specifies a silentOnset at {date:5040, onset:7.7} — this
+        // info.json specifies a silentOnset at {date:5040, onset:7700} — this
         // is from the REFERENCE performance (Welte-Mignon roll).
         //
         // After implantLocal(), the student's note onsets are much later
         // (student is consistently slower). After shiftToFirstOnset(),
-        // student onsets around date 5040 might be ~10s, but the silentOnset
-        // at 5040 is still 7.7s (reference timing, NOT adjusted).
+        // student onsets around date 5040 might be ~10 000 ms, but the silentOnset
+        // at 5040 is still 7 700 ms (reference timing, NOT adjusted).
         //
         // In extractOnsetPairs, silentOnsets take priority (set first).
         // This creates a backwards jump in the onset sequence:
-        //   date 4320 → ~10.0s (student)
-        //   date 5040 →  7.7s  (reference silentOnset!)  ← backwards!
-        //   date 5760 → ~11.5s (student)
+        //   date 4320 → ~10 000 ms (student)
+        //   date 5040 →   7 700 ms (reference silentOnset!)  ← backwards!
+        //   date 5760 → ~11 500 ms (student)
         //
         // The data is self-contradictory and no tempo curve describes it, so what the fit
         // returns is not the point. What is, is that it stays a tempo: the fit used to
@@ -503,31 +502,31 @@ describe('ApproximateLogarithmicTempo', () => {
 
         // Student notes: monotonic but much slower than reference.
         // Reference would be at ~80 BPM; student at ~30 BPM.
-        // After shiftToFirstOnset, student note at date 5040 ≈ 14s.
-        // But silentOnset at 5040 = 7.7s (reference).
+        // After shiftToFirstOnset, student note at date 5040 ≈ 14 000 ms.
+        // But silentOnset at 5040 = 7 700 ms (reference).
         const onsets = [
-            { date: 0 * BEAT, onset: 0.0 },
-            { date: 1 * BEAT, onset: 2.0 },  // ~30 BPM
-            { date: 2 * BEAT, onset: 4.0 },
-            { date: 3 * BEAT, onset: 6.0 },
-            { date: 4 * BEAT, onset: 8.0 },
-            { date: 5 * BEAT, onset: 10.0 },   // date=3600
-            { date: 6 * BEAT, onset: 12.0 },   // date=4320
-            { date: 7 * BEAT, onset: 14.0 },   // date=5040 (silentOnset overrides!)
-            { date: 8 * BEAT, onset: 16.0 },   // date=5760
+            { date: 0 * BEAT, onset: 0 },
+            { date: 1 * BEAT, onset: 2000 },  // ~30 BPM
+            { date: 2 * BEAT, onset: 4000 },
+            { date: 3 * BEAT, onset: 6000 },
+            { date: 4 * BEAT, onset: 8000 },
+            { date: 5 * BEAT, onset: 10000 },   // date=3600
+            { date: 6 * BEAT, onset: 12000 },   // date=4320
+            { date: 7 * BEAT, onset: 14000 },   // date=5040 (silentOnset overrides!)
+            { date: 8 * BEAT, onset: 16000 },   // date=5760
         ];
 
-        // The silentOnset at date 5040 with reference timing 7.7s
-        // will override the student's onset of 9.33s at that date.
+        // The silentOnset at date 5040 with reference timing 7 700 ms
+        // will override the student's onset of 9 330 ms at that date.
         const silentOnsets: SilentOnset[] = [
-            { date: 5040, onset: 7.7 },
+            { date: 5040, onset: 7700 },
         ];
 
         const tempos = fitAndGetTempos(onsets, 5 * BEAT, 8 * BEAT, 0.25, silentOnsets);
 
         expect(tempos).toHaveLength(2);
         for (const tempo of tempos) {
-            for (const bpm of [tempo.bpm, tempo['transition.to']]) {
+            for (const bpm of [tempo.bpm, tempo.transitionTo]) {
                 if (bpm === undefined) continue;
                 expect(Number.isFinite(bpm)).toBe(true);
                 expect(bpm).toBeGreaterThanOrEqual(5);
@@ -543,16 +542,15 @@ describe('ApproximateLogarithmicTempo', () => {
     test('continue chain stops at different beatLength', () => {
         const onsets = generateOnsets(() => 100, 8);
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         // Insert a predecessor with different beatLength
-        mpm.insertInstruction({
-            type: 'tempo',
-            'xml:id': 'tempo_other',
+        requireMap(mpm, 'tempo', 'global').addTempo({
+            id: 'tempo_other',
             date: 0,
             bpm: 60,
             beatLength: 0.5
-        }, 'global');
+        });
 
         // Fit segment starting at 4*BEAT with continue — should NOT chain with beatLength=0.5
         const transformer = new ApproximateLogarithmicTempo({
@@ -561,7 +559,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         // The beatLength=0.5 instruction should be untouched
@@ -589,15 +587,19 @@ describe('ApproximateLogarithmicTempo', () => {
 describe('recovering a curve the renderer can draw exactly (#39)', () => {
     const NBEATS = 16;
 
-    const truthSpan = (bpm: number, to: number, im: number, beats: number): TempoWithEndDate => ({
-        type: 'tempo', 'xml:id': 'truth', date: 0, endDate: beats * BEAT,
-        beatLength: 0.25, bpm, 'transition.to': to, meanTempoAt: im,
+    // `bpm` and `to` are as wide as the attributes are, so a span refitted from what the document
+    // says goes back in without a conversion step that could quietly change the number.
+    const truthSpan = (
+        bpm: number | string, to: number | string, im: number, beats: number
+    ): TempoWithEndDate => ({
+        id: 'truth', date: 0, endDate: beats * BEAT,
+        beatLength: 0.25, bpm, transitionTo: to, meanTempoAt: im,
     });
 
     const renderOnsets = (span: TempoWithEndDate, beats: number) =>
         Array.from({ length: beats + 1 }, (_, beat) => ({
             date: beat * BEAT,
-            onset: computeMillisecondsAt(beat * BEAT, span) / 1000,
+            onset: computeMillisecondsAt(beat * BEAT, span),
         }));
 
     //                                                     was, at the time of the issue
@@ -628,11 +630,12 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
 
             expect(fitted).toHaveLength(1);
             const refit = truthSpan(
-                fitted[0].bpm, fitted[0]['transition.to'] ?? fitted[0].bpm,
+                fitted[0].bpm, fitted[0].transitionTo ?? fitted[0].bpm,
                 fitted[0].meanTempoAt ?? 0.5, NBEATS);
 
             for (const { date, onset } of onsets) {
-                expect(computeMillisecondsAt(date, refit) / 1000).toBeCloseTo(onset, 3);
+                // to within half a millisecond, which is what the right-hand column measures
+                expect(computeMillisecondsAt(date, refit)).toBeCloseTo(onset, 0);
             }
         });
     }
@@ -649,7 +652,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         }, buildMsm(onsets));
 
         expect(fitted[0].bpm).toBeCloseTo(60, 2);
-        expect(fitted[0]['transition.to']!).toBeCloseTo(120, 2);
+        expect(fitted[0].transitionTo!).toBeCloseTo(120, 2);
         expect(fitted[0].meanTempoAt!).toBeCloseTo(0.7, 3);
     });
 
@@ -659,20 +662,20 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         // every onset in the piece — and a bias in the onsets is a bias in the tempo.
         const truth = truthSpan(90, 45, 0.7, 8);
         const beats = renderOnsets(truth, 8);
-        const spread = [-0.02, 0, 0.02];
+        const spread = [-20, 0, 20];
         const notes = beats.flatMap((beat, index) => spread.map((offset, voice) => ({
             'xml:id': `n_1_${index}_${voice}`, date: beat.date, part: 1,
             pitchname: 'g' as const, octave: 4 + voice, duration: BEAT, accidentals: 0,
-            'midi.pitch': 67 + 12 * voice, 'midi.onset': beat.onset + offset,
-            'midi.duration': 0.5, 'midi.velocity': 100,
+            'midi.pitch': 67 + 12 * voice, 'milliseconds.date': beat.onset + offset,
+            'milliseconds.date.end': beat.onset + offset + 500, velocity: 100,
         })));
 
         const fitted = ApproximateLogarithmicTempo.preview({
             scope: 'global', from: 0, to: 8 * BEAT, beatLength: 0.25, silentOnsets: [],
-        }, new MSM(notes, { numerator: 4, denominator: 4 }));
+        }, new Alignment(notes, { numerator: 4, denominator: 4 }));
 
         expect(fitted[0].bpm).toBeCloseTo(90, 2);
-        expect(fitted[0]['transition.to']!).toBeCloseTo(45, 2);
+        expect(fitted[0].transitionTo!).toBeCloseTo(45, 2);
         expect(fitted[0].meanTempoAt!).toBeCloseTo(0.7, 3);
     });
 
@@ -688,7 +691,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         const second = ApproximateLogarithmicTempo.preview(request, buildMsm(onsets));
 
         expect(second[0].bpm).toBe(first[0].bpm);
-        expect(second[0]['transition.to']).toBe(first[0]['transition.to']);
+        expect(second[0].transitionTo).toBe(first[0].transitionTo);
         expect(second[0].meanTempoAt).toBe(first[0].meanTempoAt);
     });
 });

@@ -2,8 +2,9 @@
  * Where a recorded onset falls on the score grid.
  *
  * This is the tempo half of the reduction: it reads the `<tempo>` instructions already in the
- * MPM and converts each note's recorded millisecond onset into `tickDate`, and its recorded
- * duration into `tickDuration` — the only domain `<rubato>` and `<articulation>` can speak.
+ * MPM and converts each note's recorded onset into `tickDate`, and the span from it to the
+ * recorded release into `tickDuration` — the only domain `<rubato>` and `<articulation>` can
+ * speak.
  *
  * It lives here, apart from the transformer that used to own it, because two callers need it
  * and neither should import the other: `TranslatePhysicalTimeToTicks`, which writes the values
@@ -20,8 +21,8 @@
  * The walk itself now lives in `placedTempos.ts`, which states that rule once for the four
  * callers that used to each carry their own copy of it.
  */
-import { MPM } from "../../mpm";
-import { MSM } from "../../msm";
+import { getInstructions, Mpm, scopesOf } from "../../mpm";
+import { Alignment } from "../../alignment";
 import { dateAtMilliseconds } from "./tempoCalculations";
 import { coversDate, placeTempos, PlacedTempo, segmentAtMs } from "./placedTempos";
 import { removeRubatoDistortion } from "../rubato/rubatoMath";
@@ -75,13 +76,6 @@ const tickAtMs = (segments: PlacedTempo[], ms: number): number | undefined => {
     return Number.isFinite(ticks) ? ticks : undefined
 }
 
-/** The recorded onset of a note or pedal in milliseconds, or `NaN` where it was not performed. */
-const onsetMs = (event: { 'midi.onset': number }) => event['midi.onset'] * 1000
-
-/** The recorded release of a note or pedal in milliseconds, or `NaN` where either end is absent. */
-const offsetMs = (event: { 'midi.onset': number, 'midi.duration': number }) =>
-    (event['midi.onset'] + event['midi.duration']) * 1000
-
 /**
  * Translates recorded onsets into tick dates, writing `tickDate` for every note and pedal a
  * segment covers.
@@ -89,29 +83,30 @@ const offsetMs = (event: { 'midi.onset': number, 'midi.duration': number }) =>
  * Notes and pedals are placed by different keys, and the asymmetry is forced rather than
  * historical: a note carries a score `@date`, so the instruction governing it is the one covering
  * that date, and its recorded onset is then measured under that instruction — which is the
- * anchoring rule. A pedal carries no score date at all (see `MsmPedal`), so the only question
+ * anchoring rule. A pedal carries no score date at all (see `AlignedPedal`), so the only question
  * that can be asked of it is which segment its *recording* falls in.
  *
  * And `msm.pedals` is not scoped, so with a part-scoped tempo map in the document every scope
- * would place every pedal. The first one to reach it keeps it — `scopes()` puts `global` first,
+ * would place every pedal. The first one to reach it keeps it — `scopesOf` puts `global` first,
  * which is the map a sustain pedal belongs under.
  */
-const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
-    for (const scope of mpm.scopes()) {
+const addTickOnsets = (msm: Alignment, mpm: Mpm, times: TickTimes) => {
+    for (const scope of scopesOf(mpm)) {
         const segments = placeTempos(msm, mpm, scope)
         if (segments.length === 0) continue
 
         for (const note of msm.notesInPart(scope)) {
             const segment = segments.find(s => coversDate(s, note.date))
             if (!segment) continue
-            const tickDate = dateAtMilliseconds(onsetMs(note) - segment.startMs, segment.resolved)
+            const tickDate = dateAtMilliseconds(
+                note['milliseconds.date'] - segment.startMs, segment.resolved)
             if (!Number.isFinite(tickDate)) continue
             at(times.notes, note['xml:id']).tickDate = tickDate
         }
 
         for (const pedal of msm.pedals) {
             if (times.pedals.get(pedal['xml:id'])?.tickDate !== undefined) continue
-            const tickDate = tickAtMs(segments, onsetMs(pedal))
+            const tickDate = tickAtMs(segments, pedal['milliseconds.date'])
             if (tickDate === undefined) continue
             at(times.pedals, pedal['xml:id']).tickDate = tickDate
         }
@@ -130,15 +125,15 @@ const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
  * Where the onset was never placed there is nothing to measure from, and the duration stays
  * unknown rather than becoming the difference between a tick and `undefined`.
  */
-const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
-    for (const scope of mpm.scopes()) {
+const addTickDurations = (msm: Alignment, mpm: Mpm, times: TickTimes) => {
+    for (const scope of scopesOf(mpm)) {
         const segments = placeTempos(msm, mpm, scope)
         if (segments.length === 0) continue
 
         for (const note of msm.notesInPart(scope)) {
             const time = times.notes.get(note['xml:id'])
             if (time?.tickDate === undefined) continue
-            const release = tickAtMs(segments, offsetMs(note))
+            const release = tickAtMs(segments, note['milliseconds.date.end'])
             if (release === undefined) continue
             time.tickDuration = release - time.tickDate
         }
@@ -147,7 +142,7 @@ const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
         for (const pedal of msm.pedals) {
             const time = times.pedals.get(pedal['xml:id'])
             if (time?.tickDate === undefined || time.tickDuration !== undefined) continue
-            const release = tickAtMs(segments, offsetMs(pedal))
+            const release = tickAtMs(segments, pedal['milliseconds.date.end'])
             if (release === undefined) continue
             time.tickDuration = release - time.tickDate
         }
@@ -162,7 +157,7 @@ const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
  * already exist. A `<rubato>` the document holds has explained its share of the deviation, so it
  * is taken back off — leaving what nothing has explained yet, which is what a fitter wants.
  */
-export const computeTickTimes = (msm: MSM, mpm: MPM): TickTimes => {
+export const computeTickTimes = (msm: Alignment, mpm: Mpm): TickTimes => {
     const times = emptyTickTimes()
 
     addTickOnsets(msm, mpm, times)
@@ -171,8 +166,8 @@ export const computeTickTimes = (msm: MSM, mpm: MPM): TickTimes => {
     // Scopes with no rubato are skipped rather than walked. If a global and a part rubato ever
     // covered the same note the removal would compound, which is not what a part map overriding
     // a global one should mean; mpmify writes rubatos in one scope, so it does not arise.
-    for (const scope of mpm.scopes()) {
-        if (mpm.getInstructions('rubato', scope).length === 0) continue
+    for (const scope of scopesOf(mpm)) {
+        if (getInstructions(mpm, 'rubato', scope).length === 0) continue
         removeRubatoDistortion(msm, mpm, scope, times)
     }
 

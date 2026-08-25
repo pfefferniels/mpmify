@@ -37,8 +37,8 @@
  * an overlap could take its onset from one segment and its duration from the next. The windows
  * are a partition now, and {@link segmentAtMs} is where that is stated — see its note.
  */
-import { MPM, Scope } from "../../mpm"
-import { MSM, MsmNote } from "../../msm"
+import { getInstructions, Mpm, Scope } from "../../mpm"
+import { Alignment, AlignedNote } from "../../alignment"
 import { millisecondsAt, resolveSpan, TempoWithEndDate } from "./tempoCalculations"
 import type { Tempo as ResolvedTempo } from 'espressivo'
 
@@ -70,7 +70,7 @@ export interface PlacedTempo {
     readonly modelledMs: number
 
     /** The note whose recorded onset sits exactly on the segment's end, if there is one. */
-    readonly anchor: MsmNote | undefined
+    readonly anchor: AlignedNote | undefined
 
     /**
      * What the *recording* says the segment lasts: the anchor's onset less {@link startMs}, or
@@ -89,8 +89,8 @@ export interface PlacedTempo {
  * Returns an empty array when the scope has no `<tempo>` at all, which is what an MPM with no
  * tempoMap yet looks like — every caller reads that as "no tick position is derivable".
  */
-export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => {
-    const tempos = mpm.getInstructions('tempo', scope)
+export const placeTempos = (msm: Alignment, mpm: Mpm, scope: Scope): PlacedTempo[] => {
+    const tempos = getInstructions(mpm, 'tempo', scope)
 
     // The anchoring rule, in one place. `notesInPart(scope)` and not `allNotes`: the tempo being
     // walked governs this scope, so the note that dates its boundary must be one it governs.
@@ -98,7 +98,7 @@ export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => 
     // Indexed by date once rather than scanned per segment, which made placing a map O(tempos x
     // notes) — and every consumer of a tick position places the map first. The first note on a
     // date wins, which is the note `find` used to answer with.
-    const anchorByDate = new Map<number, MsmNote>()
+    const anchorByDate = new Map<number, AlignedNote>()
     for (const note of msm.notesInPart(scope)) {
         if (!anchorByDate.has(note.date)) anchorByDate.set(note.date, note)
     }
@@ -115,7 +115,7 @@ export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => 
         const modelledMs = millisecondsAt(endDate, resolved)
 
         const anchor = anchorByDate.get(endDate)
-        const measuredMs = anchor ? anchor["midi.onset"] * 1000 - startMs : modelledMs
+        const measuredMs = anchor ? anchor['milliseconds.date'] - startMs : modelledMs
 
         segments.push({ tempo, resolved, nextDate, startMs, modelledMs, anchor, measuredMs })
 
