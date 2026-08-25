@@ -4,6 +4,7 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions } from "..
 import { v4 } from "uuid"
 import { DefinedProperty } from "../../utils/utils"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
+import { deriveResidual, NoteResidual } from "../../residual"
 
 export type ArticulationProperty =
     | 'relativeDuration'
@@ -45,31 +46,34 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
     }
 
     /**
-     * The velocity the dynamics curve prescribes at this note's date.
+     * The articulation one note calls for, measured against what the rest of the MPM already
+     * renders it as.
      *
-     * `setRelativeVolume` defines `absoluteVelocityChange = midi.velocity - should`, so the
-     * curve's own value is what is left when the residual is taken back off. This is the
-     * quantity `relativeVelocity` has to be measured against: the renderer computes
-     * `velocity = dynamics x relativeVelocity`, so the divisor has to be the dynamics side of
-     * that product. Dividing by the *performed* velocity instead — what this used to do — is
-     * right only when the residual is zero, which is exactly when the attribute would be 1 and
-     * do nothing anyway. See issue #23.
+     * The divisor for `relativeVelocity` is the velocity the MPM prescribes at this date — the
+     * renderer computes `velocity = dynamics x relativeVelocity`, so the ratio has to be taken
+     * against the dynamics side of that product (issue #23). That used to be reached by taking
+     * the accumulated residual back off the recording,
+     * `midi.velocity - absoluteVelocityChange`; it is now read directly off a residual derived
+     * with articulation held out, which is the same quantity without the intervening algebra.
      */
-    private prescribedVelocity(note: ArticulatedNote) {
-        return note["midi.velocity"] - (note.absoluteVelocityChange ?? 0)
-    }
-
-    private noteToArticulation(aspects: Set<ArticulationProperty>, note: ArticulatedNote): Articulation {
-        const relativeDuration = note.tickDuration ? (note.tickDuration / note.duration) : undefined
+    private noteToArticulation(
+        aspects: Set<ArticulationProperty>,
+        note: MsmNote,
+        residual: NoteResidual | undefined
+    ): Articulation {
+        const tickDuration = residual?.tickDuration
+        const relativeDuration = tickDuration ? (tickDuration / note.duration) : undefined
 
         // A prescribed volume of zero (or below) cannot be scaled into the performed one by any
         // multiplier, so there is no ratio to write. Leaving the attribute off says that
         // honestly; a guessed value would be silently wrong.
-        const prescribed = this.prescribedVelocity(note)
-        const relativeVelocity = prescribed > 0 ? note["midi.velocity"] / prescribed : undefined
+        const prescribed = residual?.renderedVelocity
+        const relativeVelocity = prescribed !== undefined && prescribed > 0
+            ? note["midi.velocity"] / prescribed
+            : undefined
 
-        const absoluteDuration = note.tickDuration
-        const absoluteDurationChange = note.tickDuration - note.duration
+        const absoluteDuration = tickDuration
+        const absoluteDurationChange = (tickDuration as number) - note.duration
 
         return {
             type: 'articulation',
@@ -96,7 +100,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
                 // not: the def carries the *average* ratio of its group.
                 note.absoluteVelocityChange =
                     (note.absoluteVelocityChange ?? 0)
-                    - this.prescribedVelocity(note as ArticulatedNote) * (def.relativeVelocity - 1)
+                    - (note["midi.velocity"] - (note.absoluteVelocityChange ?? 0)) * (def.relativeVelocity - 1)
             }
             if (def.absoluteDuration !== undefined) {
                 note.tickDuration = note.duration
@@ -113,8 +117,13 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             .map(id => msm.getByID(id))
             .filter(n => !!n) as MsmNote[]
 
+        // What the MPM explains without any articulation is what articulation has to account
+        // for. Derived here rather than read off the notes, so this no longer depends on which
+        // earlier transformer subtracted what.
+        const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
+
         let articulations: Articulation[] = affectedNotes
-            .map(note => this.noteToArticulation(aspects, note as ArticulatedNote))
+            .map(note => this.noteToArticulation(aspects, note, residual.of(note)))
 
         const avgs: Record<string, number> = {}
         Array

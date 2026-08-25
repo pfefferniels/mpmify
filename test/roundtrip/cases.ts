@@ -306,7 +306,7 @@ export const tierThreeCases: Case[] = [
         score: { beats: 17 },
         truth: EVERYTHING,
         note: 'issue #39 — the accelerando dominates',
-        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 820, max: 1480 }, velocity: { mean: 16, max: 40 } },
+        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 820, max: 1480 }, velocity: { mean: 12, max: 29 } },
     },
     {
         name: 'all five aspects, boundaries withheld',
@@ -318,7 +318,7 @@ export const tierThreeCases: Case[] = [
         // should do that clustering, and issue #25 says it cannot: it clusters on the very
         // attributes `InsertArticulation` has just blanked.
         note: 'issue #25 — the chain cannot recover the segmentation it was not given',
-        bounds: { onset: { mean: 265, max: 1410 }, duration: { mean: 1310, max: 3070 }, velocity: { mean: 17, max: 33 } },
+        bounds: { onset: { mean: 265, max: 1410 }, duration: { mean: 1310, max: 3070 }, velocity: { mean: 17, max: 31 } },
     },
 ]
 
