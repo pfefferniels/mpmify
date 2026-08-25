@@ -20,6 +20,15 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
     'midi.pitch': 67
 })
 
+/**
+ * Call the protected `transform` method for testing, the way the other transformer tests do.
+ * Calling it directly type-checks only as long as nobody type-checks the tests.
+ */
+const callTransform = (transformer: TranslatePhysicalTimeToTicks, msm: MSM, mpm: MPM) => {
+    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+    ;(transformer as unknown as Transformable).transform(msm, mpm)
+}
+
 const msmFixture = new MSM(
     [
         {
@@ -63,7 +72,7 @@ test('It inserts the right tempo instructions using beat length = denominator', 
     const translate = new TranslatePhysicalTimeToTicks({
         translatePhysicalModifiers: false
     })
-    translate.transform(msmFixture, mpm)
+    callTransform(translate, msmFixture, mpm)
 
     // Assert
     expect(msm.allNotes.map(note => note.tickDate)).toEqual([0, 1440, 2160])
@@ -116,7 +125,7 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     const translate = new TranslatePhysicalTimeToTicks({
         translatePhysicalModifiers: true
     })
-    translate.transform(msm, mpm)
+    callTransform(translate, msm, mpm)
 
     // Assert
     const transformed = mpm.getInstructions<Ornament>('ornament', 'global')

@@ -8,7 +8,8 @@
     "build": "npx tsc",
     "test": "npx vitest",
     "knip": "knip",
-    "test:roundtrip:report": "ROUNDTRIP_REPORT=1 npx vitest run test/roundtrip/report.test.ts"
+    "test:roundtrip:report": "ROUNDTRIP_REPORT=1 npx vitest run test/roundtrip/report.test.ts",
+    "typecheck": "npx tsc -p tsconfig.test.json"
   },
   "author": "Niels Pfeffer",
   "license": "ISC",
