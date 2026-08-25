@@ -52,7 +52,7 @@ test('it terminates when the last rubato has no frame left before the final note
 
     run(transformer(), msm, mpm)
 
-    expect(mpm.getInstructions<Rubato>('rubato', 'global').map(r => r.date)).toEqual([0, 720, 2160])
+    expect(mpm.getInstructions('rubato', 'global').map(r => r.date)).toEqual([0, 720, 2160])
 })
 
 test('it folds a run of similar rubatos into one looping instruction', () => {
@@ -70,7 +70,7 @@ test('it folds a run of similar rubatos into one looping instruction', () => {
 
     run(transformer(), msm, mpm)
 
-    const rubatos = mpm.getInstructions<Rubato>('rubato', 'global')
+    const rubatos = mpm.getInstructions('rubato', 'global')
     expect(rubatos.map(r => r.date)).toEqual([0, 2160])
     expect(rubatos[0].loop).toBe(true)
     expect(rubatos[0].intensity).toBeCloseTo((1.4 + 1.45 + 1.5) / 3, 10)

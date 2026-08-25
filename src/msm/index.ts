@@ -73,33 +73,53 @@ export class MSM {
      */
     constructor(notes?: MsmNote[], timeSignature?: TimeSignature) {
         this.pedals = []
-        this.allNotes = notes ? notes.sort((a, b) => a['date'] - b['date']) : []
+        // Sorted into a copy, not in place. `sort` mutates its receiver, so sorting the array
+        // the caller passed reordered *their* array as a side effect of construction — which is
+        // how `clone()` used to reorder the very score it claimed to be copying.
+        this.allNotes = notes ? [...notes].sort((a, b) => a['date'] - b['date']) : []
 
         if (timeSignature) {
             this.timeSignature = timeSignature
         }
     }
 
+    /**
+     * An independent copy of this score.
+     *
+     * This used to be the shallow one: it handed `this.allNotes` to the constructor and assigned
+     * `this.pedals` across, so the "copy" shared both arrays *and* every note object with the
+     * original. Writing a velocity through it wrote through to the original, and constructing it
+     * re-sorted the original in place. Nothing wanted that, so there is only one kind of copy
+     * now and both names give it.
+     */
     public clone() {
-        const clone = new MSM(this.allNotes, this.timeSignature)
-        clone.pedals = this.pedals
-        return clone
+        return this.deepClone()
     }
 
     public deepClone() {
         const clone = new MSM()
         clone.allNotes = this.allNotes.map(note => ({ ...note }))
         clone.pedals = this.pedals.map(pedal => ({ ...pedal }))
-        clone.timeSignature = { ...this.timeSignature }
+        // Spreading an absent time signature yields `{}`, which is not a TimeSignature but
+        // typechecked as one: the copy then reported `numerator` and `denominator` as undefined
+        // where the original had honestly reported having no time signature at all.
+        clone.timeSignature = this.timeSignature ? { ...this.timeSignature } : undefined
         return clone
     }
 
+    /**
+     * Attach arbitrary extra keys to one note.
+     *
+     * The keys are by definition not in `MsmNote`, so the write goes through an index signature
+     * the type does not have. That cast is the whole of the untypedness and it stays here.
+     */
     public addCustomInfo(scoreId: string, info: Record<string, unknown>) {
         const target = this.allNotes.find(note => note["xml:id"] === scoreId)
         if (!target) return
 
+        const bag = target as unknown as Record<string, unknown>
         for (const [key, value] of Object.entries(info)) {
-            target[key] = value
+            bag[key] = value
         }
     }
 
@@ -276,7 +296,8 @@ export class MSM {
         })
     }
 
-    public getByID(id: string): MsmNote | null {
+    /** The note with this `xml:id`, or `undefined`. */
+    public getByID(id: string): MsmNote | undefined {
         return this.allNotes.find(note => {
             return note["xml:id"] === id
         })
@@ -284,23 +305,21 @@ export class MSM {
 
     /**
      * Generates a homophonized version of the MSM score.
-     * @returns 
+     *
+     * The sort runs on a copy. Asking a score to describe itself as chords used to reorder it:
+     * for `'global'` the local was `this.allNotes` itself, so a read-only-looking query left the
+     * score permanently sorted by date.
      */
     public asChords(part: Scope = 'global'): ChordMap {
-        const notes = part === 'global'
-            ? this.allNotes
-            : this.allNotes.filter(n => n.part - 1 === part)
-
-        notes.sort((a, b) => a.date - b.date)
+        const notes = (part === 'global'
+            ? [...this.allNotes]
+            : this.allNotes.filter(n => n.part - 1 === part))
+            .sort((a, b) => a.date - b.date)
 
         return notes.reduce((prev, curr) => {
-            // console.log('curr=', curr)
-            if (prev.has(curr.date)) {
-                prev.set(curr.date, [...prev.get(curr.date), curr])
-            }
-            else {
-                prev.set(curr.date, [curr])
-            }
+            const chord = prev.get(curr.date)
+            if (chord) chord.push(curr)
+            else prev.set(curr.date, [curr])
             return prev
         }, new Map() as ChordMap)
     }
@@ -333,9 +352,16 @@ export class MSM {
         return new Set(this.allNotes.map(note => note.part - 1))
     }
 
-    public notesInPart(part: Scope) {
+    /**
+     * The notes of one part, or of the whole score.
+     *
+     * Both branches answer with a fresh array. The `'global'` branch used to answer with
+     * `this.allNotes` itself, so a caller that sorted or spliced what it got back was editing
+     * the score through what reads as a query.
+     */
+    public notesInPart(part: Scope): MsmNote[] {
         return part === 'global'
-            ? this.allNotes
+            ? [...this.allNotes]
             : this.allNotes.filter(n => n.part - 1 === part)
     }
 

@@ -1,4 +1,4 @@
-import { MPM, Ornament, Tempo } from "../../mpm";
+import { MPM, Tempo } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt, ticksForConstantTempo, TempoWithEndDate } from "./tempoCalculations";
@@ -38,12 +38,9 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
     requires = []
 
     constructor(options?: TranslatePhysicalTimeToTicksOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             translatePhysicalModifiers: true
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -142,9 +139,9 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      */
     translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
         for (const scope of mpm.scopes()) {
-            const tempos = mpm.getInstructions<Tempo>('tempo', scope)
+            const tempos = mpm.getInstructions('tempo', scope)
 
-            const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
+            const ornaments = mpm.getInstructions('ornament', scope)
             for (const ornament of ornaments) {
                 if (ornament["time.unit"] === 'ticks') {
                     // the job is done already

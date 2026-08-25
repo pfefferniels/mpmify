@@ -2,7 +2,7 @@
 
 import { describe, test, expect } from "vitest"
 import { MSM } from "../src/msm"
-import { Dynamics, MPM, Tempo } from "../src/mpm"
+import { MPM } from "../src/mpm"
 import { ApproximateLogarithmicTempo } from "../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { InsertDynamicsInstructions } from "../src/transformers/dynamics/InsertDynamicsInstructions"
 import { Transformer } from "../src/transformers/Transformer"
@@ -77,7 +77,7 @@ describe('the pipeline fold is a function of its inputs', () => {
             const msm = buildMsm().deepClone()
             const mpm = new MPM()
             chain()[0].run(msm, mpm)
-            return mpm.getInstructions<Tempo>('tempo', 'global')
+            return mpm.getInstructions('tempo', 'global')
                 .map(t => [t.bpm, t['transition.to'], t.meanTempoAt])
         }
         const first = bpms()
@@ -91,7 +91,7 @@ describe('the pipeline fold is a function of its inputs', () => {
             const msm = buildMsm().deepClone()
             const mpm = new MPM()
             chain()[1].run(msm, mpm)
-            return mpm.getInstructions<Dynamics>('dynamics', 'global')
+            return mpm.getInstructions('dynamics', 'global')
                 .map(d => [d.volume, d['transition.to'], d.curvature, d.protraction])
         }
         const first = curves()

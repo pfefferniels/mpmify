@@ -24,9 +24,14 @@ import { TickTimes } from "../tempo/tickTimes"
 export const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
     // compute the position of the map element within the rubato frame
     const localDate = (date - rubato.date) % rubato.frameLength;
+    // An absent @intensity is not "no intensity": the renderer reads it as 1.0, the identity
+    // warp (espressivo `resolveRubato`, and RubatoData.java before it). Reading it raw made
+    // `Math.pow(x, undefined)` NaN, and the frames CombineAdjacentRubatos writes to close a
+    // loop carry no @intensity by design — so every date under one came back NaN.
+    const intensity = rubato.intensity ?? 1
     const lateStart = Math.max(Math.min(rubato.lateStart || 0, 0.9), 0)
     const earlyEnd = Math.max(Math.min(rubato.earlyEnd || 1, 1), 0.1)
-    const d = (Math.pow(localDate / rubato.frameLength, rubato.intensity) * (earlyEnd - lateStart) + lateStart) * rubato.frameLength;
+    const d = (Math.pow(localDate / rubato.frameLength, intensity) * (earlyEnd - lateStart) + lateStart) * rubato.frameLength;
     return date + d - localDate
 }
 
@@ -80,7 +85,7 @@ export const removeRubatoDistortion = (
         const time = times.notes.get(note['xml:id'])
         if (!time?.tickDuration) continue
 
-        const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', scope)[0];
+        const onsetRubato = mpm.instructionsEffectiveAtDate(note.date, 'rubato', scope)[0];
         if (!onsetRubato) continue
 
         const onsetInTicks = onsetRubato
@@ -99,7 +104,7 @@ export const removeRubatoDistortion = (
         // position handed to the frame lookup was neither. See issue #40.
         const offset = note.date + note.duration
 
-        const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', scope)
+        const rubatos = mpm.instructionsEffectiveAtDate(offset, 'rubato', scope)
         const effectiveRubato = rubatos[0]
         if (!effectiveRubato) continue
 
@@ -107,7 +112,7 @@ export const removeRubatoDistortion = (
         const remainder = offset - rubatoStart
         time.tickDuration -= remainder
 
-        const remainderWithoutRubato = removeRubatoFromDate(effectiveRubato.date + remainder, effectiveRubato)!
+        const remainderWithoutRubato = removeRubatoFromDate(effectiveRubato.date + remainder, effectiveRubato)
         time.tickDuration += remainderWithoutRubato
     }
 }

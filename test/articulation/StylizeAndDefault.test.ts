@@ -94,7 +94,7 @@ test('StylizeArticulation sees every note a multi-note @noteid names', () => {
     callTransform(new StylizeArticulation({ volumeTolerance: 0.01, relativeDurationTolerance: 0.2 }), msm, mpm)
 
     const conflicting = mpm
-        .getInstructions<Articulation>('articulation', 'global')
+        .getInstructions('articulation', 'global')
         .find(a => a.noteid === '#n0 #n1')
 
     expect(conflicting).toBeDefined()

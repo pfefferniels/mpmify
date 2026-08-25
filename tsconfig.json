@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "strict": true,
     "incremental": true,
     "lib": [
       "dom",

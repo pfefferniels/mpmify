@@ -26,46 +26,57 @@ export interface CombineAdjacentRubatoOptions extends ScopedTransformationOption
 export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentRubatoOptions> {
     name = 'CombineAdjacentRubatos'
     requires = [InsertRubato]
-    options: CombineAdjacentRubatoOptions
 
     constructor(options?: CombineAdjacentRubatoOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             intensityTolerance: 0.2,
             compressionTolerance: 0.1,
             scope: 'global',
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        const rubatos = mpm.getInstructions<Rubato>('rubato', this.options.scope)
+        const rubatos = mpm.getInstructions('rubato', this.options.scope)
         if (rubatos.length <= 1) return
 
         const lastDate = msm.lastDate()
 
-        let ref = rubatos[0]
-        while (ref) {
+        // The frame the walk is about to fold a run onto: `undefined` once it has run past the
+        // last rubato, which is the loop's own exit. The body works on the fixed `ref` rather
+        // than on `next` itself, because the assignment at the foot of the loop otherwise makes
+        // the type of `date` below depend, through the walk, on its own initializer.
+        let next: Rubato | undefined = rubatos[0]
+        while (next) {
+            const ref: Rubato = next
+
             // Where the run of frames after `ref` stopped. `undefined` means it ran off the
             // end of the piece, which is the case that has no successor and no loop to close:
-            // advancing past `ref` unconditionally is what keeps the outer loop finite. Leaving
+            // advancing the walk unconditionally is what keeps the outer loop finite. Leaving
             // it to the `for` alone meant that a `ref` whose next frame started at or after the
-            // last note never reassigned `ref` and span forever. See old-bugs.md.
+            // last note never advanced the walk and span forever. See old-bugs.md.
             let stoppedAt: number | undefined = undefined
 
             for (let date = ref.date + ref.frameLength; date < lastDate; date += ref.frameLength) {
                 const current = rubatos.find(r => r.date === date)
 
+                // A frame that carries no @intensity is warped at 1.0, the renderer's default
+                // (espressivo `resolveRubato`) — the identity, which is neither the rush nor the
+                // delay the direction test below looks for, so such a frame merges with nothing.
+                // Reading the attribute raw reached the same outcome by accident: every
+                // comparison against `undefined` is false. The other two defaults, already
+                // spelled out below, are 0.0 for @lateStart and 1.0 for @earlyEnd.
+                const refIntensity = ref.intensity ?? 1
+                const currentIntensity = current?.intensity ?? 1
+
                 if (current &&
-                    (ref.intensity < 1 && current.intensity < 1 || ref.intensity > 1 && current.intensity > 1)
-                    && Math.abs(current.intensity - ref.intensity) < this.options.intensityTolerance
+                    (refIntensity < 1 && currentIntensity < 1 || refIntensity > 1 && currentIntensity > 1)
+                    && Math.abs(currentIntensity - refIntensity) < this.options.intensityTolerance
                     && Math.abs((current.lateStart || 0) - (ref.lateStart || 0)) < this.options.compressionTolerance
                     && Math.abs((current.earlyEnd || 1) - (ref.earlyEnd || 1)) < this.options.compressionTolerance
                 ) {
                     const count = (date - ref.date) / ref.frameLength
                     ref.loop = true
-                    ref.intensity = (ref.intensity * count + current.intensity) / (count + 1)
+                    ref.intensity = (refIntensity * count + currentIntensity) / (count + 1)
                     ref.lateStart = ((ref.lateStart || 0) * count + (current.lateStart || 0)) / (count + 1)
                     ref.earlyEnd = ((ref.earlyEnd || 1) * count + (current.earlyEnd || 1)) / (count + 1)
                     mpm.removeInstruction(current)
@@ -92,7 +103,7 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
                 }, this.options.scope)
             }
 
-            ref = rubatos.find(r => r.date > stoppedAt)
+            next = rubatos.find(r => r.date > stoppedAt)
         }
     }
 }

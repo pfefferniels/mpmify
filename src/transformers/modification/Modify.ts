@@ -15,16 +15,13 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
     requires = []
 
     constructor(options?: ModifyOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             scope: 'global',
             aspect: 'velocity',
             change: 0,
             from: 0,
             to: 0
-        }
+        })
     }
 
     protected transform(msm: MSM, _mpm: MPM) {

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { performMsmToData } from "espressivo"
-import { MPM, Dynamics, Tempo, ArticulationDef } from "../../src/mpm"
+import { MPM, ArticulationDef } from "../../src/mpm"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
 import { InsertDynamicsInstructions } from "../../src/transformers/dynamics"
@@ -30,7 +30,7 @@ const caseNamed = (name: string) => tierTwoCases.find(spec => spec.name === name
 describe('the tempo fitter recovers its own curve', () => {
     test('a constant tempo comes back as one instruction at that bpm', () => {
         const { fitted } = roundTrip(caseNamed('tempo: constant'))
-        const tempos = fitted.getInstructions<Tempo>('tempo', 'global')
+        const tempos = fitted.getInstructions('tempo', 'global')
 
         expect(tempos).toHaveLength(1)
         expect(tempos[0].date).toBe(0)
@@ -40,7 +40,7 @@ describe('the tempo fitter recovers its own curve', () => {
 
     test('a ritardando comes back with both boundary tempos', () => {
         const { fitted } = roundTrip(caseNamed('tempo: ritardando 120 to 60'))
-        const tempos = fitted.getInstructions<Tempo>('tempo', 'global')
+        const tempos = fitted.getInstructions('tempo', 'global')
             .sort((a, b) => a.date - b.date)
 
         expect(tempos.length).toBeGreaterThanOrEqual(2)
@@ -59,7 +59,7 @@ describe('the tempo fitter recovers its own curve', () => {
 describe('the dynamics fitter recovers its own curve', () => {
     test('a linear crescendo comes back with both boundary volumes', () => {
         const { fitted } = roundTrip(caseNamed('dynamics: linear crescendo 40 to 100'))
-        const dynamics = fitted.getInstructions<Dynamics>('dynamics', 'global')
+        const dynamics = fitted.getInstructions('dynamics', 'global')
             .sort((a, b) => a.date - b.date)
 
         expect(dynamics.length).toBeGreaterThanOrEqual(2)
@@ -69,7 +69,7 @@ describe('the dynamics fitter recovers its own curve', () => {
 
     test('a constant dynamic comes back flat, with no transition at all', () => {
         const { fitted } = roundTrip(caseNamed('dynamics: constant'))
-        const dynamics = fitted.getInstructions<Dynamics>('dynamics', 'global')
+        const dynamics = fitted.getInstructions('dynamics', 'global')
 
         expect(dynamics[0].volume as number).toBeCloseTo(70, 4)
         expect(dynamics[0]['transition.to']).toBeUndefined()

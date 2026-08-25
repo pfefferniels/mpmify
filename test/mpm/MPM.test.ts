@@ -2,15 +2,12 @@
 
 import { describe, expect, test } from "vitest"
 import {
-    AccentuationPattern,
     AccentuationPatternDef,
     ArticulationDef,
-    Dynamics,
     MPM,
     Ornament,
     OrnamentDef,
     parseMPM,
-    Rubato,
     Tempo,
 } from "../../src/mpm"
 
@@ -24,7 +21,7 @@ describe("instructions", () => {
         mpm.insertInstruction(tempo(1440, 90), 'global')
         mpm.insertInstruction(tempo(0, 60), 'global')
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global').map(t => t.date)).toEqual([0, 1440])
+        expect(mpm.getInstructions('tempo', 'global').map(t => t.date)).toEqual([0, 1440])
         expect(mpm.toXML()).toContain('<tempoMap>')
     })
 
@@ -37,12 +34,15 @@ describe("instructions", () => {
 
         expect(mpm.toXML()).toContain('bpm="72"')
         expect(mpm.toXML()).toContain('transition.to="90"')
-        expect(mpm.getInstructions<Tempo>('tempo', 'global')[0].bpm).toBe(72)
+        expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe(72)
     })
 
     test("assigning undefined removes the attribute, as deleting does", () => {
         const mpm = new MPM()
-        const inserted = mpm.insertInstruction(
+        // Annotated, because `insertInstruction` gives back the literal type it was handed:
+        // inferred from this object, `meanTempoAt` and `transition.to` are *required* `number`s,
+        // and the point of the test is that they are the optional ones `Tempo` declares.
+        const inserted: Tempo = mpm.insertInstruction(
             { ...tempo(0, 60), meanTempoAt: 0.5, 'transition.to': 90 },
             'global'
         )
@@ -58,7 +58,7 @@ describe("instructions", () => {
         const mpm = new MPM()
         const inserted = mpm.insertInstruction(tempo(0, 60), 'global')
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global')[0]).toBe(inserted)
+        expect(mpm.getInstructions('tempo', 'global')[0]).toBe(inserted)
     })
 
     test("spread into a plain record carrying every present attribute", () => {
@@ -87,7 +87,7 @@ describe("instructions", () => {
 
         mpm.removeInstruction(first)
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global').map(t => t.date)).toEqual([720])
+        expect(mpm.getInstructions('tempo', 'global').map(t => t.date)).toEqual([720])
         expect(mpm.toXML()).not.toContain('bpm="60"')
     })
 })
@@ -104,7 +104,7 @@ describe("merging at a date", () => {
         mpm.insertInstruction(ornament({ 'transition.from': -1, 'transition.to': 0, scale: 5 }), 'global')
         mpm.insertInstruction(ornament({ 'frame.start': -100, frameLength: 200 }), 'global')
 
-        const ornaments = mpm.getInstructions<Ornament>('ornament', 'global')
+        const ornaments = mpm.getInstructions('ornament', 'global')
         expect(ornaments).toHaveLength(1)
         expect(ornaments[0].scale).toBe(5)
         expect(ornaments[0]['frame.start']).toBe(-100)
@@ -115,7 +115,7 @@ describe("merging at a date", () => {
         mpm.insertInstruction(tempo(0, 60), 'global')
         mpm.insertInstruction(tempo(0, 90), 'global')
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global')[0].bpm).toBe(60)
+        expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe(60)
     })
 
     test("with overwrite, the incoming value wins", () => {
@@ -123,7 +123,7 @@ describe("merging at a date", () => {
         mpm.insertInstruction(tempo(0, 60), 'global')
         mpm.insertInstruction(tempo(0, 90), 'global', true)
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        const tempos = mpm.getInstructions('tempo', 'global')
         expect(tempos).toHaveLength(1)
         expect(tempos[0].bpm).toBe(90)
     })
@@ -133,7 +133,7 @@ describe("merging at a date", () => {
         mpm.insertInstruction({ ...tempo(0, 60), noteid: '#a' }, 'global')
         mpm.insertInstruction({ ...tempo(0, 90, 'tempo_0_1'), noteid: '#b' }, 'global')
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global')).toHaveLength(2)
+        expect(mpm.getInstructions('tempo', 'global')).toHaveLength(2)
     })
 
     test("a date the map does not hold does not merge into the next instruction", () => {
@@ -141,7 +141,7 @@ describe("merging at a date", () => {
         mpm.insertInstruction(tempo(720, 90), 'global')
         mpm.insertInstruction(tempo(0, 60), 'global')
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global').map(t => t.bpm)).toEqual([60, 90])
+        expect(mpm.getInstructions('tempo', 'global').map(t => t.bpm)).toEqual([60, 90])
     })
 
     test("a <style> switch sharing the date is not merged into", () => {
@@ -153,7 +153,7 @@ describe("merging at a date", () => {
         )
         mpm.insertInstruction(tempo(0, 60), 'global')
 
-        expect(mpm.getInstructions<Tempo>('tempo', 'global')).toHaveLength(1)
+        expect(mpm.getInstructions('tempo', 'global')).toHaveLength(1)
         expect(mpm.getStyles('tempo', 'global')).toHaveLength(1)
     })
 })
@@ -269,7 +269,7 @@ describe("scopes", () => {
         mpm.insertInstruction(tempo(0, 60), 'global')
         mpm.insertInstruction(tempo(720, 90), 0)
 
-        expect(mpm.getInstructions<Tempo>('tempo').map(t => t.date)).toEqual([0, 720])
+        expect(mpm.getInstructions('tempo').map(t => t.date)).toEqual([0, 720])
     })
 })
 
@@ -307,7 +307,7 @@ describe("round trip", () => {
     test("reads <accentuationPattern>, which mpm-ts's reader dropped", () => {
         const mpm = parseMPM(source)
 
-        const patterns = mpm.getInstructions<AccentuationPattern>('accentuationPattern', 'global')
+        const patterns = mpm.getInstructions('accentuationPattern', 'global')
         expect(patterns).toHaveLength(2)
         expect(patterns[0].scale).toBe(3)
         expect(patterns[0].loop).toBe(true)
@@ -327,15 +327,15 @@ describe("round trip", () => {
     test("reads the other maps and their numbers", () => {
         const mpm = parseMPM(source)
 
-        expect(mpm.getInstructions<Dynamics>('dynamics', 'global')[0].volume).toBe(60)
-        expect(mpm.getInstructions<Rubato>('rubato', 'global')[0].intensity).toBe(1.4)
+        expect(mpm.getInstructions('dynamics', 'global')[0].volume).toBe(60)
+        expect(mpm.getInstructions('rubato', 'global')[0].intensity).toBe(1.4)
         expect(mpm.getStyles('accentuationPattern', 'global')).toHaveLength(1)
     })
 
     test("a symbolic level stays the name it was written as", () => {
         const mpm = parseMPM(source.replace('volume="60"', 'volume="forte"'))
 
-        expect(mpm.getInstructions<Dynamics>('dynamics', 'global')[0].volume).toBe('forte')
+        expect(mpm.getInstructions('dynamics', 'global')[0].volume).toBe('forte')
     })
 
     test("what was read can be written back", () => {

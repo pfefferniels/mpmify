@@ -16,9 +16,8 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
     private _boundaryId?: string
 
     constructor(options?: InsertTempoOptions) {
-        super()
+        super(options || { scope: 'global', from: 0, to: 0, bpm: 120, beatLength: 0.25 })
         if (options) {
-            this.options = options
             this.argumentation = {
                 id: this.id,
                 type: 'simpleArgumentation',
@@ -63,7 +62,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
     }
 
     private removeAffectedTempoInstructions(mpm: MPM, scope: Scope, from: number, to: number) {
-        const existing = mpm.getInstructions<Tempo>('tempo', scope)
+        const existing = mpm.getInstructions('tempo', scope)
             .slice()
             .sort((a, b) => a.date - b.date)
         if (existing.length === 0) return

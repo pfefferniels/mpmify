@@ -1,4 +1,4 @@
-import { AccentuationPattern, AccentuationPatternDef, Accentuation, MPM } from "../../mpm";
+import { AccentuationPatternDef, Accentuation, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { InsertMetricalAccentuation } from "./InsertMetricalAccentuation";
@@ -13,14 +13,11 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
     requires = [InsertMetricalAccentuation]
 
     constructor(options?: MergeMetricalAccentuationsOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             names: [],
             into: '',
             scope: 'global'
-        }
+        })
     }
 
     protected transform(_: MSM, mpm: MPM) {
@@ -38,7 +35,7 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         toMerge.forEach(def => mpm.removeDefinition(def))
         mpm.insertDefinition(mergedPattern, this.options.scope)
 
-        const allInstructions = mpm.getInstructions<AccentuationPattern>('accentuationPattern', this.options.scope)
+        const allInstructions = mpm.getInstructions('accentuationPattern', this.options.scope)
         allInstructions
             .filter(a => this.options.names.includes(a["name.ref"]))
             .forEach(a => {

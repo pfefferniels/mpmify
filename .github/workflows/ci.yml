@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      # mpmify depends on espressivo as `"espressivo": "file:../meico-ts"` — a relative path
+      # to a sibling working copy, because the two repositories are developed side by side.
+      # Nothing about that path exists on a runner, so we recreate the local layout by
+      # checking out BOTH repositories as siblings under $GITHUB_WORKSPACE:
+      #
+      #   $GITHUB_WORKSPACE/mpmify     <- this repository
+      #   $GITHUB_WORKSPACE/meico-ts   <- pfefferniels/espressivo
+      #
+      # `../meico-ts`, resolved from mpmify/package.json, then points at the espressivo
+      # checkout exactly as it does on a development machine — so the lockfile's link entry
+      # stays valid and `npm ci` is usable. (espressivo is also on npm, but the checkout
+      # tracks its main branch, which is where mpmify actually consumes it from.)
+      - uses: actions/checkout@v4
+        with:
+          path: mpmify
+
+      - uses: actions/checkout@v4
+        with:
+          repository: pfefferniels/espressivo
+          path: meico-ts
+
+      # Node 22, not 21: mpmify's own floor is >=21 (src/Work.ts uses Map.groupBy), but
+      # espressivo declares engines.node >=22.0.0, so 22 is the lowest version that
+      # satisfies the whole dependency tree.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            mpmify/package-lock.json
+            meico-ts/package-lock.json
+
+      # espressivo does not commit dist/, but its package.json points main/types there, so
+      # it has to be built before mpmify can typecheck or run against it. Its node_modules
+      # must exist for a second reason: mpmify's lockfile records espressivo as a link and
+      # does not carry espressivo's runtime dependencies (@xmldom/xmldom, xpath). Node
+      # resolves those through the symlink's real path, i.e. from meico-ts/node_modules.
+      - name: Install espressivo
+        working-directory: meico-ts
+        run: npm ci
+
+      - name: Build espressivo
+        working-directory: meico-ts
+        run: npm run build
+
+      - name: Install mpmify
+        working-directory: mpmify
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: mpmify
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: mpmify
+        run: npm run lint
+
+      - name: Test
+        working-directory: mpmify
+        run: npx vitest run

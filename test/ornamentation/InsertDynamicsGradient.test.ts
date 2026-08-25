@@ -2,7 +2,7 @@
 
 import { expect, test } from 'vitest'
 import { MSM } from '../../src/msm'
-import { MPM, Ornament } from '../../src/mpm'
+import { MPM } from '../../src/mpm'
 import { InsertDynamicsGradient } from '../../src/transformers'
 
 /**
@@ -53,7 +53,7 @@ test('it fits a rising chord to the crescendo gradient and flattens the velociti
         sortVelocities: true,
     }), msm, mpm)
 
-    const ornaments = mpm.getInstructions<Ornament>('ornament', 'global')
+    const ornaments = mpm.getInstructions('ornament', 'global')
     expect(ornaments).toHaveLength(1)
     expect(ornaments[0]['transition.from']).toBe(-1)
     expect(ornaments[0]['transition.to']).toBe(0)
@@ -71,7 +71,7 @@ test('it works with the constructor defaults, which do not sort velocities', () 
     // See old-bugs.md.
     callTransform(new InsertDynamicsGradient(), msm, mpm)
 
-    const ornaments = mpm.getInstructions<Ornament>('ornament', 'global')
+    const ornaments = mpm.getInstructions('ornament', 'global')
     expect(ornaments).toHaveLength(1)
     expect(ornaments[0]['transition.from']).toBe(-1)
     expect(ornaments[0]['transition.to']).toBe(0)
@@ -84,5 +84,5 @@ test('a chord whose notes are equally loud gets no gradient', () => {
 
     callTransform(new InsertDynamicsGradient(), msm, mpm)
 
-    expect(mpm.getInstructions<Ornament>('ornament', 'global')).toHaveLength(0)
+    expect(mpm.getInstructions('ornament', 'global')).toHaveLength(0)
 })

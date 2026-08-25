@@ -96,16 +96,19 @@ describe("TransformerRegistry", () => {
             class Alpha extends AbstractTransformer<TransformationOptions> {
                 name = "Alpha"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
             class Beta extends AbstractTransformer<TransformationOptions> {
                 name = "Beta"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
             class Custom extends AbstractTransformer<TransformationOptions> {
                 name = "Custom"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
 
@@ -123,16 +126,19 @@ describe("TransformerRegistry", () => {
             class Alpha extends AbstractTransformer<TransformationOptions> {
                 name = "Alpha"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
             class Beta extends AbstractTransformer<TransformationOptions> {
                 name = "Beta"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
             class Custom extends AbstractTransformer<TransformationOptions> {
                 name = "Custom"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
 
@@ -150,6 +156,7 @@ describe("TransformerRegistry", () => {
             class Alpha extends AbstractTransformer<TransformationOptions> {
                 name = "Alpha"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
 
@@ -165,6 +172,7 @@ describe("TransformerRegistry", () => {
             class Custom extends AbstractTransformer<TransformationOptions> {
                 name = "Custom"
                 requires = []
+                constructor() { super({}) }
                 protected transform() { /* no-op */ }
             }
 

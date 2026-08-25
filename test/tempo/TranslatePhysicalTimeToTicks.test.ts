@@ -123,7 +123,7 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     callTransform(translate, msm, mpm)
 
     // Assert
-    const transformed = mpm.getInstructions<Ornament>('ornament', 'global')
+    const transformed = mpm.getInstructions('ornament', 'global')
     expect(transformed.every(arpeggio => arpeggio["time.unit"] === 'ticks')).toBeTruthy()
     expect(transformed.map(a => a["frame.start"])).toEqual([-36, -18])
     expect(transformed.map(a => a.frameLength)).toEqual([72, 36])

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { MPM, Ornament, OrnamentDef } from "../../src/mpm"
+import { MPM, Ornament, OrnamentDef, elementOf } from "../../src/mpm"
 import { StylizeOrnamentation } from "../../src/transformers"
 
 /**
@@ -28,7 +28,30 @@ const run = (mpm: MPM) => callTransform(
 const defNames = (mpm: MPM) =>
     mpm.getDefinitions<OrnamentDef>('ornamentDef', 'global').map(def => def.name)
 
-const ornaments = (mpm: MPM) => mpm.getInstructions<Ornament>('ornament', 'global')
+const ornaments = (mpm: MPM) => mpm.getInstructions('ornament', 'global')
+
+/**
+ * Give an ornament already in the document a frame of literal `NaN`.
+ *
+ * `insertInstruction` cannot produce one any more: `view.ts`'s `writeValue` refuses to spell a
+ * non-finite number, so mpmify never *authors* one. It still reads one — `parseFloat('NaN')` is
+ * NaN — which means an ornament can only arrive with an unusable frame out of a file some
+ * earlier version wrote. That is exactly where issue #28's corpus ornaments came from, so
+ * writing the attribute straight onto the element is the faithful fixture, not a workaround.
+ *
+ * The branch under test is `StylizeOrnamentation`'s "frame present but not a number", which it
+ * treats differently from "no frame at all" — so the attributes have to be there and have to be
+ * NaN. Omitting them would silently move these tests onto the ramp-only path.
+ */
+const spoilFrame = (mpm: MPM, id: string) => {
+    const element = elementOf(mpm.findInstructionById(id))
+    if (!element) throw new Error(`no ornament #${id} to spoil`)
+    for (const name of ['frame.start', 'frameLength']) {
+        const attribute = element.getAttribute(name)
+        if (!attribute) throw new Error(`ornament #${id} has no @${name} to spoil`)
+        attribute.setValue('NaN')
+    }
+}
 
 describe('an ornament and its definition do not come apart (#28)', () => {
     test('an unusable frame leaves the ornament untouched rather than half-processed', () => {
@@ -38,13 +61,14 @@ describe('an ornament and its definition do not come apart (#28)', () => {
             'xml:id': 'orn_broken',
             date: 0,
             'name.ref': 'neutralArpeggio',
-            'frame.start': NaN,
-            frameLength: NaN,
+            'frame.start': -360,
+            frameLength: 720,
             'time.unit': 'ticks',
             'transition.from': -1,
             'transition.to': 0,
             scale: 25,
         } as Ornament, 'global')
+        spoilFrame(mpm, 'orn_broken')
 
         run(mpm)
 
@@ -106,8 +130,9 @@ describe('an ornament and its definition do not come apart (#28)', () => {
         mpm.insertInstruction({
             type: 'ornament', 'xml:id': 'unusable', date: 4320,
             'name.ref': 'neutralArpeggio',
-            'frame.start': NaN, frameLength: NaN, 'time.unit': 'ticks',
+            'frame.start': -360, frameLength: 720, 'time.unit': 'ticks',
         } as Ornament, 'global')
+        spoilFrame(mpm, 'unusable')
 
         run(mpm)
 

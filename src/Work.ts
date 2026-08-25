@@ -1,6 +1,6 @@
 import { v4 } from "uuid";
 import { MakeChoice, compareTransformers } from "./transformers";
-import { Argumentation, Transformer } from "./transformers/Transformer";
+import { Argumentation, TransformationOptions, Transformer } from "./transformers/Transformer";
 import { createTransformer } from "./transformers/TransformerRegistry";
 
 export interface Work {
@@ -121,6 +121,56 @@ export function exportWork(work: Work, transformers: Transformer[], secondary?: 
 }
 
 
+/** One entry of a saved argumentation's `calls`. Everything but the name may be absent. */
+type SerializedCall = {
+    name: string;
+    id?: string;
+    options?: TransformationOptions;
+    created?: string[];
+}
+
+type SerializedArgumentation = Argumentation & { calls: SerializedCall[] };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The argumentations of a parsed work file.
+ *
+ * This is the only place mpmify reads a document it did not write in this process, and it used
+ * to reach straight through `imported.creation.argumentations`. A file that was truncated, or
+ * written by something that is not mpmify, therefore surfaced as `Cannot read properties of
+ * undefined` — true, but silent about which part of the file was missing. Each step now says
+ * what it expected to find.
+ *
+ * The narrowing is checked down to `calls` being a list and each call naming a transformer;
+ * below that the cast stands in for a schema, because the option shapes are the transformers'
+ * own and this module does not know them.
+ */
+const readArgumentations = (imported: Record<string, unknown>): SerializedArgumentation[] => {
+    const creation = imported.creation;
+    if (!isRecord(creation)) {
+        throw new Error('Not a work file: no "creation" object at the top level');
+    }
+
+    const argumentations = creation.argumentations;
+    if (!Array.isArray(argumentations)) {
+        throw new Error('Not a work file: "creation.argumentations" is missing or not a list');
+    }
+
+    return argumentations.map((argumentation, index) => {
+        if (!isRecord(argumentation) || !Array.isArray(argumentation.calls)) {
+            throw new Error(`Work file argumentation ${index} has no "calls" list`);
+        }
+        for (const call of argumentation.calls) {
+            if (!isRecord(call) || typeof call.name !== 'string') {
+                throw new Error(`Work file argumentation ${index} has a call with no name`);
+            }
+        }
+        return argumentation as unknown as SerializedArgumentation;
+    });
+}
+
 export function importWork(json: string): ImportResult {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function reviver(_: string, value: any) {
@@ -135,31 +185,29 @@ export function importWork(json: string): ImportResult {
         return value;
     }
 
-    const imported = JSON.parse(json, reviver);
+    const imported: unknown = JSON.parse(json, reviver);
+    if (!isRecord(imported)) {
+        throw new Error('Not a work file: expected a JSON object');
+    }
 
-    const transformers =
-        imported.creation.argumentations
-            .map(a => a.calls.map(call => ({
-                ...call,
-                argumentation: a
-            })))
-            .flat()
-            .map(t => {
-                const transformer = createTransformer(t.name);
-                if (!transformer) {
-                    console.warn(`Unknown transformer name: ${t.name}`);
-                    return null;
-                }
-                transformer.id = t.id || v4();
-                transformer.options = t.options;
-                transformer.argumentation = t.argumentation;
-                transformer.created = t.created;
-                return transformer;
-            })
-            .filter(t => t !== null)
+    const transformers = readArgumentations(imported)
+        .flatMap(argumentation => argumentation.calls.map(call => ({ call, argumentation })))
+        .map(({ call, argumentation }) => {
+            const transformer = createTransformer(call.name);
+            if (!transformer) {
+                console.warn(`Unknown transformer name: ${call.name}`);
+                return null;
+            }
+            transformer.id = call.id || v4();
+            if (call.options !== undefined) transformer.options = call.options;
+            transformer.argumentation = argumentation;
+            transformer.created = call.created ?? [];
+            return transformer;
+        })
+        .filter((transformer): transformer is Transformer => transformer !== null)
 
     return {
         transformers: transformers.sort(compareTransformers),
-        ...(imported.secondary !== undefined && { secondary: imported.secondary })
+        ...(imported.secondary !== undefined && { secondary: imported.secondary as Record<string, unknown> })
     };
 }

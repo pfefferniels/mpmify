@@ -88,7 +88,7 @@ function fitAndGetTempos(
         silentOnsets
     });
     callTransform(transformer, msm, mpm);
-    return mpm.getInstructions<Tempo>('tempo', 'global')
+    return mpm.getInstructions('tempo', 'global')
         .sort((a, b) => a.date - b.date);
 }
 
@@ -209,7 +209,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        const tempos = mpm.getInstructions('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -300,7 +300,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        const tempos = mpm.getInstructions('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -344,7 +344,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        const tempos = mpm.getInstructions('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -371,7 +371,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global');
+        const tempos = mpm.getInstructions('tempo', 'global');
         expect(tempos).toHaveLength(1);
         expect(tempos[0].date).toBe(0);
         expect(tempos[0].bpm).toBe(88);
@@ -414,7 +414,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global');
+        const tempos = mpm.getInstructions('tempo', 'global');
         const touchingBoundary = tempos.find(t => t.date === 2 * BEAT);
         expect(touchingBoundary).toBeDefined();
         expect(touchingBoundary!.bpm).toBe(150);
@@ -451,7 +451,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global');
+        const tempos = mpm.getInstructions('tempo', 'global');
         const continuation = tempos.find(t => t.date === BEAT);
         expect(continuation).toBeDefined();
         expect(continuation!.bpm).toBeCloseTo(200, 4);
@@ -470,7 +470,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global');
+        const tempos = mpm.getInstructions('tempo', 'global');
         expect(tempos).toHaveLength(1);
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
     });
@@ -558,7 +558,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
+        const tempos = mpm.getInstructions('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         // The beatLength=0.5 instruction should be untouched

@@ -67,7 +67,7 @@ const at = (table: Map<string, TickTime>, id: string): TickTime => {
  */
 const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
     for (const scope of mpm.scopes()) {
-        const tempos = mpm.getInstructions<Tempo>('tempo', scope)
+        const tempos = mpm.getInstructions('tempo', scope)
 
         let currentMs = 0
         for (let i = 0; i < tempos.length; i++) {
@@ -128,7 +128,7 @@ const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
  */
 const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
     for (const scope of mpm.scopes()) {
-        const tempos = mpm.getInstructions<Tempo>('tempo', scope)
+        const tempos = mpm.getInstructions('tempo', scope)
 
         let currentFrameBeginMs = 0
         for (let i = 0; i < tempos.length; i++) {

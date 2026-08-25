@@ -2,7 +2,7 @@
 
 import { expect, test } from 'vitest'
 import { MSM } from '../../src/msm'
-import { MPM, Ornament } from '../../src/mpm'
+import { MPM } from '../../src/mpm'
 import { InsertTemporalSpread } from '../../src/transformers'
 
 /**
@@ -55,7 +55,7 @@ test('it describes the roll as an <ornament> in milliseconds around the estimate
 
     run(msm, mpm)
 
-    const arpeggios = mpm.getInstructions<Ornament>('ornament', 'global')
+    const arpeggios = mpm.getInstructions('ornament', 'global')
     expect(arpeggios).toHaveLength(1)
     expect(arpeggios[0]['frame.start']).toEqual(-500)
     expect(arpeggios[0]['frameLength']).toEqual(1000)
@@ -81,5 +81,5 @@ test('a roll shorter than the threshold is left alone', () => {
 
     run(msm, mpm)
 
-    expect(mpm.getInstructions<Ornament>('ornament', 'global')).toHaveLength(0)
+    expect(mpm.getInstructions('ornament', 'global')).toHaveLength(0)
 })

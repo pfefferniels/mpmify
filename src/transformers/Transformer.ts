@@ -75,9 +75,24 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     abstract readonly name: string
     options: OptionsType
     created: string[] = []
-    argumentation: Argumentation;
+
+    /**
+     * Assigned by whoever builds the chain — `importWork` off a saved file, the desk when the
+     * user creates or edits one — never by the transformer itself, which is why there is no
+     * initializer here and why `run` reads it through `?.`.
+     *
+     * Declared as definitely assigned rather than optional because the contract holds on every
+     * transformer that reaches a chain, and `Transformer.argumentation` is consumed as required
+     * downstream. The window in which it is genuinely absent is between `new` and the caller's
+     * next statement.
+     */
+    argumentation!: Argumentation;
 
     abstract readonly requires: Array<TransformerConstructor>
+
+    protected constructor(options: OptionsType) {
+        this.options = options
+    }
 
     // this method should not be overridden
     public run(msm: MSM, mpm: MPM) {
@@ -88,7 +103,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         this.insertMetadata(mpm)
     }
 
-    protected abstract transform(msm: MSM, mpm: MPM);
+    protected abstract transform(msm: MSM, mpm: MPM): void
 
     private insertMetadata(mpm: MPM) {
         this.created.forEach(id => {
@@ -156,7 +171,7 @@ export const getRange = (
             .filter(d => !!d)
 
         if (ranges.length === 0) {
-            return null;
+            return undefined;
         }
 
         const from = Math.min(...ranges.map(({ from }) => from));
@@ -180,7 +195,7 @@ export const getRange = (
             .map(id => msm.getByID(id)?.date)
             .filter((d): d is number => d !== undefined)
         if (dates.length === 0) {
-            return null
+            return undefined
         }
         return { from: Math.min(...dates), to: Math.max(...dates) }
     }

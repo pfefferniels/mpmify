@@ -24,10 +24,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
     requires = [InsertDynamicsInstructions]
 
     constructor(options?: InsertMetricalAccentuationOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             scope: 'global',
             name: 'my-accentuation',
             from: 0,
@@ -35,7 +32,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             beatLength: 0.25,
             neutralEnd: false,
             scaleTolerance: 0,
-        }
+        })
     }
 
     private extractVelocities(
@@ -57,7 +54,10 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 .reduce((acc, note) => acc + residual.of(note)!.velocity!, 0) / notesAtDate.length
 
             velocities.push({
-                beat: msm.timeSignature.denominator * beat + 1,
+                // A score may carry no time signature, and `MSM.build()` writes out 4/4 when it
+                // does not. Beat numbers here have to be counted in the same bar the score will
+                // be published in, or the pattern would be indexed against a meter nobody sees.
+                beat: (msm.timeSignature?.denominator || 4) * beat + 1,
                 avgVelocityChange
             })
         }
@@ -118,7 +118,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             neutralEnd: this.options.neutralEnd
         }
 
-        const nextCell = mpm.getInstructions<AccentuationPattern>('accentuationPattern', this.options.scope)
+        const nextCell = mpm.getInstructions('accentuationPattern', this.options.scope)
             .find(c => c.date > this.options.from);
 
         // What the dynamics curve leaves unexplained, per note — the quantity this used to read
@@ -173,7 +173,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         const accentuationPatternDef: AccentuationPatternDef = {
             type: 'accentuationPatternDef',
             name: this.options.name,
-            length: ((cell.end - cell.start) / 4 / 720) * msm.timeSignature.denominator,
+            length: ((cell.end - cell.start) / 4 / 720) * (msm.timeSignature?.denominator || 4),
             children: accentuations,
         }
 

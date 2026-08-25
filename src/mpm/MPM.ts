@@ -37,6 +37,7 @@ import {
     AnyInstruction,
     DEFAULT_STYLE_NAME,
     DefinitionType,
+    InstructionOf,
     InstructionType,
     instructionTypes,
     mapNames,
@@ -221,33 +222,43 @@ export class MPM {
      * Every instruction in a map, as live views, in document order. `<style>` switches are
      * excluded — `getStyles` answers those.
      *
+     * Naming a type gives back that type: the caller states its intent once, in the argument,
+     * and does not have to repeat it as an assertion the compiler cannot check.
+     *
      * @param type the instruction type to filter for; all types if omitted
      * @param scope the part to read; every scope if omitted
      */
-    getInstructions<T extends AnyInstruction>(type?: InstructionType, scope?: Scope): T[] {
+    getInstructions<K extends InstructionType>(type: K, scope?: Scope): InstructionOf<K>[]
+    getInstructions(type?: undefined, scope?: Scope): AnyInstruction[]
+    getInstructions(type?: InstructionType, scope?: Scope): AnyInstruction[] {
         const scopes: Scope[] = scope !== undefined ? [scope] : this.scopes()
         const types = type ? [type] : instructionTypes
 
-        const result: T[] = []
+        const result: AnyInstruction[] = []
         for (const one of scopes) {
             for (const instructionType of types) {
                 const map = this.map(instructionType, one, false)
                 if (!map) continue
                 for (const entry of map.getAllElements()) {
                     if (entry.value.getLocalName() === 'style') continue
-                    result.push(viewOf<T>(entry.value))
+                    // The one unchecked step: a proxy over an element is whatever the map it
+                    // sits in says it is, which no signature can prove.
+                    result.push(viewOf<AnyInstruction>(entry.value))
                 }
             }
         }
         return result
     }
 
-    /** The instruction with this `xml:id`, or null. */
-    findInstructionById<T extends AnyInstruction>(id: string): T | null {
+    /**
+     * The instruction with this `xml:id`, or null. It searches every map, so it cannot know
+     * which type it will find — callers narrow on `.type`.
+     */
+    findInstructionById(id: string): AnyInstruction | null {
         for (const scope of this.scopes()) {
             for (const type of instructionTypes) {
                 const element = this.map(type, scope, false)?.getElementByID(id)
-                if (element && element.getLocalName() !== 'style') return viewOf<T>(element)
+                if (element && element.getLocalName() !== 'style') return viewOf<AnyInstruction>(element)
             }
         }
         return null
@@ -429,14 +440,16 @@ export class MPM {
      * as whatever type the loop had reached. `InsertRubato`, the only caller, always names a
      * type and never saw it.
      */
-    instructionsEffectiveAtDate<T extends AnyInstruction>(date: number, type?: InstructionType, scope?: Scope): T[] {
+    instructionsEffectiveAtDate<K extends InstructionType>(date: number, type: K, scope?: Scope): InstructionOf<K>[]
+    instructionsEffectiveAtDate(date: number, type?: undefined, scope?: Scope): AnyInstruction[]
+    instructionsEffectiveAtDate(date: number, type?: InstructionType, scope?: Scope): AnyInstruction[] {
         const scopes: Scope[] = scope !== undefined ? [scope] : this.scopes()
         const types = type ? [type] : instructionTypes
 
-        const result: T[] = []
+        const result: AnyInstruction[] = []
         for (const instructionType of types) {
             for (const one of scopes) {
-                const instructions = this.getInstructions<T>(instructionType, one)
+                const instructions = this.getInstructions(instructionType, one)
 
                 result.push(...instructions.filter(instruction => instruction.date === date))
 
@@ -447,12 +460,12 @@ export class MPM {
                     result.push(ongoing)
                 }
                 else if (instructionType === 'rubato') {
-                    const rubato = ongoing as T & Rubato
+                    const rubato = ongoing as Rubato
                     if (rubato.loop) result.push(ongoing)
                     if (date < (rubato.date + rubato.frameLength)) result.push(ongoing)
                 }
                 else if (instructionType === 'accentuationPattern') {
-                    const pattern = ongoing as T & AccentuationPattern
+                    const pattern = ongoing as AccentuationPattern
                     const def = pattern['name.ref']
                         ? this.getDefinition('accentuationPatternDef', pattern['name.ref']) as AccentuationPatternDef | null
                         : null

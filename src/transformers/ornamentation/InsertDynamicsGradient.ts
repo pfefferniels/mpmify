@@ -52,15 +52,12 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
     requires = []
 
     constructor(options?: InsertDynamicsGradientOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             scope: 'global',
             crescendo: { from: -1, to: 0 },
             decrescendo: { from: 0, to: -1 },
             sortVelocities: false
-        }
+        })
     }
 
     /**

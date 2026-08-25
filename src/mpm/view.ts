@@ -61,10 +61,27 @@ const readValue = (text: string, kind: AttrKind): unknown => {
     }
 }
 
-const writeValue = (value: unknown, kind: AttrKind): string => {
+/**
+ * @param where the attribute being written, for the error message. A caller that reaches this
+ * with a non-finite number has a bug several steps upstream — a mean over an empty set, a ratio
+ * against a zero-length note — and the number it produced is otherwise indistinguishable from a
+ * real one until the document is rendered.
+ */
+const writeValue = (value: unknown, kind: AttrKind, where: string): string => {
     if (kind === 'boolean' || kind === 'noteOffShift') {
         return typeof value === 'string' ? value : value ? 'true' : 'false'
     }
+
+    // `String(NaN)` is `'NaN'`, and `'NaN'` is a perfectly well-formed attribute value: the
+    // document stays schema-valid and says something no renderer can act on. Refusing here
+    // turns a silently corrupt MPM into a stack trace at the point that computed the number.
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+        throw new Error(
+            `Refusing to write ${where}="${value}": an MPM attribute must be a finite number. `
+            + 'Whatever computed it produced NaN or an infinity — look there, not here.'
+        )
+    }
+
     return String(value)
 }
 
@@ -112,7 +129,7 @@ export const elementFrom = (
     for (const [key, kind] of Object.entries(schema.attributes)) {
         const value = record[key]
         if (value === undefined || value === null) continue
-        setAttribute(element, key, writeValue(value, kind))
+        setAttribute(element, key, writeValue(value, kind, `<${localName} @${key}>`))
     }
     for (const [key, shape] of Object.entries(schema.children ?? {})) {
         const value = record[key]
@@ -154,7 +171,7 @@ const writeProperty = (element: Element, schema: ElementSchema, key: string, val
     const kind = schema.attributes[key]
     if (kind !== undefined) {
         if (value === undefined || value === null) removeAttribute(element, key)
-        else setAttribute(element, key, writeValue(value, kind))
+        else setAttribute(element, key, writeValue(value, kind, `<${element.getLocalName()} @${key}>`))
         return
     }
 

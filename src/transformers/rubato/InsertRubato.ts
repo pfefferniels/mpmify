@@ -10,8 +10,21 @@ import { deriveResidual, Residual } from "../../residual"
 // moved, and mpm-desk's rubato desk imports it from "mpmify".
 export { calculateRubatoOnDate } from "./rubatoMath"
 
+/**
+ * Where a chord fell under the tempo, averaged over its notes — or `undefined` when the
+ * residual has no position for one of them. A note no `<tempo>` covers has no tick date at all
+ * (see `residual/index.ts`), and one of those summed into the mean turns it, every scaled date
+ * derived from it and the fitted @intensity into NaN.
+ */
 const avarageTickDate = (notes: MsmNote[], residual: Residual) => {
-    return notes.reduce((prev, curr) => prev + residual.of(curr)!.tickDate!, 0) / notes.length
+    let sum = 0
+    for (const note of notes) {
+        const time = residual.of(note)
+        // Both are the tempo interpolation's output, and this transformer needs it to have run.
+        if (time?.tickDate === undefined || time.tickDuration === undefined) return undefined
+        sum += time.tickDate
+    }
+    return sum / notes.length
 }
 
 export interface InsertRubatoOptions extends ScopedTransformationOptions {
@@ -27,14 +40,11 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: InsertRubatoOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             scope: 'global',
             date: 0,
             length: 720
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -50,23 +60,27 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         if (chords.length === 0) return
 
         // The rubato transformation can only be placed
-        // after a tempo interpolation. Make sure that 
+        // after a tempo interpolation. Make sure that
         // all notes have a tick date and a tick duration.
-        if (chords.some(([_, notes]) =>
-            notes.some(note => residual.of(note)?.tickDate === undefined
-                || residual.of(note)?.tickDuration === undefined))
-        ) {
-            console.warn('InsertRubato: some note has no tick date or duration — run a tempo interpolation first.')
-            return
+        const meanTickDates: number[] = []
+        for (const [, notes] of chords) {
+            const mean = avarageTickDate(notes, residual)
+            if (mean === undefined) {
+                console.warn('InsertRubato: some note has no tick date or duration — run a tempo interpolation first.')
+                return
+            }
+            meanTickDates.push(mean)
         }
 
-        // if there are notes on the first date, we can use their 
-        // average tick date to determine a late start. Otherwise, 
+        // if there are notes on the first date, we can use their
+        // average tick date to determine a late start. Otherwise,
         // there is no late start.
         const startDate = chords[0][0] === this.options.date
-            ? avarageTickDate(chords[0][1], residual)
+            ? meanTickDates[0]
             : this.options.date
-        let lateStart =
+        // A @lateStart of 0 is the renderer's default (espressivo `resolveRubato`), so the
+        // frame that starts on time says nothing rather than saying nothing new.
+        let lateStart: number | undefined =
             clamp(
                 0,
                 (startDate - frame.date) / frame.length,
@@ -76,11 +90,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
         const endDate = this.options.date + this.options.length
 
-        const scaledDates = chords
-            .map(([, notes]) => {
-                const realDate = avarageTickDate(notes, residual)
-                return (realDate - startDate) / (endDate - startDate)
-            })
+        const scaledDates = meanTickDates
+            .map(realDate => (realDate - startDate) / (endDate - startDate))
 
         if (!scaledDates.includes(0)) {
             scaledDates.unshift(0)

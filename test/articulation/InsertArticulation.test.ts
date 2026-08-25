@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { Articulation, ArticulationDef, MPM, Tempo } from "../../src/mpm"
+import { ArticulationDef, MPM, Tempo } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers"
 
 /**
@@ -83,7 +83,7 @@ test('it folds the notes at one date into a single <articulation> naming the def
 
     run(msm, mpm)
 
-    const articulations = mpm.getInstructions<Articulation>('articulation', 'global')
+    const articulations = mpm.getInstructions('articulation', 'global')
     expect(articulations).toHaveLength(1)
     expect(articulations[0].noteid).toBe('#note0 #note1')
     expect(articulations[0]['name.ref']).toBe('my-articulation')

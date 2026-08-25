@@ -13,6 +13,14 @@ export type InnerControlPoints = {
     x2: number
 }
 
+// An absent `@curvature`/`@protraction` is not "no value" — it is the renderer's default, and
+// for <dynamics> espressivo/meico fills both with 0.0 (`resolveDynamics` in
+// `mpm/elements/maps/data/dynamics.ts`). Scoring a candidate as if the attributes were merely
+// missing would fit against a curve the renderer never draws. They are named apart because the
+// defaults are not shared: <movement> takes 0.4 for curvature.
+const DEFAULT_CURVATURE = 0.0
+const DEFAULT_PROTRACTION = 0.0
+
 export const computeInnerControlPointsXPositions = (curvature: number, protraction: number): InnerControlPoints => {
     if (protraction == 0.0) {
         return {
@@ -100,7 +108,10 @@ export const positionAtDate = (instruction: Movement & { endDate: number } & Inn
 const computeError = (instruction: DynamicsWithEndDate, points: DynamicsPoints[]) => {
     const computedInstruction = {
         ...instruction,
-        ...computeInnerControlPointsXPositions(instruction.curvature, instruction.protraction)
+        ...computeInnerControlPointsXPositions(
+            instruction.curvature ?? DEFAULT_CURVATURE,
+            instruction.protraction ?? DEFAULT_PROTRACTION
+        )
     }
 
     let sum = 0;
@@ -120,8 +131,8 @@ const generateNeighbour = (prev: DynamicsWithEndDate, random: Random) => {
     const maxCurvatureChange = 0.05;
 
     // Generate random changes within the defined range
-    const newProtraction = prev.protraction + (random() * 2 - 1) * maxProtractionChange;
-    const newCurvature = prev.curvature + (random() * 2 - 1) * maxCurvatureChange;
+    const newProtraction = (prev.protraction ?? DEFAULT_PROTRACTION) + (random() * 2 - 1) * maxProtractionChange;
+    const newCurvature = (prev.curvature ?? DEFAULT_CURVATURE) + (random() * 2 - 1) * maxCurvatureChange;
 
     // Ensure the new values are within valid bounds
     const validProtraction = Math.max(Math.min(newProtraction, 1.0), -1.0);

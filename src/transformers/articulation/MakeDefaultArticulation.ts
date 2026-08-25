@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
+import { ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
@@ -17,18 +17,15 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
     requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: MakeDefaultArticulationOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             scope: 'global'
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {
         // collect notes that have no articulation
         const notes: MsmNote[] = [...msm.allNotes]
-        for (const articulation of mpm.getInstructions<Articulation>('articulation', this.options.scope)) {
+        for (const articulation of mpm.getInstructions('articulation', this.options.scope)) {
             if (articulation.noteid) {
                 for (const noteId of articulation.noteid.split(' ')) {
                     const toDelete = notes.findIndex(n => n['xml:id'] === noteId.slice(1))
@@ -59,9 +56,21 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         // about to replace it, so measuring against it would be measuring against itself.
         const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
 
+        // Every rejection here has to be explicit, because the arithmetic hides two of them.
+        // `undefined / duration` is NaN, which the old `!isNaN` filter did catch — but a note of
+        // zero duration (a grace note) gives Infinity, which it did not, and one such note made
+        // the mean Infinity. And when the filter emptied the list, `0 / 0` made the mean NaN.
+        // Either way an unusable number reached `relativeDuration` and was written out.
         const relativeDurations = notes
-            .map(note => residual.of(note)?.tickDuration / note.duration)
-            .filter(n => !isNaN(n))
+            .map(note => {
+                const tickDuration = residual.of(note)?.tickDuration
+                if (tickDuration === undefined || note.duration === 0) return undefined
+                return tickDuration / note.duration
+            })
+            .filter((ratio): ratio is number => ratio !== undefined && Number.isFinite(ratio))
+
+        // Nothing measurable is not the same as a default articulation of zero: say nothing.
+        if (relativeDurations.length === 0) return
 
         const mean = relativeDurations.reduce((acc, curr) => acc + curr, 0) / relativeDurations.length
 

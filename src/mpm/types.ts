@@ -125,6 +125,12 @@ export type AnyInstruction =
     | Tempo
     | AccentuationPattern
 
+/**
+ * The instruction a given `InstructionType` names — so that a method taking the type as an
+ * argument can return the record it stands for, rather than leaving the caller to assert it.
+ */
+export type InstructionOf<K extends InstructionType> = Extract<AnyInstruction, { type: K }>
+
 export const instructionTypes = [
     'articulation',
     'asynchrony',

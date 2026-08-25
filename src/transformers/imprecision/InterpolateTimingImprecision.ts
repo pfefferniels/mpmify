@@ -18,7 +18,7 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
     requires = []
 
     constructor() {
-        super()
+        super({ predefinedImprecision: 0 })
     }
 
     protected transform(_msm: MSM, _mpm: MPM) {

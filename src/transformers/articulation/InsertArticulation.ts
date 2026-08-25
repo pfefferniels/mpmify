@@ -31,15 +31,12 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
     requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: InsertArticulationOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             noteIDs: [],
             aspects: new Set(),
             name: v4(),
             scope: 'global'
-        }
+        })
     }
 
     /**

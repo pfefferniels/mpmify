@@ -72,15 +72,13 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
     requires = []
 
     constructor(options?: ApproximateLogarithmicTempoOptions) {
-        super()
-
-        this.options = options || {
+        super(options || {
             scope: 'global',
             from: 0,
             to: 0,
             beatLength: 0.25,
             silentOnsets: []
-        }
+        })
     }
 
     /**
@@ -143,7 +141,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // so we can clean up spurious restoration instructions afterward.
         const chainEnd = segments[segments.length - 1].to;
         const existedAtChainEnd = this.options.continue && segments.length > 1
-            && mpm.getInstructions<Tempo>('tempo', this.options.scope).some(t => t.date === chainEnd);
+            && mpm.getInstructions('tempo', this.options.scope).some(t => t.date === chainEnd);
 
         this.removeAffectedTempoInstructions(mpm, this.options.scope, replacementRanges);
 
@@ -159,7 +157,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // continuation at the chain end for an instruction that was part of the
         // old chain.  This is now superseded by the re-fitted chain, so remove it.
         if (this.options.continue && segments.length > 1 && !existedAtChainEnd) {
-            const restored = mpm.getInstructions<Tempo>('tempo', this.options.scope)
+            const restored = mpm.getInstructions('tempo', this.options.scope)
                 .find(t => t.date === chainEnd);
             if (restored) {
                 mpm.removeInstruction(restored);
@@ -187,7 +185,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         const target = last['transition.to'];
         if (target === undefined || last.endDate <= last.date) return;
 
-        const existing = mpm.getInstructions<Tempo>('tempo', this.options.scope);
+        const existing = mpm.getInstructions('tempo', this.options.scope);
         if (existing.some(tempo => tempo.date === last.endDate)) return;
 
         mpm.insertInstruction({
@@ -218,7 +216,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
             }
         }
 
-        const existing = mpm.getInstructions<Tempo>('tempo', scope)
+        const existing = mpm.getInstructions('tempo', scope)
             .slice()
             .sort((a, b) => a.date - b.date);
         if (existing.length === 0) return;
@@ -280,7 +278,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
  * Stops when beatLength changes or there is a gap in the chain.
  */
 function reconstructChain(mpm: MPM, scope: Scope, from: number, beatLength: number): TempoSegment[] {
-    const allInstructions = mpm.getInstructions<Tempo>('tempo', scope)
+    const allInstructions = mpm.getInstructions('tempo', scope)
         .filter(t => t.date < from)
         .sort((a, b) => a.date - b.date);
 

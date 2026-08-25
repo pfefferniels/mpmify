@@ -27,8 +27,16 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     requires = [TranslatePhysicalTimeToTicks]
 
     constructor(options?: InsertPedalOptions) {
-        super()
-        this.options = options
+        super(options || {
+            // A pedal mark carries no shape of its own, so the defaults are the reading this
+            // shortcut exists for: the pedal goes down where the mark is, over a ramp short
+            // enough to read as the abrupt change a piano roll records — a 32nd at mpmify's
+            // 720 ppq, some 60 ms at 120 bpm. A zero-length one would put both movements on
+            // the same date, which describes no ramp at all.
+            start: 0,
+            duration: 90,
+            direction: 'down'
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {

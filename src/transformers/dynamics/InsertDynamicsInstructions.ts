@@ -17,15 +17,12 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     requires = []
 
     constructor(options?: InsertDynamicsInstructionsOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             scope: 'global',
             from: 0,
             to: 0,
             phantomVelocities: new Map()
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -67,7 +64,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         const target = instruction["transition.to"]
         if (target === undefined || endDate <= instruction.date) return
 
-        const existing = mpm.getInstructions<Dynamics>('dynamics', this.options.scope)
+        const existing = mpm.getInstructions('dynamics', this.options.scope)
         if (existing.some(dynamics => dynamics.date === endDate)) return
 
         mpm.insertInstruction({

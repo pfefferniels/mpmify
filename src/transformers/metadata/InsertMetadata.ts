@@ -51,8 +51,7 @@ export class InsertMetadata extends AbstractTransformer<InsertMetadataOptions> {
     requires = []
 
     constructor(options?: InsertMetadataOptions) {
-        super()
-        this.options = options || {}
+        super(options || {})
     }
 
     protected transform(msm: MSM, mpm: MPM) {

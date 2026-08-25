@@ -1,4 +1,4 @@
-import { DEFAULT_STYLE_NAME, DynamicsGradient, MPM, Ornament, OrnamentDef, Scope } from "../../mpm"
+import { DEFAULT_STYLE_NAME, DynamicsGradient, MPM, Ornament, OrnamentDef, Scope, TemporalSpread } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -29,12 +29,11 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     requires = [InsertDynamicsGradient, InsertTemporalSpread]
 
     constructor(options?: StylizeOrnamentationOptions) {
-        super()
-        this.options = {
+        super({
             tickTolerance: options?.tickTolerance || 10,
             intensityTolerance: 0.3,
             gradientTolerance: 0.1
-        }
+        })
     }
 
     generateClusters(ornaments: Ornament[]) {
@@ -73,7 +72,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
 
     protected transform(msm: MSM, mpm: MPM) {
         for (const scope of mpm.scopes()) {
-            const ornaments = mpm.getInstructions<Ornament>('ornament', scope)
+            const ornaments = mpm.getInstructions('ornament', scope)
 
             const filteredOrnaments = ornaments.filter(o =>
                 o["frame.start"] !== undefined &&
@@ -203,15 +202,55 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                     'transition.to': transitionTo,
                 }
                 : undefined,
-            temporalSpread: {
-                type: 'temporalSpread',
-                'frame.start': mean(ornament => ornament["frame.start"]) as number,
-                'frameLength': mean(ornament => ornament.frameLength) as number,
+            temporalSpread: this.temporalSpreadOf({
+                'frame.start': mean(ornament => ornament["frame.start"]),
+                'frameLength': mean(ornament => ornament.frameLength),
+                // Neither of these is a number to average. `generateClusters` keys on the
+                // note-off shift with an epsilon of zero, so the group is uniform in it and the
+                // first ornament speaks for all.
                 'noteoff.shift': ornaments[0]["noteoff.shift"],
                 'time.unit': ornaments[0]["time.unit"],
                 // `?? 1`, not `|| 1`: an intensity of 0 is a legal value, not a missing one.
                 intensity: mean(ornament => ornament.intensity ?? 1),
-            }
+            })
+        }
+    }
+
+    /**
+     * The `<temporalSpread>` a set of ornament attributes describes, or nothing where they
+     * describe no roll.
+     *
+     * All four attributes a spread needs are optional on the `<ornament>` they are read off, so
+     * this is the one place that says what each absence means. The frame's two ends *are* the
+     * roll: an ornament with no frame is a velocity ramp and nothing else, and writing a
+     * `<temporalSpread>` full of undefined for it would describe a roll that was never measured.
+     * A frame of `NaN` describes one just as little — that is the "unusable frame"
+     * `defineAndName` refuses to write a definition for, and it asks here rather than deciding
+     * again on its own.
+     *
+     * The unit and the note-off shift are the two that have a reading when absent, and writing
+     * that reading down says exactly what silence would have said: MPM reads a missing
+     * `@time.unit` as ticks and a missing `@noteoff.shift` as false. False is also the reading
+     * `generateClusters` already gives it, coding absent and `false` onto the same coordinate —
+     * so within a cluster the two are indistinguishable by construction and the def has to pick
+     * the one dbscan saw.
+     */
+    private temporalSpreadOf(
+        source: Pick<Ornament, 'frame.start' | 'frameLength' | 'noteoff.shift' | 'time.unit' | 'intensity'>
+    ): TemporalSpread | undefined {
+        const frameStart = source["frame.start"]
+        const frameLength = source.frameLength
+
+        if (frameStart === undefined || frameLength === undefined) return undefined
+        if (isNaN(frameStart) || isNaN(frameLength)) return undefined
+
+        return {
+            type: 'temporalSpread',
+            'frame.start': frameStart,
+            'frameLength': frameLength,
+            'noteoff.shift': source["noteoff.shift"] ?? false,
+            'time.unit': source["time.unit"] ?? 'ticks',
+            intensity: source.intensity,
         }
     }
 
@@ -287,25 +326,11 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             }
         }
 
-        // An ornament with no frame is a velocity ramp and nothing else. Writing a
-        // `<temporalSpread>` full of undefined for it would describe a roll that was never
-        // measured.
-        const hasFrame = ornament["frame.start"] !== undefined && ornament.frameLength !== undefined
-
         return {
             type: 'ornamentDef',
             name: `def_${v4()}`,
             dynamicsGradient,
-            temporalSpread: hasFrame
-                ? {
-                    type: 'temporalSpread',
-                    'frame.start': ornament["frame.start"],
-                    'frameLength': ornament.frameLength,
-                    'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
-                    'time.unit': ornament['time.unit'],
-                    intensity: ornament.intensity
-                }
-                : undefined
+            temporalSpread: this.temporalSpreadOf(ornament)
         }
     }
 
@@ -315,13 +340,13 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * `@name.ref` it already had rather than gaining a dangling one.
      */
     private defineAndName(mpm: MPM, scope: Scope, ornament: Ornament, defined: Set<Ornament>) {
-        const frameStart = ornament["frame.start"]
-        const frameLength = ornament.frameLength
-        const hasFrame = frameStart !== undefined && frameLength !== undefined
+        const hasFrame = ornament["frame.start"] !== undefined && ornament.frameLength !== undefined
 
         // Having no frame and having an unusable one are different. A gradient-only ornament has
         // nothing to check; one whose frame failed translation must not be given a definition.
-        if (hasFrame && (isNaN(frameStart) || isNaN(frameLength))) {
+        // Which frames are unusable is `temporalSpreadOf`'s to say, so it is asked rather than
+        // second-guessed here.
+        if (hasFrame && this.temporalSpreadOf(ornament) === undefined) {
             console.warn('skipping ornament with an unusable frame', ornament["xml:id"])
             return
         }

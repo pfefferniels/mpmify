@@ -30,13 +30,10 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     requires = []
 
     constructor(options?: MakeChoiceOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             prefer: '',
             scope: 'global'
-        }
+        })
     }
 
     protected transform(msm: MSM, _: MPM) {

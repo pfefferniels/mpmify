@@ -78,15 +78,12 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
     requires = []
 
     constructor(options?: InsertTemporalSpreadOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             durationThreshold: 35,
             placement: 'estimate',
             noteOffShiftTolerance: 500,
             scope: 'global'
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {

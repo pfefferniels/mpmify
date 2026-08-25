@@ -13,11 +13,9 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
     requires = [StylizeOrnamentation]
 
     constructor() {
-        super()
-
-        this.options = {
+        super({
             tickPrecision: 0
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {

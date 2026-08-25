@@ -28,14 +28,11 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
     requires = []
 
     constructor(options?: InsertAsynchronyOptions) {
-        super()
-
-        // set the default options
-        this.options = options || {
+        super(options || {
             from: 0,
             to: 0,
             part: 1
-        }
+        })
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -47,17 +44,17 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
             })
 
         const shifts = chords
-            .map(([date, chord]) => {
+            .flatMap(([date, chord]) => {
                 const onset = chord.at(0)?.['midi.onset']
                 const otherChords = msm.asChords(this.options?.part === 1 ? 0 : 1)
                 const otherOnset = otherChords.get(date)?.at(0)?.['midi.onset']
-                return [onset, otherOnset] as [number?, number?]
-            })
-            .filter(([onset, otherOnset]) => {
-                return onset !== undefined && otherOnset !== undefined
-            })
-            .map(([onset, otherOnset]) => {
-                return onset - otherOnset
+
+                // A date the other part does not sound at, or a note that carries no performance
+                // onset yet, has no shift to contribute — dropping the pair here is what keeps it
+                // out of the average, and doing it in one step is what lets the subtraction below
+                // see two numbers.
+                if (onset === undefined || otherOnset === undefined) return []
+                return [onset - otherOnset]
             })
         
         const averageShift = shifts.reduce((acc, shift) => acc + shift, 0) / shifts.length

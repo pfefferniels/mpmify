@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { Dynamics, MPM } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
 import { deriveResidual } from "../../src/residual"
 
@@ -61,7 +61,7 @@ test('it fits one <dynamics> across the range, from the first velocity to the la
 
     run(msm, mpm)
 
-    const dynamics = mpm.getInstructions<Dynamics>('dynamics', 'global')
+    const dynamics = mpm.getInstructions('dynamics', 'global')
     expect(dynamics[0].date).toBe(0)
     expect(dynamics[0].volume).toBe(50)
     expect(dynamics[0]['transition.to']).toBe(100)

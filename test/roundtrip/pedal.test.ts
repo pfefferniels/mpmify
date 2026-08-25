@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { performMsmToData } from "espressivo"
-import { MPM, Movement } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
 import { InsertPedal } from "../../src/transformers/pedal/InsertPedalInstructions"
@@ -73,7 +73,7 @@ describe('pedalling reaches the renderer', () => {
         const score = pedalledScore()
         const mpm = fitPedals(score)
 
-        const movements = mpm.getInstructions<Movement>('movement', 'global')
+        const movements = mpm.getInstructions('movement', 'global')
             .sort((a, b) => a.date - b.date)
 
         // Two pedal marks, each a start and the point it arrives at full depth.
