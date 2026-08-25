@@ -259,7 +259,7 @@ describe("definitions", () => {
 })
 
 describe("scopes", () => {
-    test("a part is created on demand and numbered as MSM expects", () => {
+    test("a part is created on demand and numbered as Alignment expects", () => {
         const mpm = createMpm()
         requireMap(mpm, 'tempo', 1).addTempo(tempo(0, 60))
 

@@ -1,38 +1,34 @@
 // @vitest-environment jsdom
 
 /**
- * A structural digest of what the chain produces, for the espressivo-integration migration.
+ * A structural digest of what the chain produces.
  *
  * Not an assertion — a recorder. `MIGRATION_DIGEST=1 npx vitest run scripts/mpm-digest.test.ts`
  * writes one line per instruction element of every round-trip case to
  * `scripts/mpm-digest.txt`: case, scope, element name, and every attribute as `name=value`
  * sorted by name.
  *
- * Sorted, because the point is to compare the documents across a change that deliberately moves
- * attribute order — mpmify wrote `date xml:id bpm beatLength`, espressivo's `addTempo` writes
- * `date bpm transition.to meanTempoAt beatLength xml:id`. Sorting takes the one difference that
- * is expected out of the comparison and leaves every difference that is not.
+ * Sorted, because attribute order is espressivo's to choose and mpmify's is not the interesting
+ * difference. Sorting takes the one difference that is expected out of the comparison and leaves
+ * every difference that is not.
  *
  * The chain is deterministic (`test/determinism.test.ts` folds it twice and compares), so a
- * digest taken before and after the migration must match line for line.
+ * digest taken before and after a change that is meant to preserve behaviour must match line for
+ * line.
  *
- * ## The three lines it did not match on, and why
+ * ## What legitimately moves it
  *
- * Measured over the espressivo migration: 20 lines of 314, all ornamentation.
+ * Two things, and neither is a difference in what renders:
  *
- * 1. `<temporalSpread>` no longer writes `noteoff.shift="false"` or `time.unit="ticks"`.
- *    espressivo's `TemporalSpread.generateXML` omits an attribute at its default; MPM reads an
- *    absent one as exactly that default. Same document, fewer bytes.
- * 2. `<ornament>` no longer carries `@intensity`. That was a leak: `StylizeOrnamentation`
- *    deleted six parked attributes and not the seventh, and the ODD does not give `<ornament>`
- *    an `@intensity` at all (it is a `memberOf` `att.id`, `att.note.order`,
- *    `att.reference.name`, `att.scale`, `att.time.symbolic.date`). The def's own `@intensity`,
- *    which is valid, is unchanged.
- * 3. `<ornament>` now always carries `@scale`, `scale="0"` where it used to carry none.
- *    espressivo's `addOrnamentV3` writes it unconditionally at the spec's own default of 0.0.
+ * 1. **espressivo omits an attribute at its default and writes some unconditionally.**
+ *    `<temporalSpread>` leaves out `noteoff.shift="false"` and `time.unit="ticks"`; `<ornament>`
+ *    always carries `scale="0"`, the spec's own default. Same documents, different bytes.
+ * 2. **Last-digit float noise.** The fitters are iterative, so a change of 1e-16 in an input
+ *    reaches the output as ~1e-9 — which is what dropping the alignment's seconds/milliseconds
+ *    round trip did to four of the cases. `ROUNDTRIP_REPORT=1` is the check that matters
+ *    there: it reports to two decimals and must not move at all.
  *
- * None of the three changes what renders — the tier0/2/3 round-trip suites compare in
- * performance space and stayed green through all of it.
+ * Anything else is a behaviour change, and the digest is how it gets noticed.
  */
 import { describe, test } from "vitest"
 import { writeFileSync } from "fs"

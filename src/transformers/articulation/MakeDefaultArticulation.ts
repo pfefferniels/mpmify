@@ -1,5 +1,5 @@
 import { ensureDefaultStyle, getInstructions, insertDefinition, Mpm } from "../../mpm";
-import { MSM, MsmNote } from "../../msm";
+import { Alignment, AlignedNote } from "../../alignment";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { TranslatePhysicalTimeToTicks } from "../tempo";
 import { deriveResidual } from "../../residual";
@@ -22,9 +22,9 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         })
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         // collect notes that have no articulation
-        const notes: MsmNote[] = [...msm.allNotes]
+        const notes: AlignedNote[] = [...msm.allNotes]
         for (const articulation of getInstructions(mpm, 'articulation', this.options.scope)) {
             if (articulation.noteid) {
                 // One reference, the way the renderer reads it. This walked a space-separated

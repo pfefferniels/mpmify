@@ -17,7 +17,7 @@ import { getTransformerOrder, isRegistered, registerAlias, registerTransformer }
 registerTransformer(MakeChoice);
 registerTransformer(Modify);
 // The gradient before the spread, because the spread destroys what the gradient reads.
-// `InsertDynamicsGradient` sorts a chord by `midi.onset` to find which way its ramp runs, and
+// `InsertDynamicsGradient` sorts a chord by `milliseconds.date` to find which way its ramp runs, and
 // `InsertTemporalSpread` collapses every onset in the chord onto one date. Run the other way
 // round, the direction is read off onsets that no longer differ and every arpeggio's ramp comes
 // back reversed — a truth of 39/51.5/64 refitting as 64/51.5/39. `InsertDynamicsGradient`'s own

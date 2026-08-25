@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 import { Mpm, createMpm, exportMPM, getInstructions } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
 import { deriveResidual } from "../../src/residual"
 
 /**
- * Quickly generates a simple MSM note
+ * Quickly generates a simple aligned note
  * @note Example for duration and position: 0.25 = quarter note etc.
  */
 const generateNote = (position: number, duration: number, part: number = 1) => ({
@@ -21,34 +21,34 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
     'midi.pitch': 67
 })
 
-const msmFixture = () => new MSM([
+const msmFixture = () => new Alignment([
     {
         ...generateNote(0, 0.25),
-        'midi.onset': 1,
-        'midi.duration': 1,
-        'midi.velocity': 50
+        'milliseconds.date': 1000,
+        'milliseconds.date.end': 2000,
+        velocity: 50
     },
     {
         ...generateNote(0.25, 0.25),
-        'midi.onset': 2,
-        'midi.duration': 2,
-        'midi.velocity': 75
+        'milliseconds.date': 2000,
+        'milliseconds.date.end': 4000,
+        velocity: 75
     },
     {
         ...generateNote(0.5, 0.25),
-        'midi.onset': 3,
-        'midi.duration': 3,
-        'midi.velocity': 100
+        'milliseconds.date': 3000,
+        'milliseconds.date.end': 6000,
+        velocity: 100
     }],
     { numerator: 3, denominator: 4 })
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: InsertDynamicsInstructions, msm: MSM, mpm: Mpm) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+const callTransform = (transformer: InsertDynamicsInstructions, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const run = (msm: MSM, mpm: Mpm) => callTransform(new InsertDynamicsInstructions({
+const run = (msm: Alignment, mpm: Mpm) => callTransform(new InsertDynamicsInstructions({
     scope: 'global',
     from: 0,
     to: msm.lastDate(),

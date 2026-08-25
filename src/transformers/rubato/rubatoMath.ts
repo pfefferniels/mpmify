@@ -15,7 +15,7 @@
  */
 import { resolveRubato, type AddRubatoOptions, type Rubato as ResolvedRubato } from "espressivo"
 import { instructionsEffectiveAtDate, Mpm, Scope } from "../../mpm"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 import { TickTimes } from "../tempo/tickTimes"
 
 /**
@@ -143,7 +143,7 @@ const removeRubatoFromDate = (newDate: number, rubato: RubatoFrame) => {
  * @todo remove the distortion from pedals as well.
  */
 export const removeRubatoDistortion = (
-    msm: MSM,
+    msm: Alignment,
     mpm: Mpm,
     scope: Scope,
     times: TickTimes

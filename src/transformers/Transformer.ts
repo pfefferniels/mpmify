@@ -1,5 +1,5 @@
 import { auditInstructions, fingerprintInstructions, getInstructions, InstructionType, Scope } from "../mpm";
-import { MSM } from "../msm";
+import { Alignment } from "../alignment";
 import { Residual } from "../residual";
 import { Mpm } from "espressivo";
 import { v4 } from "uuid";
@@ -33,7 +33,7 @@ export interface Transformer {
      * segments name, and what the bake turns into spans.
      */
     created: string[]
-    run(msm: MSM, mpm: Mpm): void
+    run(msm: Alignment, mpm: Mpm): void
     readonly requires: Array<TransformerConstructor>
 }
 
@@ -65,7 +65,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
      *
      * Not to be overridden.
      */
-    public run(msm: MSM, mpm: Mpm) {
+    public run(msm: Alignment, mpm: Mpm) {
         const before = fingerprintInstructions(mpm)
         this.transform(msm, mpm)
 
@@ -91,7 +91,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
             .map(([id]) => id)
     }
 
-    protected abstract transform(msm: MSM, mpm: Mpm): void
+    protected abstract transform(msm: Alignment, mpm: Mpm): void
 }
 
 export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
@@ -131,7 +131,7 @@ type Range = {
  */
 export const getRange = (
     transformer: TransformationOptions | Transformer[],
-    msm: MSM,
+    msm: Alignment,
     residual?: Residual
 ): Range | undefined => {
     if (Array.isArray(transformer)) {

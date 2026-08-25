@@ -8,7 +8,7 @@ import {
     requireMap,
     unwrap,
 } from "../../mpm";
-import { MSM } from "../../msm";
+import { Alignment } from "../../alignment";
 import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
@@ -63,7 +63,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
     private extractVelocities(
         { from: start, to: end, beatLength }: InsertMetricalAccentuationOptions,
-        msm: MSM,
+        msm: Alignment,
         residual: Residual
     ): Velocity[] {
         const velocities = []
@@ -79,7 +79,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 .reduce((acc, note) => acc + residual.of(note)!.velocity!, 0) / notesAtDate.length
 
             velocities.push({
-                // A score may carry no time signature, and `MSM.build()` writes out 4/4 when it
+                // A score may carry no time signature, and `Alignment.build()` writes out 4/4 when it
                 // does not. Beat numbers here have to be counted in the same bar the score will
                 // be published in, or the pattern would be indexed against a meter nobody sees.
                 beat: (msm.timeSignature?.denominator || 4) * beat + 1,
@@ -137,7 +137,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         return def
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         if (!getDefinitions(mpm, 'accentuationPatternDef', this.options.scope)
             .find(def => def.getName() === 'neutral')) {
             insertDefinition(

@@ -1,6 +1,6 @@
 import { FrameDomain } from "espressivo";
 import { getInstructions, Mpm, ornamentDraftOf, scopesOf, setOrnamentDraft } from "../../mpm";
-import { MSM } from "../../msm";
+import { Alignment } from "../../alignment";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dateAtMilliseconds, millisecondsAt } from "./tempoCalculations";
 import { placeTempos, PlacedTempo, segmentAtMs } from "./placedTempos";
@@ -14,7 +14,7 @@ export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptio
     translatePhysicalModifiers: boolean
 
     /**
-     * Defines whether the pedal instruction in the MSM should be 
+     * Defines whether the pedal instruction in the alignment should be 
      * translated to tick time as well.
      * @todo not yet implemented
      */
@@ -44,7 +44,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
         })
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
     }
 
@@ -91,7 +91,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      * given MPM and translates them into tick values.
      * @todo Currently, only ornaments are taken into account.
      */
-    translatePhysicalMPMModifiers(mpm: Mpm, msm: MSM) {
+    translatePhysicalMPMModifiers(mpm: Mpm, msm: Alignment) {
         for (const scope of scopesOf(mpm)) {
             const segments = placeTempos(msm, mpm, scope)
 

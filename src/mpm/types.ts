@@ -7,7 +7,7 @@
  *
  * Three things are mpmify's own and stay:
  *
- * - **`Scope`.** MSM names a part `'global'` or by index; espressivo names it with a `Global`
+ * - **`Scope`.** The alignment names a part `'global'` or by index; espressivo names it with a `Global`
  *   or `Part` object. `document.ts` converts.
  * - **The element names.** MPM calls the element `<tempo>` and the map it lives in `tempoMap`,
  *   and mpmify asks its questions in element names. {@link mapNames} is that one-line pairing,
@@ -35,7 +35,8 @@ import type {
 } from 'espressivo'
 
 /**
- * A part can be specified as either a given part number or global. Used in both MSM and MPM.
+ * A part can be specified as either a given part number or global. Used by the alignment and
+ * the MPM alike.
  */
 export type Scope = number | 'global'
 

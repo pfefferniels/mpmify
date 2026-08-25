@@ -1,6 +1,6 @@
 import type { AddDynamicsOptions } from "espressivo"
 import { getInstructions, InstructionOptions, Mpm, requireMap, Scope, fillInAt } from "../../mpm"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, DynamicsPoints } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
@@ -33,7 +33,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         })
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const points = this.asPoints(msm, this.options.scope)
         const { from, to } = this.options
 
@@ -95,14 +95,14 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         })
     }
 
-    private asPoints(msm: MSM, part: Scope): DynamicsPoints[] {
+    private asPoints(msm: Alignment, part: Scope): DynamicsPoints[] {
         const points: DynamicsPoints[] = []
         const chords = msm.asChords(part)
         for (const [date, notes] of chords) {
             const notesWithVolume = notes
-                .filter(n => n["midi.velocity"] !== undefined)
+                .filter(n => n.velocity !== undefined)
             const velocity = notesWithVolume
-                .reduce((sum, curr) => sum + curr["midi.velocity"], 0) / notesWithVolume.length
+                .reduce((sum, curr) => sum + curr.velocity, 0) / notesWithVolume.length
 
             const phantomVelocity = this.options.phantomVelocities.get(date)
 

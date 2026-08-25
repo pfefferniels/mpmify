@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
 import { describe, test, expect } from "vitest"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 import { Instruction, Mpm, createMpm, getInstructions, requireMap } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { computeMillisecondsAt, TempoWithEndDate } from "../../src/transformers/tempo/tempoCalculations"
 
 /** Call the protected `transform` method for testing */
-function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: Mpm) {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void };
+function callTransform(transformer: ApproximateLogarithmicTempo, msm: Alignment, mpm: Mpm) {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
     (transformer as unknown as Transformable).transform(msm, mpm);
 }
 
@@ -17,7 +17,7 @@ const BEAT = 720; // ticks per quarter note
 /**
  * Generate synthetic onset times by numerically integrating a tempo curve.
  * tempo(d) returns BPM at tick position d.
- * Returns onset pairs: [{date, onset_seconds}, ...]
+ * Returns onset pairs: [{date, onset_milliseconds}, ...]
  */
 function generateOnsets(
     tempoFn: (d: number) => number,
@@ -41,8 +41,8 @@ function generateOnsets(
                 const T1 = tempoFn(d1);
                 integral += 0.5 * (1 / T0 + 1 / T1) * (d1 - d0);
             }
-            // integral is in minutes (BPM * ticks cancel), convert to seconds
-            time += integral * 60 / BEAT;
+            // integral is in minutes (BPM * ticks cancel), convert to milliseconds
+            time += integral * 60000 / BEAT;
         }
     }
 
@@ -56,7 +56,7 @@ function imToExponent(im: number): number {
 /**
  * Build MSM notes from onset data
  */
-function buildMsm(onsets: { date: number; onset: number }[]): MSM {
+function buildMsm(onsets: { date: number; onset: number }[]): Alignment {
     const notes = onsets.map((o, i) => ({
         'xml:id': `n_1_${i}`,
         date: o.date,
@@ -66,11 +66,11 @@ function buildMsm(onsets: { date: number; onset: number }[]): MSM {
         duration: BEAT,
         accidentals: 0,
         'midi.pitch': 67,
-        'midi.onset': o.onset,
-        'midi.duration': 0.5,
-        'midi.velocity': 100
+        'milliseconds.date': o.onset,
+        'milliseconds.date.end': o.onset + 500,
+        velocity: 100
     }));
-    return new MSM(notes, { numerator: 4, denominator: 4 });
+    return new Alignment(notes, { numerator: 4, denominator: 4 });
 }
 
 /**
@@ -327,15 +327,15 @@ describe('ApproximateLogarithmicTempo', () => {
         const totalTicks = 8 * BEAT;
 
         const onsets = [
-            { date: 0 * BEAT, onset: 0.0 },
-            { date: 1 * BEAT, onset: 0.80 },
-            { date: 2 * BEAT, onset: 1.53 },
-            { date: 3 * BEAT, onset: 2.19 },
-            { date: 4 * BEAT, onset: 2.80 },
-            { date: 5 * BEAT, onset: 3.43 },
-            { date: 6 * BEAT, onset: 4.10 },
-            { date: 7 * BEAT, onset: 4.84 },
-            { date: 8 * BEAT, onset: 5.65 }
+            { date: 0 * BEAT, onset: 0 },
+            { date: 1 * BEAT, onset: 800 },
+            { date: 2 * BEAT, onset: 1530 },
+            { date: 3 * BEAT, onset: 2190 },
+            { date: 4 * BEAT, onset: 2800 },
+            { date: 5 * BEAT, onset: 3430 },
+            { date: 6 * BEAT, onset: 4100 },
+            { date: 7 * BEAT, onset: 4840 },
+            { date: 8 * BEAT, onset: 5650 }
         ];
 
         const msm = buildMsm(onsets);
@@ -362,7 +362,7 @@ describe('ApproximateLogarithmicTempo', () => {
     });
 
     test('keeps existing tempos unchanged when fitting yields no segments', () => {
-        const msm = new MSM([], { numerator: 4, denominator: 4 });
+        const msm = new Alignment([], { numerator: 4, denominator: 4 });
         const mpm = createMpm();
         requireMap(mpm, 'tempo', 'global').addTempo({
             id: 'tempo_existing',
@@ -387,7 +387,7 @@ describe('ApproximateLogarithmicTempo', () => {
     test('treats overlap as half-open and keeps touching end boundary instructions', () => {
         const msm = buildMsm([
             { date: BEAT, onset: 0 },
-            { date: 2 * BEAT, onset: 1 }
+            { date: 2 * BEAT, onset: 1000 }
         ]);
         const mpm = createMpm();
         const tempi = requireMap(mpm, 'tempo', 'global');
@@ -427,7 +427,7 @@ describe('ApproximateLogarithmicTempo', () => {
     test('restores a continuation tempo at segment end when removed tempo extends beyond', () => {
         const msm = buildMsm([
             { date: 0, onset: 0 },
-            { date: BEAT, onset: 1 }
+            { date: BEAT, onset: 1000 }
         ]);
         const mpm = createMpm();
         const tempi = requireMap(mpm, 'tempo', 'global');
@@ -479,19 +479,19 @@ describe('ApproximateLogarithmicTempo', () => {
         // Models the actual Träumerei pipeline:
         //
         // The segment for m2.2 covers dates 3600–5760 (beatLength=0.25).
-        // info.json specifies a silentOnset at {date:5040, onset:7.7} — this
+        // info.json specifies a silentOnset at {date:5040, onset:7700} — this
         // is from the REFERENCE performance (Welte-Mignon roll).
         //
         // After implantLocal(), the student's note onsets are much later
         // (student is consistently slower). After shiftToFirstOnset(),
-        // student onsets around date 5040 might be ~10s, but the silentOnset
-        // at 5040 is still 7.7s (reference timing, NOT adjusted).
+        // student onsets around date 5040 might be ~10 000 ms, but the silentOnset
+        // at 5040 is still 7 700 ms (reference timing, NOT adjusted).
         //
         // In extractOnsetPairs, silentOnsets take priority (set first).
         // This creates a backwards jump in the onset sequence:
-        //   date 4320 → ~10.0s (student)
-        //   date 5040 →  7.7s  (reference silentOnset!)  ← backwards!
-        //   date 5760 → ~11.5s (student)
+        //   date 4320 → ~10 000 ms (student)
+        //   date 5040 →   7 700 ms (reference silentOnset!)  ← backwards!
+        //   date 5760 → ~11 500 ms (student)
         //
         // The data is self-contradictory and no tempo curve describes it, so what the fit
         // returns is not the point. What is, is that it stays a tempo: the fit used to
@@ -502,24 +502,24 @@ describe('ApproximateLogarithmicTempo', () => {
 
         // Student notes: monotonic but much slower than reference.
         // Reference would be at ~80 BPM; student at ~30 BPM.
-        // After shiftToFirstOnset, student note at date 5040 ≈ 14s.
-        // But silentOnset at 5040 = 7.7s (reference).
+        // After shiftToFirstOnset, student note at date 5040 ≈ 14 000 ms.
+        // But silentOnset at 5040 = 7 700 ms (reference).
         const onsets = [
-            { date: 0 * BEAT, onset: 0.0 },
-            { date: 1 * BEAT, onset: 2.0 },  // ~30 BPM
-            { date: 2 * BEAT, onset: 4.0 },
-            { date: 3 * BEAT, onset: 6.0 },
-            { date: 4 * BEAT, onset: 8.0 },
-            { date: 5 * BEAT, onset: 10.0 },   // date=3600
-            { date: 6 * BEAT, onset: 12.0 },   // date=4320
-            { date: 7 * BEAT, onset: 14.0 },   // date=5040 (silentOnset overrides!)
-            { date: 8 * BEAT, onset: 16.0 },   // date=5760
+            { date: 0 * BEAT, onset: 0 },
+            { date: 1 * BEAT, onset: 2000 },  // ~30 BPM
+            { date: 2 * BEAT, onset: 4000 },
+            { date: 3 * BEAT, onset: 6000 },
+            { date: 4 * BEAT, onset: 8000 },
+            { date: 5 * BEAT, onset: 10000 },   // date=3600
+            { date: 6 * BEAT, onset: 12000 },   // date=4320
+            { date: 7 * BEAT, onset: 14000 },   // date=5040 (silentOnset overrides!)
+            { date: 8 * BEAT, onset: 16000 },   // date=5760
         ];
 
-        // The silentOnset at date 5040 with reference timing 7.7s
-        // will override the student's onset of 9.33s at that date.
+        // The silentOnset at date 5040 with reference timing 7 700 ms
+        // will override the student's onset of 9 330 ms at that date.
         const silentOnsets: SilentOnset[] = [
-            { date: 5040, onset: 7.7 },
+            { date: 5040, onset: 7700 },
         ];
 
         const tempos = fitAndGetTempos(onsets, 5 * BEAT, 8 * BEAT, 0.25, silentOnsets);
@@ -599,7 +599,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
     const renderOnsets = (span: TempoWithEndDate, beats: number) =>
         Array.from({ length: beats + 1 }, (_, beat) => ({
             date: beat * BEAT,
-            onset: computeMillisecondsAt(beat * BEAT, span) / 1000,
+            onset: computeMillisecondsAt(beat * BEAT, span),
         }));
 
     //                                                     was, at the time of the issue
@@ -634,7 +634,8 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
                 fitted[0].meanTempoAt ?? 0.5, NBEATS);
 
             for (const { date, onset } of onsets) {
-                expect(computeMillisecondsAt(date, refit) / 1000).toBeCloseTo(onset, 3);
+                // to within half a millisecond, which is what the right-hand column measures
+                expect(computeMillisecondsAt(date, refit)).toBeCloseTo(onset, 0);
             }
         });
     }
@@ -661,17 +662,17 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         // every onset in the piece — and a bias in the onsets is a bias in the tempo.
         const truth = truthSpan(90, 45, 0.7, 8);
         const beats = renderOnsets(truth, 8);
-        const spread = [-0.02, 0, 0.02];
+        const spread = [-20, 0, 20];
         const notes = beats.flatMap((beat, index) => spread.map((offset, voice) => ({
             'xml:id': `n_1_${index}_${voice}`, date: beat.date, part: 1,
             pitchname: 'g' as const, octave: 4 + voice, duration: BEAT, accidentals: 0,
-            'midi.pitch': 67 + 12 * voice, 'midi.onset': beat.onset + offset,
-            'midi.duration': 0.5, 'midi.velocity': 100,
+            'midi.pitch': 67 + 12 * voice, 'milliseconds.date': beat.onset + offset,
+            'milliseconds.date.end': beat.onset + offset + 500, velocity: 100,
         })));
 
         const fitted = ApproximateLogarithmicTempo.preview({
             scope: 'global', from: 0, to: 8 * BEAT, beatLength: 0.25, silentOnsets: [],
-        }, new MSM(notes, { numerator: 4, denominator: 4 }));
+        }, new Alignment(notes, { numerator: 4, denominator: 4 }));
 
         expect(fitted[0].bpm).toBeCloseTo(90, 2);
         expect(fitted[0].transitionTo!).toBeCloseTo(45, 2);

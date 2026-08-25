@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 import { Mpm, createMpm, getDefinition, getInstructions, getStyles, requireMap } from "../../src/mpm"
 import { MakeDefaultArticulation } from "../../src/transformers/articulation/MakeDefaultArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
@@ -24,9 +24,9 @@ const UNRESOLVED = 'measured'
  *
  * Stated as a recording rather than as tick figures: both transformers here derive where a note
  * fell from the recording and the tempo, so the fixture has to say what was recorded. At 60bpm
- * with a quarter-note beat one second is 720 ticks, which is the whole of the conversion below.
+ * with a quarter-note beat 720 ticks are 1000 ms, which is the whole of the conversion below.
  */
-const note = (id: string, date: number, pitch: number, tickDuration: number): MsmNote => ({
+const note = (id: string, date: number, pitch: number, tickDuration: number): AlignedNote => ({
     'xml:id': id,
     date,
     part: 1,
@@ -35,12 +35,12 @@ const note = (id: string, date: number, pitch: number, tickDuration: number): Ms
     accidentals: 0,
     duration: 720,
     'midi.pitch': pitch,
-    'midi.onset': date / 720,
-    'midi.duration': tickDuration / 720,
-    'midi.velocity': 64,
+    'milliseconds.date': date / 720 * 1000,
+    'milliseconds.date.end': (date + tickDuration) / 720 * 1000,
+    velocity: 64,
 })
 
-/** The tempo those recorded seconds are read against. */
+/** The tempo those recorded milliseconds are read against. */
 const atSixtyBpm = () => {
     const mpm = createMpm()
     requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
@@ -50,10 +50,10 @@ const atSixtyBpm = () => {
 /** Call the protected `transform` method for testing */
 const callTransform = (
     transformer: MakeDefaultArticulation | StylizeArticulation,
-    msm: MSM,
+    msm: Alignment,
     mpm: Mpm
 ) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
@@ -62,7 +62,7 @@ test('MakeDefaultArticulation excludes the notes a date-scoped <articulation> al
     // every note at its date. Only the third note should reach the default. The inner `notes`
     // used to shadow the outer one, so all three did and the mean was (0.5 + 2 + 1) / 3.
     // See old-bugs.md.
-    const msm = new MSM([
+    const msm = new Alignment([
         note('n0', 0, 60, 360),
         note('n1', 0, 67, 1440),
         note('n2', 720, 60, 720),
@@ -85,7 +85,7 @@ test('StylizeArticulation tells the notes of a chord apart', () => {
     // cluster mean would run over the repeated c at date 720, so it is a conflict and has to
     // keep its own values, while the upper one has nothing in its way and joins the cluster.
     // The folded instruction could not express that difference even once it was read correctly.
-    const msm = new MSM([
+    const msm = new Alignment([
         note('n0', 0, 60, 1440),
         note('n1', 0, 67, 1440),
         note('n2', 720, 60, 720),
@@ -134,7 +134,7 @@ test('a chain running both transformers leaves exactly one <style> in the articu
     // `ensureDefaultStyle` asks for the switch instead of inserting one, so the second caller
     // amends what the first wrote. n4 and n5 carry no <articulation>, which is what leaves
     // MakeDefaultArticulation something to measure.
-    const msm = new MSM([
+    const msm = new Alignment([
         note('n0', 0, 60, 360),
         note('n1', 720, 62, 360),
         note('n2', 1440, 64, 365),

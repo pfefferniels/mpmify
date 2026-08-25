@@ -3,7 +3,7 @@
  *
  * mpmify is a reduction: each transformer accounts for one slice of the deviation between the
  * score and the recording, and the next one works on what is left. That remainder used to be
- * *carried* — written back onto the MSM notes as `tickDate`, `tickDuration` and
+ * *carried* — written back onto the aligned notes as `tickDate`, `tickDuration` and
  * `absoluteVelocityChange`, each step subtracting its own share for the next. This module
  * computes it instead, from the score, the recording and the MPM, on demand.
  *
@@ -38,12 +38,12 @@
  *   unproven code that has to stay in step with a renderer it does not own.
  */
 import { exportMPM, InstructionType, Mpm, withoutMaps } from "../mpm"
-import { MSM, MsmNote, MsmPedal } from "../msm"
+import { Alignment, AlignedNote, AlignedPedal } from "../alignment"
 import { computeTickTimes } from "../transformers/tempo/tickTimes"
 import { performMsmToData } from "espressivo"
 
 export interface NoteResidual {
-    readonly note: MsmNote
+    readonly note: AlignedNote
 
     /**
      * Where the recorded onset falls on the score grid, in ticks. `undefined` when no `<tempo>`
@@ -64,20 +64,20 @@ export interface NoteResidual {
      * What the probed MPM sounds this note at. The quantity `InsertArticulation` reaches by
      * taking the residual back off the recording, and the divisor `relativeVelocity` needs:
      * the renderer computes velocity as dynamics x relativeVelocity, so the ratio to write is
-     * `note['midi.velocity'] / renderedVelocity`.
+     * `note.velocity / renderedVelocity`.
      */
     readonly renderedVelocity: number | undefined
 }
 
 export interface PedalResidual {
-    readonly pedal: MsmPedal
+    readonly pedal: AlignedPedal
     readonly tickDate: number | undefined
     readonly tickDuration: number | undefined
 }
 
 export interface Residual {
-    of(note: MsmNote): NoteResidual | undefined
-    ofPedal(pedal: MsmPedal): PedalResidual | undefined
+    of(note: AlignedNote): NoteResidual | undefined
+    ofPedal(pedal: AlignedPedal): PedalResidual | undefined
     readonly notes: readonly NoteResidual[]
     readonly pedals: readonly PedalResidual[]
 }
@@ -97,7 +97,7 @@ export interface DeriveResidualOptions {
 const RESIDUAL_SEED = 0x6D706D
 
 export const deriveResidual = (
-    msm: MSM,
+    msm: Alignment,
     mpm: Mpm,
     options: DeriveResidualOptions = {}
 ): Residual => {
@@ -115,7 +115,7 @@ export const deriveResidual = (
             tickDuration: placed?.tickDuration,
             velocity: renderedVelocity === undefined
                 ? undefined
-                : note['midi.velocity'] - renderedVelocity,
+                : note.velocity - renderedVelocity,
             renderedVelocity,
         }
     })
@@ -137,7 +137,7 @@ export const deriveResidual = (
 }
 
 /** What the probed MPM renders each note at, by `xml:id`. */
-const renderedVelocities = (msm: MSM, mpm: Mpm): Map<string, number> | undefined => {
+const renderedVelocities = (msm: Alignment, mpm: Mpm): Map<string, number> | undefined => {
     const score = msm.serializeScore()
     if (!score) return undefined
 

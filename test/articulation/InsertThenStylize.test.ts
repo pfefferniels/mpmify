@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 import { Mpm, createMpm, getDefinition, getInstructions, getStyles, requireMap } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers/articulation/InsertArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
@@ -17,7 +17,7 @@ import { StylizeArticulation } from "../../src/transformers/articulation/Stylize
  */
 
 /** A note that was played for `playedTicks` ticks — stated as a recording, read at 60bpm. */
-const note = (id: string, date: number, pitch: number, playedTicks: number): MsmNote => ({
+const note = (id: string, date: number, pitch: number, playedTicks: number): AlignedNote => ({
     'xml:id': id,
     date,
     part: 1,
@@ -26,22 +26,22 @@ const note = (id: string, date: number, pitch: number, playedTicks: number): Msm
     accidentals: 0,
     duration: 720,
     'midi.pitch': pitch,
-    'midi.onset': date / 720,
-    'midi.duration': playedTicks / 720,
-    'midi.velocity': 64,
+    'milliseconds.date': date / 720 * 1000,
+    'milliseconds.date.end': (date + playedTicks) / 720 * 1000,
+    velocity: 64,
 })
 
-/** The tempo those recorded seconds are read against. */
+/** The tempo those recorded milliseconds are read against. */
 const atSixtyBpm = () => {
     const mpm = createMpm()
     requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
-type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
 const callTransform = (
     transformer: InsertArticulation | StylizeArticulation,
-    msm: MSM,
+    msm: Alignment,
     mpm: Mpm
 ) => (transformer as unknown as Transformable).transform(msm, mpm)
 
@@ -50,12 +50,12 @@ const BOTH = new Set(['relativeDuration', 'relativeVelocity'] as const)
 /** Eight notes on eight pitches, so no stretched note can run into a repeat of its own. */
 const PITCHES = [60, 62, 64, 65, 67, 69, 71, 72]
 
-const insert = (msm: MSM, mpm: Mpm, name: string, ids: string[]) =>
+const insert = (msm: Alignment, mpm: Mpm, name: string, ids: string[]) =>
     callTransform(new InsertArticulation({
         scope: 'global', noteIDs: ids, aspects: new Set(BOTH), name,
     }), msm, mpm)
 
-const stylize = (msm: MSM, mpm: Mpm) =>
+const stylize = (msm: Alignment, mpm: Mpm) =>
     callTransform(new StylizeArticulation(), msm, mpm)
 
 const defaultDef = (mpm: Mpm) => {
@@ -67,7 +67,7 @@ test('the articulations InsertArticulation wrote are clustered, not read as nois
     // The issue's own evidence: two notes shortened alike, folded into one def named 'a', and
     // two `<articulation>` elements carrying nothing but `@name.ref="a"`. That is one cluster,
     // and being the only one it becomes the map's default — so the instructions can go.
-    const msm = new MSM([
+    const msm = new Alignment([
         note('n0', 0, 60, 648),
         note('n1', 720, 62, 648),
     ], { numerator: 4, denominator: 4 })
@@ -91,7 +91,7 @@ test('two articulation units are kept apart, and the larger one becomes the defa
     // clusters that are further apart than `relativeDurationTolerance`. The larger becomes the
     // default; the smaller keeps an instruction each, now naming the def the cluster was given.
     const played = [360, 360, 360, 360, 360, 1008, 1008, 1008]
-    const msm = new MSM(
+    const msm = new Alignment(
         PITCHES.map((pitch, i) => note(`n${i}`, i * 720, pitch, played[i])),
         { numerator: 4, denominator: 4 }
     )

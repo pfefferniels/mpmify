@@ -1,4 +1,4 @@
-import { getRange, MSM, Segment, Transformer } from "mpmify";
+import { getRange, Alignment, Segment, Transformer } from "mpmify";
 import type { Residual } from "mpmify";
 
 /**
@@ -15,7 +15,7 @@ import type { Residual } from "mpmify";
 export function mergeOverlappingSegments(
     segments: Segment[],
     transformers: Transformer[],
-    msm: MSM,
+    msm: Alignment,
     residual: Residual,
 ): Segment[] {
     const byCallId = new Map(transformers.map(t => [t.id, t]));

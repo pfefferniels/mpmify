@@ -32,14 +32,16 @@ const RAMP_TICKS = 60
 const pedalledScore = () => {
     const score = buildScore({ beats: 8 })
     for (const note of score.allNotes) {
-        note['midi.onset'] = (note.date / QUARTER) * 0.5
-        note['midi.duration'] = 0.5
-        note['midi.velocity'] = 64
+        // Half a second to the quarter, which is the 120 bpm the assertions below read back.
+        const onset = (note.date / QUARTER) * 500
+        note['milliseconds.date'] = onset
+        note['milliseconds.date.end'] = onset + 500
+        note.velocity = 64
     }
-    // Down on beat 1, again on beat 5 — 0 s and 2 s at the 120 bpm the onsets describe.
+    // Down on beat 1, again on beat 5 — 0 ms and 2000 ms at the 120 bpm the onsets describe.
     score.pedals = [
-        { 'xml:id': 'ped0', type: 'sustain', 'midi.onset': 0, 'midi.duration': 1 },
-        { 'xml:id': 'ped1', type: 'sustain', 'midi.onset': 2, 'midi.duration': 1 },
+        { 'xml:id': 'ped0', type: 'sustain', 'milliseconds.date': 0, 'milliseconds.date.end': 1000 },
+        { 'xml:id': 'ped1', type: 'sustain', 'milliseconds.date': 2000, 'milliseconds.date.end': 3000 },
     ]
     return score
 }

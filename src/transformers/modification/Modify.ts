@@ -1,11 +1,12 @@
 import { Mpm } from "../../mpm"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
 export type ModifyOptions = ScopedTransformationOptions
     & ({ noteIDs: string[] } | { from: number, to: number })
     & {
         aspect: 'velocity' | 'onset' | 'duration' | 'pedal'
+        /** how much to add, in the aspect's own unit: velocity steps for `velocity`, milliseconds for `onset` and `duration`. */
         change: number
     }
 
@@ -24,7 +25,7 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
         })
     }
 
-    protected transform(msm: MSM, _mpm: Mpm) {
+    protected transform(msm: Alignment, _mpm: Mpm) {
         const { aspect, change } = this.options
 
         const notes = ('noteIDs' in this.options)
@@ -36,13 +37,16 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
 
             switch (aspect) {
                 case 'velocity':
-                    note['midi.velocity'] = Math.max(0, note['midi.velocity'] + change)
+                    note.velocity = Math.max(0, note.velocity + change)
                     break
                 case 'onset':
-                    note['midi.onset'] += change
+                    // Moving a note moves its release with it. The end is absolute, so shifting
+                    // only the start would shorten or lengthen the note instead of displacing it.
+                    note['milliseconds.date'] += change
+                    note['milliseconds.date.end'] += change
                     break
                 case 'duration':
-                    note['midi.duration'] += change
+                    note['milliseconds.date.end'] += change
                     break
                 default:
                     console.warn(`Unknown aspect: ${aspect}`)

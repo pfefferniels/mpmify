@@ -145,7 +145,7 @@ const articulationInstructions = (truth: ArticulationTruth, notes: ScoreNote[]) 
 }
 
 /** Just enough of a note for the articulation map: taken as an argument so this file need not
- * know about the MSM class. */
+ * know about the `Alignment` class. */
 export interface ScoreNote {
     id: string
     date: number

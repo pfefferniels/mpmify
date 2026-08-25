@@ -14,7 +14,7 @@ import {
     Scope,
     scopesOf,
 } from "../../mpm";
-import { MSM, MsmNote } from "../../msm";
+import { Alignment, AlignedNote } from "../../alignment";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dbscan, IPoint } from "../../utils/dbscan";
 import { InsertArticulation, makeArticulationDef } from "./InsertArticulation";
@@ -100,7 +100,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
     }
 
     private findConflicts(
-        withinNotes: MsmNote[],
+        withinNotes: AlignedNote[],
         clusteredArticulations: Articulation[],
         meanRelativeDuration: number,
         residual: Residual
@@ -214,7 +214,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
             .forEach(def => removeDefinition(mpm, 'articulationDef', def))
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         // Where each note actually fell, under everything the MPM explains apart from
         // articulation — which is what this step is deciding. Derived once: it does not vary by
         // scope, and each call renders the document.

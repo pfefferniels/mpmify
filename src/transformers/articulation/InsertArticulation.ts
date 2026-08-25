@@ -6,7 +6,7 @@ import {
     requireMap,
     unwrap,
 } from "../../mpm"
-import { MSM, MsmNote } from "../../msm"
+import { Alignment, AlignedNote } from "../../alignment"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
@@ -102,12 +102,12 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
      * renderer computes `velocity = dynamics x relativeVelocity`, so the ratio has to be taken
      * against the dynamics side of that product (issue #23). That used to be reached by taking
      * the accumulated residual back off the recording,
-     * `midi.velocity - absoluteVelocityChange`; it is now read directly off a residual derived
+     * `velocity - absoluteVelocityChange`; it is now read directly off a residual derived
      * with articulation held out, which is the same quantity without the intervening algebra.
      */
     private noteToArticulation(
         aspects: Set<ArticulationProperty>,
-        note: MsmNote,
+        note: AlignedNote,
         residual: NoteResidual | undefined
     ): MeasuredArticulation {
         const tickDuration = residual?.tickDuration
@@ -118,7 +118,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // honestly; a guessed value would be silently wrong.
         const prescribed = residual?.renderedVelocity
         const relativeVelocity = prescribed !== undefined && prescribed > 0
-            ? note["midi.velocity"] / prescribed
+            ? note.velocity / prescribed
             : undefined
 
         // Both are absent where the recording did not place the note, and saying nothing is what
@@ -140,11 +140,11 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         }
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const { noteIDs, aspects, name } = this.options
         const affectedNotes = noteIDs
             .map(id => msm.getByID(id))
-            .filter(n => !!n) as MsmNote[]
+            .filter(n => !!n) as AlignedNote[]
 
         // What the MPM explains without any articulation is what articulation has to account
         // for. Derived here rather than read off the notes, so this no longer depends on which

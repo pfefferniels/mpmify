@@ -2,7 +2,7 @@
  * Where a {@link Scope} meets an espressivo document.
  *
  * The document is espressivo's `Mpm` — passed around by the transformers as it is, with its
- * whole surface. What is here is the one question espressivo does not answer: mpmify and MSM
+ * whole surface. What is here is the one question espressivo does not answer: mpmify and the alignment
  * name a part `'global'` or by index, and turning that into a `<global>` or a numbered
  * `<part>`, then into its `<dated>`, then into the map, creating each on the way, is four steps
  * no transformer should repeat.
@@ -102,7 +102,7 @@ export const scopesOf = (mpm: Mpm): Scope[] => {
  * The `<global>` or `<part>` a scope names, created if `create` and it is not there yet.
  *
  * A part's `@number` is `scope + 1` and its `@midi.channel` is `scope`, which is the numbering
- * mpm-ts's serializer wrote and what `MSM.notesInPart` assumes.
+ * mpm-ts's serializer wrote and what `Alignment.notesInPart` assumes.
  */
 const environmentOf = (mpm: Mpm, scope: Scope, create: boolean): Global | Part | null => {
     const performance = performanceOf(mpm)
@@ -156,7 +156,7 @@ export const requireMap = <K extends InstructionType>(
  * The point is to ask what the rest of the MPM explains. Rendering `withoutMaps(mpm,
  * ['articulation'])` and comparing against the recording gives the deviation articulation still
  * has to account for — the same quantity the transformers used to accumulate by subtracting
- * their own share from the MSM, obtained by construction instead of by bookkeeping.
+ * their own share from the alignment, obtained by construction instead of by bookkeeping.
  *
  * The document is deep-copied, so this never disturbs the one being fitted. It is a probe:
  * render it and throw it away.

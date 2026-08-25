@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 import { InstructionOptions, Mpm, createMpm, getInstructions, requireMap } from "../../src/mpm"
 import { CombineAdjacentRubatos } from "../../src/transformers/rubato/CombineAdjacentRubatos"
 
-const note = (date: number): MsmNote => ({
+const note = (date: number): AlignedNote => ({
     'xml:id': `n${date}`,
     date,
     part: 1,
@@ -14,9 +14,9 @@ const note = (date: number): MsmNote => ({
     accidentals: 0,
     duration: 720,
     'midi.pitch': 60,
-    'midi.onset': date / 720,
-    'midi.duration': 1,
-    'midi.velocity': 64,
+    'milliseconds.date': date / 720 * 1000,
+    'milliseconds.date.end': date / 720 * 1000 + 1000,
+    velocity: 64,
 })
 
 const rubato = (date: number, intensity: number): InstructionOptions<'rubato'> => ({
@@ -30,8 +30,8 @@ const given = (mpm: Mpm, rubatos: InstructionOptions<'rubato'>[]) => {
 }
 
 /** Call the protected `transform` method for testing */
-const run = (transformer: CombineAdjacentRubatos, msm: MSM, mpm: Mpm) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+const run = (transformer: CombineAdjacentRubatos, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
@@ -45,7 +45,7 @@ test('it terminates when the last rubato has no frame left before the final note
     // The walk used to advance `ref` only from inside the frame loop, so a `ref` whose next
     // frame started at or after the last note never advanced and the transformer span forever.
     // See old-bugs.md.
-    const msm = new MSM(
+    const msm = new Alignment(
         [0, 720, 1440, 2160, 2880].map(note),
         { numerator: 4, denominator: 4 }
     )
@@ -62,7 +62,7 @@ test('it terminates when the last rubato has no frame left before the final note
 })
 
 test('it folds a run of similar rubatos into one looping instruction', () => {
-    const msm = new MSM(
+    const msm = new Alignment(
         [0, 720, 1440, 2160, 2880, 3600].map(note),
         { numerator: 4, denominator: 4 }
     )

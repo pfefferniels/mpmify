@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { FrameDomain } from "espressivo"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 import {
     InstructionOptions, Mpm, OrnamentDraft, createMpm, fillInAt, getInstructions,
     ornamentDraftOf, requireMap, setOrnamentDraft,
@@ -29,30 +29,30 @@ const generateNote = (position: number, duration: number, part: number = 1) => (
  * Call the protected `transform` method for testing, the way the other transformer tests do.
  * Calling it directly type-checks only as long as nobody type-checks the tests.
  */
-const callTransform = (transformer: TranslatePhysicalTimeToTicks, msm: MSM, mpm: Mpm) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+const callTransform = (transformer: TranslatePhysicalTimeToTicks, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const msmFixture = new MSM(
+const msmFixture = new Alignment(
     [
         {
-            ...generateNote(0, 0.5),    // half note ...
-            'midi.onset': 0,            
-            'midi.duration': 2,         // lasting 2 seconds (i.e. 60bpm)
-            'midi.velocity': 100
+            ...generateNote(0, 0.5),        // half note ...
+            'milliseconds.date': 0,
+            'milliseconds.date.end': 2000,  // lasting 2000 ms (i.e. 60bpm)
+            velocity: 100
         },
         {
-            ...generateNote(0.5, 0.25), // quarter note ...
-            'midi.onset': 2,           
-            'midi.duration': 1,         // lasting 1 seconds (i.e. 60bpm too)
-            'midi.velocity': 100
+            ...generateNote(0.5, 0.25),     // quarter note ...
+            'milliseconds.date': 2000,
+            'milliseconds.date.end': 3000,  // lasting 1000 ms (i.e. 60bpm too)
+            velocity: 100
         },
         {
             ...generateNote(0.75, 0.25),
-            'midi.onset': 3,
-            'midi.duration': 1,
-            'midi.velocity': 100
+            'milliseconds.date': 3000,
+            'milliseconds.date.end': 4000,
+            velocity: 100
         }
     ],
     { numerator: 4, denominator: 4 }
@@ -80,10 +80,10 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     // Arrange: a piece under a single constant tempo, so the tick/ms ratio is known exactly.
     // At 60 bpm with beatLength 0.25 a quarter note (720 ticks) lasts 1000 ms, i.e. 0.72
     // ticks per millisecond.
-    const msm = new MSM([
-        { ...generateNote(0, 0.25), 'midi.onset': 0, 'midi.duration': 1, 'midi.velocity': 100 },
-        { ...generateNote(0.25, 0.25), 'midi.onset': 1, 'midi.duration': 1, 'midi.velocity': 100 },
-        { ...generateNote(0.5, 0.25), 'midi.onset': 2, 'midi.duration': 1, 'midi.velocity': 100 },
+    const msm = new Alignment([
+        { ...generateNote(0, 0.25), 'milliseconds.date': 0, 'milliseconds.date.end': 1000, velocity: 100 },
+        { ...generateNote(0.25, 0.25), 'milliseconds.date': 1000, 'milliseconds.date.end': 2000, velocity: 100 },
+        { ...generateNote(0.5, 0.25), 'milliseconds.date': 2000, 'milliseconds.date.end': 3000, velocity: 100 },
     ], { numerator: 4, denominator: 4 })
 
     const mpm = createMpm()

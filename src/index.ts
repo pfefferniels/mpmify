@@ -1,4 +1,4 @@
-export * from "./msm";
+export * from "./alignment";
 export * from "./mpm";
 export * from "./transformers";
 export * from "./residual";

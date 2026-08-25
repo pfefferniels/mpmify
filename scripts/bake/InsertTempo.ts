@@ -1,4 +1,4 @@
-import { MSM, AbstractTransformer, generateId, getInstructions, removeInstruction, requireMap } from 'mpmify'
+import { Alignment, AbstractTransformer, generateId, getInstructions, removeInstruction, requireMap } from 'mpmify'
 import type { InstructionOptions, Mpm, Scope, ScopedTransformationOptions } from 'mpmify'
 
 interface InsertTempoOptions extends ScopedTransformationOptions {
@@ -19,7 +19,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
         super(options || { scope: 'global', from: 0, to: 0, bpm: 120, beatLength: 0.25 })
     }
 
-    public run(msm: MSM, mpm: Mpm) {
+    public run(msm: Alignment, mpm: Mpm) {
         this._boundaryId = undefined
         super.run(msm, mpm)
         if (this._boundaryId) {
@@ -27,7 +27,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
         }
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         msm.shiftToFirstOnset()
         const { from, to, bpm, transitionTo, meanTempoAt, beatLength } = this.options
         const scope = this.options.scope

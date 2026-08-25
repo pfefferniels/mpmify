@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 import { Mpm, createMpm, getDefinitions, getInstructions, requireMap } from "../../src/mpm"
 import { InsertMetricalAccentuation } from "../../src/transformers/accentuation"
 import { PULSES_PER_QUARTER } from "../../src/ppq"
@@ -12,13 +12,13 @@ import { PULSES_PER_QUARTER } from "../../src/ppq"
  * quantity rather than the recorded velocities directly.
  *
  * A single flat `<dynamics>` makes the two the same thing up to a constant: espressivo renders
- * every note at `volume`, so `residual = midi.velocity - volume` exactly, with no rounding to
+ * every note at `volume`, so `residual = velocity - volume` exactly, with no rounding to
  * work around. Everything below is written in terms of the residual and the fixture adds the
  * constant back.
  */
 const VOLUME = 64
 
-const note = (index: number, velocity: number): MsmNote => ({
+const note = (index: number, velocity: number): AlignedNote => ({
     'xml:id': `n_${index}`,
     date: index * PULSES_PER_QUARTER,
     part: 1,
@@ -27,10 +27,10 @@ const note = (index: number, velocity: number): MsmNote => ({
     accidentals: 0,
     duration: PULSES_PER_QUARTER,
     'midi.pitch': 60,
-    'midi.onset': index * 500,
-    'midi.duration': 500,
-    'midi.velocity': velocity,
-} as MsmNote)
+    'milliseconds.date': index * 500,
+    'milliseconds.date.end': index * 500 + 500,
+    velocity,
+} as AlignedNote)
 
 /**
  * The residual shape one bar carries, as a fraction of that bar's scale.
@@ -59,7 +59,7 @@ const SHAPE = [0.3, 1, 0.5, 0.2]
  * exits disagreeing.
  */
 const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
-    const notes: MsmNote[] = []
+    const notes: AlignedNote[] = []
     for (let bar = 0; bar < scales.length; bar++) {
         for (let beat = 0; beat < 4; beat++) {
             notes.push(note(bar * 4 + beat, VOLUME + SHAPE[beat] * scales[bar]))
@@ -67,7 +67,7 @@ const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
     }
     if (closingDownbeat) notes.push(note(scales.length * 4, VOLUME))
 
-    const msm = new MSM(notes, { numerator: 4, denominator: 4 })
+    const msm = new Alignment(notes, { numerator: 4, denominator: 4 })
 
     const mpm = createMpm()
     requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
@@ -77,7 +77,7 @@ const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
 }
 
 /** Call the protected `transform` method for testing */
-const run = (msm: MSM, mpm: Mpm, scaleTolerance: number) => {
+const run = (msm: Alignment, mpm: Mpm, scaleTolerance: number) => {
     const transformer = new InsertMetricalAccentuation({
         scope: 'global',
         name: 'metre',
@@ -86,7 +86,7 @@ const run = (msm: MSM, mpm: Mpm, scaleTolerance: number) => {
         beatLength: 0.25,
         scaleTolerance,
     })
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 

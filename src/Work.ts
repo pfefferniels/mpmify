@@ -62,7 +62,7 @@ export type ImportResult = {
     secondary?: Record<string, unknown>;
 }
 
-/** The MSM ids a `MakeChoice` call preferred — which recording each note was taken from. */
+/** The recording ids a `MakeChoice` call preferred — which recording each note was taken from. */
 export const sourcesOf = (transformers: Transformer[]): string[] =>
     Array.from(new Set(transformers
         .filter((t): t is MakeChoice => t.name === 'MakeChoice')

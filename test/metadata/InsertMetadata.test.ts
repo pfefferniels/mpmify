@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest"
 import { createMpm, exportMPM } from "../../src/mpm"
 import { InsertMetadata } from "../../src/transformers"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 
-const score = () => new MSM()
+const score = () => new Alignment()
 
 const write = (options: ConstructorParameters<typeof InsertMetadata>[0]) => {
     const mpm = createMpm()

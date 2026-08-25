@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, test } from "vitest"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 import {
     FrameDomain, InstructionOptions, Mpm, NoteOffShift, OrnamentDraft, createMpm,
     fillInAt, findInstructionById, getDefinitions, getInstructions, ornamentDraftOf,
@@ -19,14 +19,14 @@ import { StylizeOrnamentation } from "../../src/transformers"
  * the fitters leave them and the shapes below are ones the ordinary chain no longer produces.
  */
 
-const callTransform = (transformer: StylizeOrnamentation, msm: MSM, mpm: Mpm) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+const callTransform = (transformer: StylizeOrnamentation, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
 const run = (mpm: Mpm) => callTransform(
     new StylizeOrnamentation({ tickTolerance: 10, gradientTolerance: 0.1, intensityTolerance: 0.3 }),
-    new MSM([], { numerator: 4, denominator: 4 }),
+    new Alignment([], { numerator: 4, denominator: 4 }),
     mpm)
 
 const defNames = (mpm: Mpm) =>

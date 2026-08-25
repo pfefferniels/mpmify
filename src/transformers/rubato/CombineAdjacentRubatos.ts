@@ -1,7 +1,7 @@
 import { getInstructions, Instruction, Mpm, removeInstruction, requireMap } from "../../mpm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { InsertRubato } from "./InsertRubato"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 
 export interface CombineAdjacentRubatoOptions extends ScopedTransformationOptions {    // adjacentRubatos: Rubato[]
     /**
@@ -35,7 +35,7 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
         })
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const rubatos = getInstructions(mpm, 'rubato', this.options.scope)
         if (rubatos.length <= 1) return
 

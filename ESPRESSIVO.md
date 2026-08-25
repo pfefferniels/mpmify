@@ -29,7 +29,7 @@ reason is visible in the code:
 - Accentuation after dynamics, for the same reason one dimension over: a metrical pattern is
   invisible underneath a trend that has not yet taken its share.
 
-The residual is no longer *carried*. It used to be written back onto the MSM notes, each step
+The residual is no longer *carried*. It used to be written back onto the aligned notes, each step
 subtracting its own share for the next; `src/residual/` computes it instead, from the score, the
 recording and the MPM, on demand. A transformer asks for it with its own dimension held out
 (`deriveResidual(msm, mpm, { without: ['articulation'] })`) — "what does everything *else*
@@ -65,7 +65,32 @@ which element.
 
 ## 1. Where the line is
 
-espressivo owns **MPM**. mpmify owns **the fitting**.
+espressivo owns **MPM**. mpmify owns **the fitting**, and **the alignment**.
+
+### The alignment is not an MSM, and that is why it is mpmify's
+
+`src/alignment/` holds a score and a recording of it, note by note. espressivo has no name for
+that: its `Msm` is a document handle (`createMsm`, `addPart(Element)`, `getParts(): Elements`,
+`exportMidi`) with no note type and no note writer, and MSM itself has no way to say "the score
+says this and the performance did that" in one place. So `Alignment` is mpmify's, the way the
+fitting is — and it is called `Alignment` rather than `MSM` because it is not one, and because
+`MSM` and `Msm` would collide the moment the two libraries met.
+
+Every attribute it carries **is** MSM's, though:
+
+| | in ticks | in milliseconds |
+|---|---|---|
+| the score | `date`, `duration`, `midi.pitch`, `pitchname`, `octave`, `accidentals` | — |
+| the recording | — | `milliseconds.date`, `milliseconds.date.end`, `velocity` |
+
+Those three are what `Performance.perform` writes and `readPerformanceData` reads. mpmify used to
+carry the recording in `midi.onset` / `midi.duration` / `midi.velocity`, in **seconds** — three
+names that appear nowhere in meico's Java source, and a unit every fitter converted away from at
+the point of use. There were exactly ten `* 1000` in `src/` and all ten were that conversion.
+
+`Alignment.serialize()` therefore states the alignment as a document espressivo can read straight
+back, and `serializeScore()` states only the score half — which is what a residual is measured
+against, since a document carrying both is ambiguous about which timing it means.
 
 Concretely, espressivo answers four questions about every instruction, and mpmify asks all four
 rather than modelling any of them:
@@ -89,7 +114,7 @@ to a hardcoded 100.0, and has no inverse.
 ### A transformer is handed espressivo's `Mpm`
 
 ```ts
-protected transform(msm: MSM, mpm: Mpm) {
+protected transform(msm: Alignment, mpm: Mpm) {
     const map = requireMap(mpm, 'tempo', scope)   // espressivo's TempoMap
     map.addTempo({ id, date, bpm, beatLength })
     map.updateTempoAt(index, { bpm: 90 })
@@ -112,7 +137,7 @@ Everything below is a free function over `Mpm`, in `src/mpm/`. None of them wrap
 
 | what | why espressivo cannot answer it |
 |---|---|
-| `requireMap` / `mapOf` / `scopesOf` (`document.ts`) | a `Scope` is mpmify's and MSM's way of naming a part. Turning one into a `<global>` or numbered `<part>`, then its `<dated>`, then the map, creating each on the way, is four steps no transformer should repeat. What comes back is espressivo's own `TempoMap`, `DynamicsMap`, … with its whole surface. |
+| `requireMap` / `mapOf` / `scopesOf` (`document.ts`) | a `Scope` is mpmify's and the alignment's way of naming a part. Turning one into a `<global>` or numbered `<part>`, then its `<dated>`, then the map, creating each on the way, is four steps no transformer should repeat. What comes back is espressivo's own `TempoMap`, `DynamicsMap`, … with its whole surface. |
 | `getInstructions` (`instructions.ts`) | espressivo reads by index and by type; "every `<tempo>` in scope S" is the question mpmify asks. The `READ` table there is the only thing in the whole module that knows one instruction type from another, and it has no write half. |
 | `auditInstructions` / `fingerprintInstructions` | what a transformer changed, what it left unnamed, what it wrote as `NaN` — all by looking at the document afterwards. |
 | `insertStyle` / `ensureDefaultStyle` (`styles.ts`) | mpmify's one-`<styleDef>`-per-collection convention, and the `<style date="0">` switch without which every `@name.ref` in a map is unresolvable. |

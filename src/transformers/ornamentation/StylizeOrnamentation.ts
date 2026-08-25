@@ -12,7 +12,7 @@ import {
     Scope,
     scopesOf,
 } from "../../mpm"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
 import { dbscan } from "../../utils/dbscan"
@@ -124,7 +124,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         })
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         for (const scope of scopesOf(mpm)) {
             const ornaments: FittedOrnament[] = getInstructions(mpm, 'ornament', scope)
                 .map(instruction => ({ instruction, draft: ornamentDraftOf(instruction.element) }))

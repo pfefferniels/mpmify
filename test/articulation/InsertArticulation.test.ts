@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 import { Mpm, createMpm, getDefinition, getInstructions, requireMap } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers"
 
@@ -25,8 +25,8 @@ const generateNote = (position: number, duration: number, id: string, part: numb
  *
  * The played lengths are stated as what was recorded rather than as tick figures, because the
  * fitter derives the tick figures from the recording and the tempo. At 60bpm with a quarter-note
- * beat, one second is one quarter note is 720 ticks — so 0.5s is the 360 ticks this used to
- * assert directly, and 2s is the 1440.
+ * beat, 1000 ms is one quarter note is 720 ticks — so a note released 500 ms after it sounded is
+ * the 360 ticks this used to assert directly, and one released after 2000 ms is the 1440.
  *
  * The rest note is there to make the piece long enough to contain them — or it was. The tick
  * walk used to measure a duration only where the note's end fell inside a tempo's span, and the
@@ -36,28 +36,28 @@ const generateNote = (position: number, duration: number, id: string, part: numb
  * no longer changes what these two notes measure. It stays because it also gives the piece a
  * second date, and the assertions below were recorded against a score that had one.
  */
-const msmFixture = () => new MSM([
+const msmFixture = () => new Alignment([
     {
         ...generateNote(0, 0.25, 'note0'),   // duration = 720 ticks
-        'midi.onset': 0,
-        'midi.duration': 0.5,                // → 360 ticks
-        'midi.velocity': 50,
+        'milliseconds.date': 0,
+        'milliseconds.date.end': 500,        // → 360 ticks
+        velocity: 50,
     },
     {
         ...generateNote(0, 0.25, 'note1'),   // duration = 720 ticks
-        'midi.onset': 0,
-        'midi.duration': 2,                  // → 1440 ticks
-        'midi.velocity': 50,
+        'milliseconds.date': 0,
+        'milliseconds.date.end': 2000,       // → 1440 ticks
+        velocity: 50,
     },
     {
         ...generateNote(1, 0.25, 'rest'),    // date 2880; not articulated, it only sets msm.end
-        'midi.onset': 4,
-        'midi.duration': 1,
-        'midi.velocity': 50,
+        'milliseconds.date': 4000,
+        'milliseconds.date.end': 5000,
+        velocity: 50,
     }],
     { numerator: 1, denominator: 4 })
 
-/** The tempo the recorded seconds above are read against. */
+/** The tempo the recorded milliseconds above are read against. */
 const atSixtyBpm = () => {
     const mpm = createMpm()
     requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
@@ -65,12 +65,12 @@ const atSixtyBpm = () => {
 }
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: InsertArticulation, msm: MSM, mpm: Mpm) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+const callTransform = (transformer: InsertArticulation, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const run = (msm: MSM, mpm: Mpm) => callTransform(new InsertArticulation({
+const run = (msm: Alignment, mpm: Mpm) => callTransform(new InsertArticulation({
     scope: 'global',
     noteIDs: ['note0', 'note1'],
     aspects: new Set(['relativeDuration']),

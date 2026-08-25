@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 import { createMpm, requireMap } from "../../src/mpm"
 import { deriveResidual } from "../../src/residual"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 
-const note = (position: number, onset: number, velocity = 100, duration = 1): MsmNote => ({
+const note = (position: number, onset: number, velocity = 100, duration = 1000): AlignedNote => ({
     'xml:id': `n_${position}`,
     date: position * 4 * 720,
     part: 1,
@@ -13,14 +13,14 @@ const note = (position: number, onset: number, velocity = 100, duration = 1): Ms
     accidentals: 0,
     duration: 0.25 * 4 * 720,
     'midi.pitch': 67,
-    'midi.onset': onset,
-    'midi.duration': duration,
-    'midi.velocity': velocity,
-} as MsmNote)
+    'milliseconds.date': onset,
+    'milliseconds.date.end': onset + duration,
+    velocity,
+} as AlignedNote)
 
 /** Three quarter notes at 60bpm, the last one late and quiet. */
-const fixture = () => new MSM(
-    [note(0, 0), note(0.25, 1), note(0.5, 2.1, 80)],
+const fixture = () => new Alignment(
+    [note(0, 0), note(0.25, 1000), note(0.5, 2100, 80)],
     { numerator: 4, denominator: 4 }
 )
 

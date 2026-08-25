@@ -9,7 +9,7 @@ import {
     Mpm,
     requireMap,
 } from "../../src/mpm"
-import { MSM } from "../../src/msm"
+import { Alignment } from "../../src/alignment"
 import { AbstractTransformer, TransformationOptions } from "../../src/transformers/Transformer"
 
 /**
@@ -45,14 +45,14 @@ class WritesTempo extends AbstractTransformer<TransformationOptions> {
     ) {
         super({})
     }
-    protected transform(_msm: MSM, mpm: Mpm) {
+    protected transform(_msm: Alignment, mpm: Mpm) {
         requireMap(mpm, 'tempo', 'global')
             .addTempo({ id: this.elementId, date: 0, bpm: this.bpm, beatLength: 0.25 })
     }
 }
 
 const run = (transformer: AbstractTransformer<TransformationOptions>, mpm: Mpm) =>
-    transformer.run(new MSM([], { numerator: 4, denominator: 4 }), mpm)
+    transformer.run(new Alignment([], { numerator: 4, denominator: 4 }), mpm)
 
 describe('a non-finite number never survives a transformer', () => {
     test('NaN is refused, and the message names the attribute', () => {

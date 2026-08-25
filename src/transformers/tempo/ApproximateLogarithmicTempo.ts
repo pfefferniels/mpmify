@@ -9,7 +9,7 @@ import {
     requireMap,
     Scope,
 } from "../../mpm";
-import { MSM, MsmNote } from "../../msm";
+import { Alignment, AlignedNote } from "../../alignment";
 import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { clamp } from "../../utils/utils";
@@ -25,8 +25,10 @@ export type TempoSegment = {
     beatLength: number
 }
 
+/** An anchor the caller places at a score date nothing sounds at — a rest, or a tied-over beat. */
 export type SilentOnset = {
     date: number
+    /** When it falls, in milliseconds, on the same timeline as a note's `milliseconds.date`. */
     onset: number
 }
 
@@ -123,12 +125,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
     }
 
     /**
-     * Preview the fitted tempos without touching MSM/MPM.
+     * Preview the fitted tempos without touching the alignment or the MPM.
      * When `options.continue` is true and an MPM is provided,
      * the chain is reconstructed so boundary tempos are shared
      * (matching the jointly-fitted result from `insert`).
      */
-    static preview(options: ApproximateLogarithmicTempoOptions, msm: MSM, mpm?: Mpm): TempoWithEndDate[] {
+    static preview(options: ApproximateLogarithmicTempoOptions, msm: Alignment, mpm?: Mpm): TempoWithEndDate[] {
         const notes = msm.notesInPart(options.scope);
         const newSegment: TempoSegment = { from: options.from, to: options.to, beatLength: options.beatLength };
 
@@ -143,7 +145,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         return fitSegments(segments, notes, options.silentOnsets);
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         if (!msm.timeSignature) {
             console.warn('A time signature must be given to interpolate a tempo map.')
             return
@@ -431,7 +433,7 @@ const findEffectiveTempoIndex = (tempos: Instruction<'tempo'>[], date: number): 
  */
 function fitSegments(
     segments: TempoSegment[],
-    notes: MsmNote[],
+    notes: AlignedNote[],
     silentOnsets: SilentOnset[]
 ): TempoWithEndDate[] {
     if (segments.length === 0) return [];
@@ -597,7 +599,7 @@ function normalizeChainedSegments(segments: TempoSegment[]): TempoSegment[] {
  * The observed (score position, physical time) pairs over `range`.
  *
  * A chord is one onset, and which millisecond it happened at is a question about the chord and
- * not about whichever of its notes the MSM happens to list first. The notes of a chord are not
+ * not about whichever of its notes the alignment happens to list first. The notes of a chord are not
  * played together — spread and asynchrony are the point of a performance model — so taking the
  * first was taking an arbitrary member of a spread that can be tens of milliseconds wide. The
  * median is the answer that does not move when one voice is early, and on a two-note chord it is
@@ -607,15 +609,15 @@ function normalizeChainedSegments(segments: TempoSegment[]): TempoSegment[] {
  * placed, and the fit should believe it.
  */
 function extractOnsetPairs(
-    range: TempoSegment, notes: MsmNote[], silentOnsets: SilentOnset[]
+    range: TempoSegment, notes: AlignedNote[], silentOnsets: SilentOnset[]
 ): OnsetPair[] {
     const sounding = new Map<number, number[]>();
 
     for (const n of notes) {
-        if (n.date >= range.from && n.date <= range.to && n["midi.onset"] !== undefined) {
+        if (n.date >= range.from && n.date <= range.to && n['milliseconds.date'] !== undefined) {
             const at = sounding.get(n.date);
-            if (at) at.push(n["midi.onset"] * 1000);
-            else sounding.set(n.date, [n["midi.onset"] * 1000]);
+            if (at) at.push(n['milliseconds.date']);
+            else sounding.set(n.date, [n['milliseconds.date']]);
         }
     }
 
@@ -624,7 +626,7 @@ function extractOnsetPairs(
 
     for (const s of silentOnsets) {
         if (s.date >= range.from && s.date <= range.to) {
-            pairMap.set(s.date, s.onset * 1000);
+            pairMap.set(s.date, s.onset);
         }
     }
 

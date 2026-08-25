@@ -8,7 +8,7 @@ import {
     removeDefinition,
     unwrap,
 } from "../../mpm";
-import { MSM } from "../../msm";
+import { Alignment } from "../../alignment";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { InsertMetricalAccentuation } from "./InsertMetricalAccentuation";
 
@@ -37,7 +37,7 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         })
     }
 
-    protected transform(_: MSM, mpm: Mpm) {
+    protected transform(_: Alignment, mpm: Mpm) {
         const allDefs = getDefinitions(mpm, 'accentuationPatternDef', this.options.scope)
         if (allDefs.length <= 1) return
 

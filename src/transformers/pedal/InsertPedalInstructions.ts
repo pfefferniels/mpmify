@@ -1,6 +1,6 @@
 import type { Normalized } from "espressivo"
 import { Mpm, requireMap } from "../../mpm"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { deriveResidual } from "../../residual"
@@ -28,7 +28,7 @@ export type InsertPedalOptions =
 
 /**
  * This transformer is a shortcut. The developed "path" for encoding pedal changes
- * would be to first insert accurate movements into the MSM (if necessary), and then
+ * would be to first insert accurate movements into the alignment (if necessary), and then
  * to approximate the shape using a transformer similiar to `InsertDynamics`. However,
  * this shortcut is useful for all cases in which the original source material
  * cannot represent accurate pedal movements (such as reproducing piano rolls)
@@ -51,7 +51,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         })
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         // Where each pedal fell on the score grid, under the MPM as it stands. `movement` is
         // held out for the same reason every other fitter holds its own dimension out, though
         // it changes nothing here: a movementMap moves controllers, not the pedal marks this

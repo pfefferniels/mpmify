@@ -3,13 +3,21 @@ import { parse } from "js2xmlparser";
 import { isDefined } from "../utils/utils";
 import { PULSES_PER_QUARTER } from "../ppq";
 
-type PhysicalAttributes = {
-    'midi.onset': number
-    'midi.duration': number
+/**
+ * When the recording sounds an event, in the two attributes MSM states a performance in:
+ * milliseconds from the start of the piece, and milliseconds to its release.
+ *
+ * An end rather than a duration because that is what MSM says — `Performance.perform` writes
+ * `milliseconds.date` and `milliseconds.date.end` onto a note, and `readPerformanceData` reads
+ * them back. Every caller that wanted a duration wanted `onset + duration` anyway.
+ */
+type PerformedAttributes = {
+    'milliseconds.date': number
+    'milliseconds.date.end': number
 }
 
 /**
- * What the score carries beyond the score.
+ * What mpmify carries beyond what MSM states.
  *
  * This used to hold the reduction as it ran — `tickDate`, `tickDuration` and
  * `absoluteVelocityChange`, each transformer subtracting its share and writing the rest back for
@@ -22,18 +30,16 @@ type TemporaryAttributes = Partial<{
     source: string
 }>
 
-export type MsmPedal = {
+export type AlignedPedal = {
     'xml:id': string
     type: 'sustain' | 'soft'
-} & PhysicalAttributes & TemporaryAttributes
+} & PerformedAttributes & TemporaryAttributes
 
 
 /**
- * Represents a score note as part of an MSM encoding. 
- * During the process of MPM generation several temporary 
- * attributes will be attached to it.
+ * One note of the score, together with what the recording did with it.
  */
-export type MsmNote = {
+export type AlignedNote = {
     readonly 'xml:id': string,
     readonly 'part': number,
     readonly 'date': number,
@@ -41,15 +47,15 @@ export type MsmNote = {
     readonly pitchname: string
     readonly accidentals: number
     readonly octave: number
-} & PhysicalAttributes & {
+} & PerformedAttributes & {
     'midi.pitch': number
-    'midi.velocity': number
+    velocity: number
 } & TemporaryAttributes
 
 /**
  * Used to represent a homophonized version of the score.
  */
-export type ChordMap = Map<number, MsmNote[]>
+export type ChordMap = Map<number, AlignedNote[]>
 
 export type TimeSignature = {
     numerator: number
@@ -57,22 +63,28 @@ export type TimeSignature = {
 }
 
 /**
- * This class represents an MSM encoding.
+ * A score and a recording of it, note by note.
+ *
+ * Not an MSM document — `Msm` is espressivo's, and this is the thing espressivo has no name for:
+ * the alignment. Each note carries its symbolic `date` and `duration` in ticks *and* the
+ * `milliseconds.date` / `milliseconds.date.end` / `velocity` the performance sounded it at, which
+ * is what every transformer fits against. Both halves are MSM's own attributes, so
+ * {@link Alignment.serialize} states the alignment as a document espressivo can read straight
+ * back, and {@link Alignment.serializeScore} states only the score half.
  */
-export class MSM {
-    allNotes: MsmNote[]
-    pedals: MsmPedal[]
+export class Alignment {
+    allNotes: AlignedNote[]
+    pedals: AlignedPedal[]
     timeSignature?: TimeSignature
 
     /**
-     * Constructs an MSM representation from a done
-     * score-to-performance alignment. 
+     * Builds an alignment from a finished score-to-performance alignment.
      * 
      * @param notes (usually constructed from an alignment)
      * containing information about symbolic time and the
      * real (physical) time.
      */
-    constructor(notes?: MsmNote[], timeSignature?: TimeSignature) {
+    constructor(notes?: AlignedNote[], timeSignature?: TimeSignature) {
         this.pedals = []
         // Sorted into a copy, not in place. `sort` mutates its receiver, so sorting the array
         // the caller passed reordered *their* array as a side effect of construction — which is
@@ -98,7 +110,7 @@ export class MSM {
     }
 
     public deepClone() {
-        const clone = new MSM()
+        const clone = new Alignment()
         clone.allNotes = this.allNotes.map(note => ({ ...note }))
         clone.pedals = this.pedals.map(pedal => ({ ...pedal }))
         // Spreading an absent time signature yields `{}`, which is not a TimeSignature but
@@ -111,7 +123,7 @@ export class MSM {
     /**
      * Attach arbitrary extra keys to one note.
      *
-     * The keys are by definition not in `MsmNote`, so the write goes through an index signature
+     * The keys are by definition not in `AlignedNote`, so the write goes through an index signature
      * the type does not have. That cast is the whole of the untypedness and it stays here.
      */
     public addCustomInfo(scoreId: string, info: Record<string, unknown>) {
@@ -128,23 +140,26 @@ export class MSM {
      * Deletes the silence before the first note is being played 
      */
     public shiftToFirstOnset() {
-        const notesWithOnset = this.allNotes.filter(n => isDefined(n['midi.onset']))
+        const notesWithOnset = this.allNotes.filter(n => isDefined(n['milliseconds.date']))
         // `Math.min()` of nothing is `Infinity`, and only the note shift at the bottom was
         // guarded against it: the pedal loop subtracted it unconditionally and left every pedal
         // onset at `-Infinity`. A score with no recorded onset has no first onset to shift to.
         if (notesWithOnset.length === 0) return
         // Folded rather than spread, for the reason given on `lastDate`.
-        const min = notesWithOnset.reduce((acc, n) => Math.min(acc, n['midi.onset']), Infinity)
+        const min = notesWithOnset.reduce((acc, n) => Math.min(acc, n['milliseconds.date']), Infinity)
+        if (!min) return
 
+        // A pedal already down before the first note starts at zero and keeps its release, which
+        // is the same subtraction as every other event's — the clamp only moves the start.
         this.pedals.forEach(p => {
-            if (p["midi.onset"] < min) {
-                p["midi.duration"] -= (min - p["midi.onset"])
-                p['midi.onset'] = 0
-            }
-            else p['midi.onset'] -= min
+            p['milliseconds.date.end'] -= min
+            p['milliseconds.date'] = Math.max(0, p['milliseconds.date'] - min)
         })
 
-        if (min) notesWithOnset.forEach(n => n['midi.onset'] -= min)
+        notesWithOnset.forEach(n => {
+            n['milliseconds.date'] -= min
+            n['milliseconds.date.end'] -= min
+        })
     }
 
     /**
@@ -160,10 +175,10 @@ export class MSM {
      * The MSM as a *score*: symbolic dates and durations plus `midi.pitch`, and nothing the
      * performance put there.
      *
-     * This is what goes to espressivo when a residual is derived. Handing the renderer the
-     * recorded `midi.onset` as well would be harmless — it reads `date`/`duration` — but it
-     * makes the document ambiguous about which timing it is stating, and the whole point of
-     * the residual is to keep the recording and the rendering apart.
+     * This is what goes to espressivo when a residual is derived. The recording states itself
+     * in the same attributes a render writes — `milliseconds.date`, `milliseconds.date.end`,
+     * `velocity` — so a document carrying both is ambiguous about which timing it means, and
+     * the whole point of the residual is to keep the recording and the rendering apart.
      */
     public serializeScore() {
         return this.build('pitch')
@@ -174,8 +189,8 @@ export class MSM {
      *
      * @param midi which of a note's MIDI attributes to carry into the document. `'none'` is
      * symbolic only; `'pitch'` adds `midi.pitch`, which is the least a renderer needs to sound
-     * the note and the most a *score* should say; `'all'` adds the recorded `midi.onset`,
-     * `midi.duration` and `midi.velocity` as well.
+     * the note and the most a *score* should say; `'all'` adds the recorded
+     * `milliseconds.date`, `milliseconds.date.end` and `velocity` as well.
      */
     private build(midi: 'none' | 'pitch' | 'all') {
         if (this.allNotes.length === 0) {
@@ -263,14 +278,14 @@ export class MSM {
                                         result['midi.pitch'] = note['midi.pitch']
                                     }
                                     if (midi === 'all') {
-                                        if (note['midi.onset']) {
-                                            result['midi.onset'] = note['midi.onset']
+                                        if (note['milliseconds.date']) {
+                                            result['milliseconds.date'] = note['milliseconds.date']
                                         }
-                                        if (note['midi.duration']) {
-                                            result['midi.duration'] = note['midi.duration']
+                                        if (note['milliseconds.date.end']) {
+                                            result['milliseconds.date.end'] = note['milliseconds.date.end']
                                         }
-                                        if (note['midi.velocity']) {
-                                            result['midi.velocity'] = note['midi.velocity']
+                                        if (note.velocity) {
+                                            result.velocity = note.velocity
                                         }
                                     }
 
@@ -292,9 +307,9 @@ export class MSM {
      * part.
      * @param tstamp score date
      * @param part if "global", all parts will be considered
-     * @returns array of MSM notes
+     * @returns array of aligned notes
      */
-    public notesAtDate(tstamp: number, part: Scope): MsmNote[] {
+    public notesAtDate(tstamp: number, part: Scope): AlignedNote[] {
         return this.allNotes.filter(note => {
             return (typeof part === 'number') ?
                 (note.date === tstamp && note.part === part + 1) // a specific part
@@ -303,14 +318,14 @@ export class MSM {
     }
 
     /** The note with this `xml:id`, or `undefined`. */
-    public getByID(id: string): MsmNote | undefined {
+    public getByID(id: string): AlignedNote | undefined {
         return this.allNotes.find(note => {
             return note["xml:id"] === id
         })
     }
 
     /**
-     * Generates a homophonized version of the MSM score.
+     * Generates a homophonized version of the score.
      *
      * The sort runs on a copy. Asking a score to describe itself as chords used to reorder it:
      * for `'global'` the local was `this.allNotes` itself, so a read-only-looking query left the
@@ -361,9 +376,9 @@ export class MSM {
 
     /**
      * Returns the last note
-     * @returns MSM note
+     * @returns the aligned note
      */
-    public lastNote(): MsmNote | undefined {
+    public lastNote(): AlignedNote | undefined {
         // Hoisted out of the predicate. `lastDate()` is itself a walk over every note, and
         // calling it from inside `find` ran that walk once per note the `find` visited — so
         // reading the last note of a 450-note score cost 200k comparisons.
@@ -382,7 +397,7 @@ export class MSM {
      * `this.allNotes` itself, so a caller that sorted or spliced what it got back was editing
      * the score through what reads as a query.
      */
-    public notesInPart(part: Scope): MsmNote[] {
+    public notesInPart(part: Scope): AlignedNote[] {
         return part === 'global'
             ? [...this.allNotes]
             : this.allNotes.filter(n => n.part - 1 === part)

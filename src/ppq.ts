@@ -6,7 +6,7 @@
  * `<performance pulsesPerQuarter="720">` both state it, and espressivo's renderer takes it as an
  * argument (`TempoMap.computeDiffTiming(date, ppq, tempo)`) rather than assuming one.
  *
- * mpmify writes 720 and only 720 — it is what `MSM.serializeScore` stamps and what
+ * mpmify writes 720 and only 720 — it is what `Alignment.serializeScore` stamps and what
  * `Performance.fromName` is constructed with — so every conversion between ticks and beats or
  * milliseconds is entitled to use it. What none of them is entitled to do is spell it out again:
  * before this module the literal appeared eleven times across six files, in four spellings

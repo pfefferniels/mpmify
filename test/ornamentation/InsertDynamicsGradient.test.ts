@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { expect, test } from 'vitest'
-import { MSM } from '../../src/msm'
+import { Alignment } from '../../src/alignment'
 import { Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm'
 import { InsertDynamicsGradient } from '../../src/transformers'
 
@@ -21,24 +21,24 @@ const generateNote = (position: number, duration: number, pitch: number, part: n
 })
 
 /** A rolled chord whose second note is the louder one. */
-const msmFixture = () => new MSM([
+const msmFixture = () => new Alignment([
     {
         ...generateNote(0, 0.25, 60),
-        'midi.onset': 1,
-        'midi.duration': 1,
-        'midi.velocity': 50
+        'milliseconds.date': 1000,
+        'milliseconds.date.end': 2000,
+        velocity: 50
     },
     {
         ...generateNote(0, 0.25, 67),
-        'midi.onset': 1.1,
-        'midi.duration': 1,
-        'midi.velocity': 100
+        'milliseconds.date': 1100,
+        'milliseconds.date.end': 2100,
+        velocity: 100
     }],
     { numerator: 1, denominator: 4 })
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: InsertDynamicsGradient, msm: MSM, mpm: Mpm) => {
-    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
+const callTransform = (transformer: InsertDynamicsGradient, msm: Alignment, mpm: Mpm) => {
+    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
@@ -69,7 +69,7 @@ test('it fits a rising chord to the crescendo gradient and flattens the velociti
     expect(ornaments[0].scale).toBe(50)
 
     // The gradient having explained the spread, every note carries the same velocity.
-    expect(msm.allNotes.map(n => n['midi.velocity'])).toEqual([100, 100])
+    expect(msm.allNotes.map(n => n.velocity)).toEqual([100, 100])
 })
 
 test('it works with the constructor defaults, which do not sort velocities', () => {
@@ -88,7 +88,7 @@ test('it works with the constructor defaults, which do not sort velocities', () 
 
 test('a chord whose notes are equally loud gets no gradient', () => {
     const msm = msmFixture()
-    msm.allNotes[1]['midi.velocity'] = 50
+    msm.allNotes[1].velocity = 50
     const mpm = createMpm()
 
     callTransform(new InsertDynamicsGradient(), msm, mpm)

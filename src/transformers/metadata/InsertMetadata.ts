@@ -1,6 +1,6 @@
 import { Author, Comment, RelatedResource } from "espressivo"
 import { Mpm, unwrap } from "../../mpm"
-import { MSM } from "../../msm"
+import { Alignment } from "../../alignment"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
 export interface AuthorOptions {
@@ -38,7 +38,7 @@ export class InsertMetadata extends AbstractTransformer<InsertMetadataOptions> {
         super(options || {})
     }
 
-    protected transform(msm: MSM, mpm: Mpm) {
+    protected transform(msm: Alignment, mpm: Mpm) {
         const authors = (this.options.authors ?? [])
             .map(author => unwrap(Author.fromName(author.text, author.number, null), 'author'))
         const comments = (this.options.comments ?? [])

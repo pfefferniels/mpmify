@@ -89,9 +89,9 @@ describe('the articulation fitter recovers its own ratios', () => {
      * The identity behind issue #23, isolated.
      *
      * `relativeVelocity` is a factor on what the dynamics curve prescribes, so its divisor has
-     * to be that prescribed value — `midi.velocity - absoluteVelocityChange` — and not the
-     * performed velocity. With one articulation unit per note there is no averaging to blur the
-     * result, so the round trip is *exact*: the renderer computes `prescribed x
+     * to be that prescribed value — the velocity a render of the rest of the MPM would sound —
+     * and not the performed velocity. With one articulation unit per note there is no averaging
+     * to blur the result, so the round trip is *exact*: the renderer computes `prescribed x
      * (recorded/prescribed)` and lands back on `recorded`.
      *
      * Under the old divisor this same case errs by up to 43 velocity units, so a regression here
@@ -119,9 +119,9 @@ describe('the articulation fitter recovers its own ratios', () => {
         const byId = new Map(notesOf(truthPerformance).map(note => [note.id, note]))
         for (const note of performed.allNotes) {
             const rendered = byId.get(note['xml:id'])!
-            note['midi.onset'] = rendered.milliseconds.date / 1000
-            note['midi.duration'] = (rendered.milliseconds.end - rendered.milliseconds.date) / 1000
-            note['midi.velocity'] = rendered.velocity
+            note['milliseconds.date'] = rendered.milliseconds.date
+            note['milliseconds.date.end'] = rendered.milliseconds.end
+            note.velocity = rendered.velocity
         }
 
         const mpm = createMpm()

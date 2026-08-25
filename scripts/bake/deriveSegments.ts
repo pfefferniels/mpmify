@@ -18,7 +18,7 @@ import {
     registerTransformer,
     validate,
 } from 'mpmify'
-import type { InstructionType, Mpm, MSM, Segment as WorkSegment, Transformer } from 'mpmify'
+import type { InstructionType, Mpm, Alignment, Segment as WorkSegment, Transformer } from 'mpmify'
 import { convertMeiToMsm } from 'espressivo'
 import { InsertTempo } from './InsertTempo'
 import { asMSM } from './asMSM'
@@ -38,7 +38,7 @@ interface Pipeline {
     /** The MEI as MSM — what a render performs. */
     scoreMsm: string
     /** The recording on the score, as the chain left it. */
-    msm: MSM
+    msm: Alignment
     mpm: Mpm
     /** The chain's MPM, serialized. */
     mpmXml: string
@@ -58,7 +58,7 @@ interface Derived {
     pipeline: {
         transformers: Transformer[]
         segments: WorkSegment[]
-        msm: MSM
+        msm: Alignment
         mpm: Mpm
     }
     stats: {

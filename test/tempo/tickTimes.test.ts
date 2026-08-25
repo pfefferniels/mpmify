@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { MSM, MsmNote } from "../../src/msm"
+import { Alignment, AlignedNote } from "../../src/alignment"
 import { InstructionOptions, createMpm, requireMap } from "../../src/mpm"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 import { placeTempos, segmentAtMs } from "../../src/transformers/tempo/placedTempos"
@@ -19,27 +19,36 @@ const BOUNDARY = 2 * QUARTER
  * (issue #27), and a recording where the two figures happen to agree cannot see either.
  */
 const score = () => {
-    const msm = new MSM([0, 1, 2, 3].map(beat => ({
-        'xml:id': `n${beat}`,
-        date: beat * QUARTER,
-        part: 1,
-        pitchname: 'g',
-        octave: 4,
-        accidentals: 0,
-        duration: QUARTER,
-        'midi.pitch': 67,
-        'midi.velocity': 100,
+    const msm = new Alignment([0, 1, 2, 3].map(beat => {
         // The note on the boundary arrives 200 ms early; the rest are played as written.
-        'midi.onset': beat === 2 ? 1.8 : beat,
-        'midi.duration': 1,
-    } as MsmNote)), { numerator: 4, denominator: 4 })
+        const onset = beat === 2 ? 1800 : beat * 1000
+        return {
+            'xml:id': `n${beat}`,
+            date: beat * QUARTER,
+            part: 1,
+            pitchname: 'g',
+            octave: 4,
+            accidentals: 0,
+            duration: QUARTER,
+            'midi.pitch': 67,
+            velocity: 100,
+            'milliseconds.date': onset,
+            'milliseconds.date.end': onset + 1000,
+        } as AlignedNote
+    }), { numerator: 4, denominator: 4 })
 
     msm.pedals = [
         // Down exactly with the note that dates the boundary, so its tick position is knowable
         // without doing any of the arithmetic under test: it is that note's.
-        { 'xml:id': 'ped_boundary', type: 'sustain', 'midi.onset': 1.8, 'midi.duration': 0.5 },
+        {
+            'xml:id': 'ped_boundary', type: 'sustain',
+            'milliseconds.date': 1800, 'milliseconds.date.end': 2300,
+        },
         // Down after the last modelled moment of the piece, and released later still.
-        { 'xml:id': 'ped_late', type: 'sustain', 'midi.onset': 3.5, 'midi.duration': 0.4 },
+        {
+            'xml:id': 'ped_late', type: 'sustain',
+            'milliseconds.date': 3500, 'milliseconds.date.end': 3900,
+        },
     ]
     return msm
 }

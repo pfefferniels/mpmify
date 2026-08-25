@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, test, expect } from "vitest"
-import { MSM } from "../src/msm"
+import { Alignment } from "../src/alignment"
 import { createMpm, exportMPM, getInstructions } from "../src/mpm"
 import { ApproximateLogarithmicTempo } from "../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { InsertDynamicsInstructions } from "../src/transformers/dynamics/InsertDynamicsInstructions"
@@ -9,7 +9,7 @@ import { Transformer } from "../src/transformers/Transformer"
 
 /**
  * The pipeline re-folds the *entire* chain over a fresh MPM on every edit, so the fold has to be
- * a function: the same chain over the same MSM must produce the same document. Two transformers
+ * a function: the same chain over the same alignment must produce the same document. Two transformers
  * fit their curves by simulated annealing, which used to draw from `Math.random` — touching any
  * desk then re-fitted every tempo and dynamics curve in the piece to slightly different numbers.
  *
@@ -23,6 +23,8 @@ const BEAT = 720
 const buildMsm = () => {
     const notes = Array.from({ length: 17 }, (_, i) => {
         const x = i / 16
+        // accelerando: beats get closer together
+        const onset = 750 * i - 180 * x * i
         return {
             'xml:id': `n_1_${i}`,
             date: i * BEAT,
@@ -32,14 +34,13 @@ const buildMsm = () => {
             duration: BEAT,
             accidentals: 0,
             'midi.pitch': 67,
-            // accelerando: beats get closer together
-            'midi.onset': 0.75 * i - 0.18 * x * i,
-            'midi.duration': 0.5,
+            'milliseconds.date': onset,
+            'milliseconds.date.end': onset + 500,
             // a swell, so the dynamics fit is neither flat nor a straight line
-            'midi.velocity': Math.round(50 + 45 * Math.sin(Math.PI * x)),
+            velocity: Math.round(50 + 45 * Math.sin(Math.PI * x)),
         }
     })
-    return new MSM(notes, { numerator: 4, denominator: 4 })
+    return new Alignment(notes, { numerator: 4, denominator: 4 })
 }
 
 /**
@@ -60,7 +61,7 @@ const chain = (): Transformer[] => [
     }),
 ]
 
-/** What the worker does: fresh MPM, cloned MSM, run every transformer, serialize. */
+/** What the worker does: fresh MPM, cloned alignment, run every transformer, serialize. */
 const fold = (transformers: Transformer[]) => {
     const msm = buildMsm().deepClone()
     const mpm = createMpm()
