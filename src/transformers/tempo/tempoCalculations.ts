@@ -163,6 +163,20 @@ export const computeMillisecondsForConstantTempo = (date: number, tempo: TempoWi
     return ((15000.0 * (date - tempo.date)) / (tempo.bpm * tempo.beatLength * 720));
 }
 
+/**
+ * The tick span a millisecond span covers at a constant tempo — the inverse of
+ * `computeMillisecondsForConstantTempo` over the same stretch, sharing its constants so the two
+ * cannot drift apart.
+ *
+ * Defined for negative spans too, which is the point: it is what lets a time *before* the first
+ * `<tempo>` be placed on the tick grid at all. A roll that begins before its beat is the ordinary
+ * arpeggio, and it has no segment of its own to be measured in.
+ */
+export const ticksForConstantTempo = (
+    milliseconds: number,
+    tempo: Pick<Tempo, 'bpm' | 'beatLength'>
+): number => (milliseconds * Number(tempo.bpm) * tempo.beatLength * 720) / 15000.0
+
 export const computeMillisecondsForTransition = (date: number, tempo: TempoWithEndDate): number => {
     const N = 2 * Math.floor((date - tempo.date) / (720 / 4));
     const adjustedN = (N === 0) ? 2 : N;

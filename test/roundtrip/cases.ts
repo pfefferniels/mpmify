@@ -212,19 +212,21 @@ export const tierTwoCases: Case[] = [
                 ],
             },
         },
-        // Two identical rolls, and exactly one survives. The roll at date 0 starts 250 ms
-        // *before* the beat, and `TranslatePhysicalTimeToTicks` has no tempo instruction
-        // covering a negative time ("no tempo found for -250 ms"), so the frame converts to
-        // NaN. `StylizeOrnamentation.asDef` then stamps `name.ref` on the ornament *before* its
-        // caller decides whether to insert the def, so the NaN check skips the definition and
-        // leaves the reference dangling. The roll at 1440 converts fine and round-trips exactly.
+        // Both rolls survive now, and the fitted frame is exact: -360 ticks over 720, which is
+        // -250 ms over 500 at this tempo. What is left is the renderer's, not mpmify's.
         //
-        // A roll that begins before its beat is the ordinary case for an arpeggio, so this is
-        // not a corner: every piece-initial ornament lands on it.
-        note: 'issues #26, #28 — a pre-beat frame converts to NaN, and the skipped def leaves '
-            + 'the @name.ref that was already stamped on the ornament',
-        knownViolations: ['@name.ref resolves'],
-        bounds: { onset: { mean: 55, max: 300 }, duration: { mean: 55, max: 300 }, velocity: { max: 0.5 } },
+        // espressivo performs any ornament frame that *begins* before the first <tempo> at its
+        // no-tempo default of 100 bpm, ignoring the tempo map for that frame entirely — measured
+        // by rendering one frame at 60, 100 and 120 bpm and getting 600 ms every time, while the
+        // identical frame one bar later gives 1000, 600 and 500. So the roll on beat 1 comes out
+        // 20% wide here and the roll at 1440 comes out exact.
+        //
+        // mpmify could match that by converting pre-piece frames at 100 bpm, and should not: it
+        // would bake one renderer's fallback into the document and mean something else anywhere
+        // else. The 50 ms is recorded rather than fitted away.
+        note: 'espressivo renders a frame beginning before the first <tempo> at its 100 bpm '
+            + 'default, whatever the tempo map says',
+        bounds: { onset: { mean: 11, max: 60 }, duration: { mean: 11, max: 60 }, velocity: { max: 0.5 } },
     },
     {
         name: 'ornamentation: velocity gradient across the chord',
@@ -245,16 +247,10 @@ export const tierTwoCases: Case[] = [
                 ],
             },
         },
-        // Nothing survives: the whole gradient is lost, both chords. An ornament fitted by
-        // `InsertDynamicsGradient` carries no frame at all, but
-        // `TranslatePhysicalTimeToTicks` stamps one on it anyway — `NaN`, converted from
-        // nothing — which turns an ornament that had no frame into one with an unusable frame.
-        // `StylizeOrnamentation` then skips every definition, and the `<style>` switch it
-        // writes unconditionally names a `<styleDef>` that consequently never gets created.
-        note: 'issue #28 — gradient-only ornaments are stripped, and the style switch is '
-            + 'written whether or not any definition was',
-        knownViolations: ['@name.ref resolves'],
-        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { mean: 8, max: 30 } },
+        // Exact. This case used to lose the gradient entirely — an ornament with a ramp and no
+        // roll was given a NaN frame by the tick translation, then discarded by the clustering,
+        // which keys on the frame. It now keeps its ramp and gets a definition of its own.
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { max: 0.5 } },
     },
     {
         name: 'ornamentation: a roll that also swells',
@@ -277,17 +273,22 @@ export const tierTwoCases: Case[] = [
                 ],
             },
         },
-        // Both families on one chord, and both losses above compound. On top of them, the one
-        // definition that does get written carries a `<temporalSpread>` and no
-        // `<dynamicsGradient>` at all, even though its ornament carries `scale="25"`:
-        // `asDef` guards the gradient with `transition.from !== undefined && transition.to`,
-        // and `transition.to` is **0** for a crescendo — falsy, so the gradient is dropped.
-        // mpmify's own default is `crescendo: { from: -1, to: 0 }`, so this fires on the
-        // default configuration rather than on some unusual value.
-        note: 'issues #26, #28, #46 — truthiness guards the gradient, and 0 is a legal '
-            + 'transition.to that mpmify itself emits by default',
-        knownViolations: ['@name.ref resolves'],
-        bounds: { onset: { mean: 55, max: 300 }, duration: { mean: 55, max: 300 }, velocity: { mean: 8, max: 30 } },
+        // The frame is now exact and the gradient is now written — but written backwards. The
+        // fit says `transition.from="0" transition.to="-1"`, the decrescendo default, where the
+        // truth ramps up: the chord comes back 64/51.5/39 against a truth of 39/51.5/64.
+        //
+        // That is the registry order. `InsertTemporalSpread` runs first and collapses every
+        // onset in the chord onto one date; `InsertDynamicsGradient` then sorts the chord by
+        // `midi.onset` to read the ramp's direction, and by then no two onsets differ. Its own
+        // doc comment says so — "should always take place before inserting temporal spread,
+        // since temporal spread will destroy the original order of MIDI onsets" — and the
+        // registry does the opposite. Swapping the two would change the fold order of every
+        // saved work file, so it is left for #32 rather than done in passing.
+        //
+        // The onset bound is the same renderer behaviour as the rolled-chords case above.
+        note: 'issue #32 — the registry runs the spread before the gradient that reads the '
+            + 'onsets it destroys, so every arpeggio ramp comes back reversed',
+        bounds: { onset: { mean: 11, max: 60 }, duration: { mean: 11, max: 60 }, velocity: { mean: 11, max: 30 } },
     },
 ]
 

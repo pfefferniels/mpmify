@@ -1,4 +1,4 @@
-import { DEFAULT_STYLE_NAME, DynamicsGradient, MPM, Ornament, OrnamentDef } from "../../mpm"
+import { DEFAULT_STYLE_NAME, DynamicsGradient, MPM, Ornament, OrnamentDef, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -79,7 +79,19 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 o["frame.start"] !== undefined &&
                 o.frameLength !== undefined
             )
-            if (filteredOrnaments.length === 0) continue
+
+            // An ornament can carry a velocity ramp and no roll — that is exactly what
+            // `InsertDynamicsGradient` fits. Clustering keys on the frame, so those used to fall
+            // out here and be left pointing at `neutralArpeggio`, a name no definition ever
+            // carries. They get definitions of their own, keyed on the only thing they have.
+            const gradientOnly = ornaments.filter(o =>
+                o["frame.start"] === undefined &&
+                o.frameLength === undefined &&
+                o["transition.from"] !== undefined &&
+                o["transition.to"] !== undefined
+            )
+
+            if (filteredOrnaments.length === 0 && gradientOnly.length === 0) continue
 
             const clusters = this.generateClusters(filteredOrnaments)
 
@@ -95,16 +107,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             for (const label in clustersByLabel) {
                 const group = clustersByLabel[label]
                 if (label === "-1") {
-                    group.forEach(({ ornament }) => {
-                        const def = this.asDef(ornament)
-
-                        if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
-                            console.warn('skipping ornament with a NaN frame', ornament["xml:id"])
-                        }
-                        else {
-                            mpm.insertDefinition(def, scope)
-                        }
-                    })
+                    group.forEach(({ ornament }) => this.defineAndName(mpm, scope, ornament))
                     continue
                 }
 
@@ -124,16 +127,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                     const subgroup = subClustersByLabel[subLabel]
 
                     if (subLabel === "-1") {
-                        subgroup.forEach(({ ornament }) => {
-                            const def = this.asDef(ornament)
-
-                            if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
-                                console.warn('skipping ornament with a NaN frame', ornament["xml:id"])
-                            }
-                            else {
-                                mpm.insertDefinition(def, scope)
-                            }
-                        })
+                        subgroup.forEach(({ ornament }) => this.defineAndName(mpm, scope, ornament))
                     } else {
                         const sums = subgroup.reduce((acc, cur) => {
                             acc.frameStart += cur.point[0]
@@ -179,6 +173,8 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 }
             }
 
+            this.defineGradientOnly(mpm, scope, gradientOnly)
+
             mpm.insertStyle({
                 date: 0,
                 type: 'style',
@@ -200,11 +196,68 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         }
     }
 
-    private asDef(ornament: Ornament) {
-        // For noise points, create individual ornamentDefs
+    /**
+     * Definitions for the ornaments that carry a ramp and no roll.
+     *
+     * Same shape as the framed path, one dimension shorter: sub-cluster on the gradient alone,
+     * give each cluster one definition holding the mean, and leave the noise points with a
+     * definition each. Without this the whole family reached the document as `@name.ref`
+     * pointing at nothing — well-formed, and silent.
+     */
+    private defineGradientOnly(mpm: MPM, scope: Scope, ornaments: Ornament[]) {
+        if (ornaments.length === 0) return
+
+        const clusters = this.generateSubClusters(ornaments)
+        const byLabel = clusters.reduce((acc, cluster, index) => {
+            const label = cluster.label.toString()
+            if (!acc[label]) acc[label] = []
+            acc[label].push(ornaments[index])
+            return acc
+        }, {} as { [label: string]: Ornament[] })
+
+        for (const label in byLabel) {
+            const group = byLabel[label]
+
+            if (label === "-1") {
+                group.forEach(ornament => this.defineAndName(mpm, scope, ornament))
+                continue
+            }
+
+            const sums = group.reduce((acc, ornament) => ({
+                from: acc.from + (ornament["transition.from"] as number),
+                to: acc.to + (ornament["transition.to"] as number),
+            }), { from: 0, to: 0 })
+
+            const def: OrnamentDef = {
+                type: 'ornamentDef',
+                name: `def_${scope}_gradient_${label}`,
+                dynamicsGradient: {
+                    type: 'dynamicsGradient',
+                    'transition.from': sums.from / group.length,
+                    'transition.to': sums.to / group.length,
+                }
+            }
+
+            mpm.insertDefinition(def, scope)
+            group.forEach(ornament => { ornament["name.ref"] = def.name })
+        }
+    }
+
+    /**
+     * The definition one ornament asks for, on its own — the shape a cluster of size one gets.
+     *
+     * Pure. It used to stamp `ornament["name.ref"] = defName` on its way out, before its callers
+     * had decided whether to insert the definition at all; every skipped one therefore left the
+     * map naming a definition that was never written. Naming now happens where inserting does.
+     */
+    private asDef(ornament: Ornament): OrnamentDef {
+        // `transition.to` is compared against undefined rather than tested for truth. Zero is a
+        // legal end for a ramp — and it is the end of `InsertDynamicsGradient`'s own default
+        // crescendo, `{ from: -1, to: 0 }` — so a truthiness test dropped the gradient from
+        // every crescendo mpmify fits by default.
         let dynamicsGradient: DynamicsGradient | undefined = undefined
         if (ornament["transition.from"] !== undefined &&
-            ornament["transition.to"]) {
+            ornament["transition.to"] !== undefined) {
             dynamicsGradient = {
                 type: 'dynamicsGradient',
                 'transition.from': ornament["transition.from"],
@@ -212,26 +265,47 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             }
         }
 
-        if (isNaN(ornament["frame.start"]) || isNaN(ornament.frameLength)) {
-            console.warn('building an ornamentDef from an ornament with a NaN frame', ornament["xml:id"])
-        }
+        // An ornament with no frame is a velocity ramp and nothing else. Writing a
+        // `<temporalSpread>` full of undefined for it would describe a roll that was never
+        // measured.
+        const hasFrame = ornament["frame.start"] !== undefined && ornament.frameLength !== undefined
 
-        const defName = `def_${v4()}`
-        const def: OrnamentDef = {
+        return {
             type: 'ornamentDef',
-            name: defName,
+            name: `def_${v4()}`,
             dynamicsGradient,
-            temporalSpread: {
-                type: 'temporalSpread',
-                'frame.start': ornament["frame.start"],
-                'frameLength': ornament.frameLength,
-                'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
-                'time.unit': ornament['time.unit'],
-                intensity: ornament.intensity
-            }
+            temporalSpread: hasFrame
+                ? {
+                    type: 'temporalSpread',
+                    'frame.start': ornament["frame.start"],
+                    'frameLength': ornament.frameLength,
+                    'noteoff.shift': (ornament['noteoff.shift'] !== undefined) ? ornament['noteoff.shift'] : true,
+                    'time.unit': ornament['time.unit'],
+                    intensity: ornament.intensity
+                }
+                : undefined
         }
-        ornament["name.ref"] = defName
+    }
 
-        return def
+    /**
+     * Insert the definition and point the ornament at it — the two halves that must not come
+     * apart. An ornament whose frame did not survive translation gets neither: it keeps whatever
+     * `@name.ref` it already had rather than gaining a dangling one.
+     */
+    private defineAndName(mpm: MPM, scope: Scope, ornament: Ornament) {
+        const frameStart = ornament["frame.start"]
+        const frameLength = ornament.frameLength
+        const hasFrame = frameStart !== undefined && frameLength !== undefined
+
+        // Having no frame and having an unusable one are different. A gradient-only ornament has
+        // nothing to check; one whose frame failed translation must not be given a definition.
+        if (hasFrame && (isNaN(frameStart) || isNaN(frameLength))) {
+            console.warn('skipping ornament with an unusable frame', ornament["xml:id"])
+            return
+        }
+
+        const def = this.asDef(ornament)
+        mpm.insertDefinition(def, scope)
+        ornament["name.ref"] = def.name
     }
 }
