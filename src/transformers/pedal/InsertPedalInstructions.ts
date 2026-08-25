@@ -62,7 +62,9 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
 
                 return true
             })
-        const depth = this.options.depth || 1
+        // `??`, so a caller asking for a depth of `0` gets one. `||` read it as "not given" and
+        // substituted a fully depressed pedal — the opposite of what was asked for (issue #46).
+        const depth = this.options.depth ?? 1
 
         for (const pedal of validPedals) {
             const tickDate = residual.ofPedal(pedal)!.tickDate!

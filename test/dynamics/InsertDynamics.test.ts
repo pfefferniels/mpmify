@@ -104,3 +104,40 @@ test('the fitting window is not written into the document', () => {
 // Superseded by test/roundtrip: 'dynamics: linear crescendo 40 to 100' renders the fit and
 // measures the velocity error against the performance it was fitted to, which is strictly
 // stronger than asserting the middle note lies between the outer two.
+
+
+/**
+ * A phantom velocity is what the caller says the curve should pass through at a date, and it
+ * stands in for the chord's own mean whether or not it happens to be `0`. `phantomVelocity ||
+ * velocity` read a phantom of 0 as no phantom at all — and a dynamics fading to silence is
+ * precisely the case a caller reaches for one (issue #46).
+ */
+test('a phantom velocity of 0 is used, not read as an absent one', () => {
+    const msm = msmFixture()
+    const mpm = new MPM()
+
+    callTransform(new InsertDynamicsInstructions({
+        scope: 'global',
+        from: 0,
+        to: msm.lastDate(),
+        phantomVelocities: new Map([[msm.lastDate(), 0]]),
+    }), msm, mpm)
+
+    expect(mpm.getInstructions('dynamics', 'global')[0]['transition.to']).toBe(0)
+})
+
+/**
+ * `0 / 0` is not a velocity. A date with neither a phantom nor a note carrying `midi.velocity`
+ * has nothing to contribute, and a point whose velocity is NaN is not a point.
+ */
+test('a chord with no measured velocity contributes no point rather than a NaN one', () => {
+    const msm = msmFixture()
+    for (const note of msm.allNotes) {
+        (note as Partial<typeof note>)['midi.velocity'] = undefined
+    }
+    const mpm = new MPM()
+
+    run(msm, mpm)
+
+    expect(mpm.getInstructions('dynamics', 'global')).toHaveLength(0)
+})

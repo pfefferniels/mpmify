@@ -229,48 +229,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
     }
 
 
-    private accentuationAt(beat: number, def: AccentuationPatternDef): number {
-        // Read once. Every `def.children` access re-reads the child elements and hands back a
-        // *new* array (see `mpm/view.ts`), so sorting the property sorted a throwaway and each
-        // read below got the document order back. Nothing downstream saw a sorted pattern.
-        const children = [...def.children].sort((a, b) => a.beat - b.beat)
-
-        if (children.length === 0) {
-            return 0
-        }
-
-        if (beat < children[0].beat) {
-            return 0
-        }
-        if (beat >= def.length + 1) {
-            const last = children[children.length - 1]
-            const result = last["transition.to"] || last.value;
-            return result;
-        }
-
-        let selectedAccent: Accentuation | undefined;
-        let segmentEnd: number = def.length + 1;
-
-        // Traverse the accentuations in reverse order
-        for (let i = children.length - 1; i >= 0; --i) {
-            const accent = children[i];
-            if (beat === accent.beat) {
-                return accent.value;
-            }
-
-            if (beat > accent.beat) {
-                selectedAccent = accent;
-                if (i < children.length - 1) {
-                    // There is a subsequent accentuation; set its beat as the segment end
-                    segmentEnd = children[i + 1].beat;
-                }
-                break;
-            }
-        }
-
-        const result = (((beat - selectedAccent!.beat) *
-            ((selectedAccent!["transition.to"] - selectedAccent!["transition.from"]))) /
-            (segmentEnd - selectedAccent!.beat)) + selectedAccent!["transition.from"];
-        return result;
-    }
+    // `accentuationAt` used to live here: a private evaluator of an `<accentuationPatternDef>`
+    // at a beat, with no caller since the reduction stopped carrying its own remainder. What it
+    // computed is now espressivo's answer, read back through `deriveResidual`, so a second
+    // implementation of the renderer's arithmetic could only ever drift from it. It also held
+    // one of issue #46's truthiness rows — `last["transition.to"] || last.value`, which reads a
+    // pattern ending at 0 as one ending at its own value — and deleting it is the honest way to
+    // close that row.
 }

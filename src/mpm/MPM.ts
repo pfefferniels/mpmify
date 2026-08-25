@@ -271,8 +271,14 @@ export class MPM {
      * An instruction already at the same `@date` and `@noteid` is *merged into* rather than
      * duplicated — which is not an optimisation but the mechanism by which
      * `InsertDynamicsGradient` and `InsertTemporalSpread` describe one `<ornament>` between
-     * them. Without `overwrite`, a field the existing instruction already has a truthy value
-     * for is left alone.
+     * them. Without `overwrite`, a field the existing instruction already has is left alone.
+     *
+     * *Has*, not *has a truthy value for*. The two are different rules and only the first is the
+     * one this mechanism needs: under the truthy version a field the first transformer had
+     * deliberately set to `0` was not "already set" and the second silently replaced it — and
+     * `0` is not an exotic value in an `<ornament>`, it is the target of `InsertDynamicsGradient`'s
+     * own default crescendo, `{ from: -1, to: 0 }`. A caller that means to replace an existing
+     * value says so with `overwrite` (issue #46).
      *
      * @returns the view of the instruction that now holds the values — the existing one when
      * a merge happened, so a caller can hold on to the element it wrote.
@@ -294,7 +300,7 @@ export class MPM {
         if (existing) {
             const view = viewOf<Record<string, unknown>>(existing)
             for (const [key, value] of Object.entries(instruction)) {
-                if (!overwrite && view[key]) continue
+                if (!overwrite && view[key] !== undefined) continue
                 view[key] = value
             }
             return view as T
