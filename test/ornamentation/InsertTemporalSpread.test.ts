@@ -2,7 +2,7 @@
 
 import { expect, test } from 'vitest'
 import { MSM } from '../../src/msm'
-import { MPM } from '../../src/mpm'
+import { FrameDomain, MPM, ornamentDraftOf } from '../../src/mpm'
 import { InsertTemporalSpread } from '../../src/transformers'
 
 /**
@@ -57,10 +57,15 @@ test('it describes the roll as an <ornament> in milliseconds around the estimate
 
     const arpeggios = mpm.getInstructions('ornament', 'global')
     expect(arpeggios).toHaveLength(1)
-    expect(arpeggios[0]['frame.start']).toEqual(-500)
-    expect(arpeggios[0]['frameLength']).toEqual(1000)
-    expect(arpeggios[0]['time.unit']).toEqual('milliseconds')
-    expect(arpeggios[0]['note.order']).toEqual('ascending pitch')
+    expect(arpeggios[0].noteOrder).toEqual('ascending pitch')
+
+    // The frame belongs on the `<temporalSpread>` of a def that does not exist yet, so it is
+    // parked on the element rather than said by the instruction. `StylizeOrnamentation` is what
+    // eventually moves it.
+    const frame = ornamentDraftOf(arpeggios[0].element)
+    expect(frame.frameStart).toEqual(-500)
+    expect(frame.frameLength).toEqual(1000)
+    expect(frame.frameDomain).toEqual(FrameDomain.Milliseconds)
 })
 
 test('it collapses the rolled chord onto one onset, so a tempo can be read off it', () => {

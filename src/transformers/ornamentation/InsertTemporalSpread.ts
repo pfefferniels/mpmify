@@ -1,4 +1,5 @@
-import { MPM, Ornament } from "../../mpm"
+import { AddOrnamentOptions, FrameDomain, NoteOffShift } from "espressivo"
+import { MPM, OrnamentDraft, setOrnamentDraft } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
@@ -87,7 +88,10 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        const ornaments: Ornament[] = []
+        // Each ornament is written in two goes: what MPM lets an `<ornament>` say, and the
+        // `<temporalSpread>` fields that have no place on one and are parked on its element for
+        // `StylizeOrnamentation` to collect.
+        const ornaments: { options: AddOrnamentOptions, draft: OrnamentDraft }[] = []
 
         const chords = msm.asChords(this.options.scope)
         for (const [date, chordNotes] of chords) {
@@ -118,7 +122,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             }
 
             // by default, no offset shifting is applied
-            let noteOffShift: boolean | 'monophonic' = false
+            let noteOffShift: NoteOffShift = NoteOffShift.False
             const firstNote = sortedByOnset[0]
             const lastNote = sortedByOnset[sortedByOnset.length - 1]
 
@@ -132,7 +136,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             const offsetScaleTolerance = 0.8
             const minOffsetDistance = duration * offsetScaleTolerance
             if (offsetOf(lastNote) - offsetOf(firstNote) > minOffsetDistance && sameOrder) {
-                noteOffShift = true
+                noteOffShift = NoteOffShift.True
             }
 
             const monophonicTolerance = 20 / 1000 // in ms
@@ -148,7 +152,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             }
 
             if (isMonophonic) {
-                noteOffShift = 'monophonic'
+                noteOffShift = NoteOffShift.Monophonic
             }
 
             // define the frame start based on the given option
@@ -185,16 +189,19 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             const intensity = determineIntensity(normalizedOnsets)
 
             ornaments.push({
-                'type': 'ornament',
-                'xml:id': generateId('ornament', date, mpm),
-                date,
-                'name.ref': 'neutralArpeggio',
-                'noteoff.shift': noteOffShift,
-                'note.order': noteOrder,
-                'frame.start': frameStart,
-                'frameLength': frameLength,
-                'time.unit': 'milliseconds',
-                'intensity': intensity === 1 ? undefined : intensity
+                options: {
+                    id: generateId('ornament', date, mpm),
+                    date,
+                    nameRef: 'neutralArpeggio',
+                    noteOrder
+                },
+                draft: {
+                    noteOffShift,
+                    frameStart,
+                    frameLength,
+                    frameDomain: FrameDomain.Milliseconds,
+                    intensity: intensity === 1 ? undefined : intensity
+                }
             })
 
             sortedByOnset.forEach(note => {
@@ -202,6 +209,9 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             })
         }
 
-        mpm.insertInstructions(ornaments, this.options.scope)
+        for (const { options, draft } of ornaments) {
+            const ornament = mpm.insertInstruction('ornament', options, this.options.scope)
+            setOrnamentDraft(ornament.element, draft)
+        }
     }
 }

@@ -27,9 +27,22 @@ export class MPMRecording extends MPM {
         overwrite = false,
     ): Instruction<K> {
         const inserted = super.insertInstruction(type, options, scope, overwrite)
-        // An instruction written without an `@xml:id` cannot be attributed to anything, so it is
-        // not recorded rather than recorded as `undefined`. Every mpmify writer supplies one.
-        if (inserted.id !== undefined) this.created.push(inserted.id)
+
+        // An instruction with no `@xml:id` cannot be attributed to the call that wrote it: it
+        // gets no `@corresp`, the work file cannot name it, and `deriveSegments` drops the span
+        // that pointed at it. All of that is silent, and it happened — nine `<tempo>` elements
+        // written without one, found only by counting spans in a bake fixture. Every mpmify
+        // writer supplies an id, so a missing one is a bug in the caller, and this is where it
+        // is cheapest to see.
+        if (inserted.id === undefined) {
+            throw new Error(
+                `<${type}> written at date ${String((options as { date: number }).date)} with no `
+                + 'xml:id. An instruction without one cannot be attributed to the transformer '
+                + 'that wrote it — pass `id` in the options.'
+            )
+        }
+
+        this.created.push(inserted.id)
         return inserted
     }
 }

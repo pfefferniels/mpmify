@@ -64,7 +64,7 @@ test('it fits one <dynamics> across the range, from the first velocity to the la
     const dynamics = mpm.getInstructions('dynamics', 'global')
     expect(dynamics[0].date).toBe(0)
     expect(dynamics[0].volume).toBe(50)
-    expect(dynamics[0]['transition.to']).toBe(100)
+    expect(dynamics[0].transitionTo).toBe(100)
 })
 
 

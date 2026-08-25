@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM, Rubato } from "../../src/mpm"
+import { InstructionOptions, MPM } from "../../src/mpm"
 import { CombineAdjacentRubatos } from "../../src/transformers/rubato/CombineAdjacentRubatos"
 
 const note = (date: number): MsmNote => ({
@@ -19,8 +19,8 @@ const note = (date: number): MsmNote => ({
     'midi.velocity': 64,
 })
 
-const rubato = (date: number, intensity: number): Rubato => ({
-    type: 'rubato', 'xml:id': `rubato_${date}`, date, frameLength: 720, intensity,
+const rubato = (date: number, intensity: number): InstructionOptions<'rubato'> => ({
+    id: `rubato_${date}`, date, frameLength: 720, intensity,
 })
 
 /** Call the protected `transform` method for testing */
@@ -44,7 +44,7 @@ test('it terminates when the last rubato has no frame left before the final note
         { numerator: 4, denominator: 4 }
     )
     const mpm = new MPM()
-    mpm.insertInstructions([
+    mpm.insertInstructions('rubato', [
         rubato(0, 0.5),
         rubato(720, 2.0),   // opposite side of 1: not mergeable with its predecessor
         rubato(2160, 0.5),  // reached as `ref`; its next frame starts at the last note
@@ -61,7 +61,7 @@ test('it folds a run of similar rubatos into one looping instruction', () => {
         { numerator: 4, denominator: 4 }
     )
     const mpm = new MPM()
-    mpm.insertInstructions([
+    mpm.insertInstructions('rubato', [
         rubato(0, 1.4),
         rubato(720, 1.45),
         rubato(1440, 1.5),

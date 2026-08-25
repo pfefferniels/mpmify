@@ -13,10 +13,35 @@
  * was issue #40: the offset used to be `note.date + note.tickDuration`, a symbolic position plus
  * a performed one.
  */
-import { resolveRubato, type Rubato as ResolvedRubato } from "espressivo"
-import { MPM, Rubato, Scope } from "../../mpm"
+import { resolveRubato, type AddRubatoOptions, type Rubato as ResolvedRubato } from "espressivo"
+import { MPM, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { TickTimes } from "../tempo/tickTimes"
+
+/**
+ * What this module needs a `<rubato>` to say: where its first frame begins, and the five
+ * parameters the warp is built from.
+ *
+ * Narrower than the whole of `AddRubatoOptions` on purpose — `@name.ref` and `@xml:id` say
+ * nothing about where a date lands, and naming only the fields that do lets a caller hand in
+ * anything shaped like a frame, which is what the tests do.
+ */
+export type RubatoFrame = Pick<
+    AddRubatoOptions,
+    'date' | 'frameLength' | 'intensity' | 'lateStart' | 'earlyEnd' | 'loop'
+>
+
+/**
+ * `@frameLength` as the arithmetic below needs it.
+ *
+ * It is optional on the instruction because a `<rubato>` may inherit it from the `rubatoDef` it
+ * names; mpmify models no def and writes every parameter onto the element, so the only way to
+ * reach here without one is a document that says nothing. That case used to be *typed* as a
+ * number and read back `undefined`, and every figure derived from it came out NaN. The assertion
+ * keeps exactly that rather than inventing a frame — {@link resolve} is where absence is actually
+ * answered, and it answers with the identity.
+ */
+const frameLengthOf = (rubato: RubatoFrame) => rubato.frameLength as number
 
 /**
  * One `<rubato>` record with its parameters defaulted and clamped the way the renderer does it.
@@ -35,23 +60,29 @@ import { TickTimes } from "../tempo/tickTimes"
  * RubatoMap.java's order, including the `@intensity` default of 1.0.
  *
  * `null` where there is no frame to warp — an absent `@frameLength`, which is the one parameter
- * with no default. That used to divide by `undefined` and hand back `NaN`.
+ * with no default. That used to divide by `undefined` and hand back `NaN`. The early return says
+ * so before the span is computed; `resolveRubato` would reject the instruction on the same
+ * grounds a line later, so this is the type agreeing with the answer rather than a new one.
  *
  * The `def` argument is `null` because mpmify models no `<rubatoDef>`: it writes every parameter
  * onto the instruction. This is the seam where def inheritance would arrive, and passing the
  * argument explicitly is what keeps that a one-line change rather than a rewrite.
  */
-const resolve = (rubato: Rubato): ResolvedRubato | null => resolveRubato(
-    { startDate: rubato.date, endDate: rubato.date + rubato.frameLength },
-    {
-        frameLength: rubato.frameLength,
-        intensity: rubato.intensity,
-        lateStart: rubato.lateStart,
-        earlyEnd: rubato.earlyEnd,
-        loop: rubato.loop,
-    },
-    null,
-)
+const resolve = (rubato: RubatoFrame): ResolvedRubato | null => {
+    if (rubato.frameLength === undefined) return null
+
+    return resolveRubato(
+        { startDate: rubato.date, endDate: rubato.date + rubato.frameLength },
+        {
+            frameLength: rubato.frameLength,
+            intensity: rubato.intensity,
+            lateStart: rubato.lateStart,
+            earlyEnd: rubato.earlyEnd,
+            loop: rubato.loop,
+        },
+        null,
+    )
+}
 
 /**
  * Where a symbolic date lands once the rubato has warped its frame.
@@ -65,7 +96,7 @@ const resolve = (rubato: Rubato): ResolvedRubato | null => resolveRubato(
  *
  * An unresolvable rubato leaves the date where it was, which is what an identity warp means.
  */
-export const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
+export const calculateRubatoOnDate = (date: number, rubato: RubatoFrame) => {
     const rd = resolve(rubato)
     if (rd === null) return date
 
@@ -80,10 +111,11 @@ export const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
  * It removes the "rubato effect" from a given date.
  * TODO: find a numerical, non-iterative solution.
  */
-const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
-    const target = rubato.date + ((newDate - rubato.date) % rubato.frameLength);
+const removeRubatoFromDate = (newDate: number, rubato: RubatoFrame) => {
+    const frameLength = frameLengthOf(rubato)
+    const target = rubato.date + ((newDate - rubato.date) % frameLength);
     let lowerBound = rubato.date;
-    let upperBound = rubato.date + rubato.frameLength;
+    let upperBound = rubato.date + frameLength;
 
     while (upperBound - lowerBound > 1e-6) {
         const middle = (upperBound + lowerBound) / 2;
@@ -148,7 +180,7 @@ export const removeRubatoDistortion = (
         const effectiveRubato = rubatos[0]
         if (!effectiveRubato) continue
 
-        const rubatoStart = offset - ((offset - effectiveRubato.date) % effectiveRubato.frameLength)
+        const rubatoStart = offset - ((offset - effectiveRubato.date) % frameLengthOf(effectiveRubato))
         const remainder = offset - rubatoStart
         time.tickDuration -= remainder
 

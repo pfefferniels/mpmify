@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { ArticulationDef, MPM, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers/articulation/InsertArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
 
@@ -10,9 +10,9 @@ import { StylizeArticulation } from "../../src/transformers/articulation/Stylize
  * The chain issue #25 is about: `InsertArticulation` first, `StylizeArticulation` on what it
  * wrote. Every other articulation test hands `StylizeArticulation` `<articulation>` elements
  * built by hand, which still carry `@relativeDuration` and `@relativeVelocity` — and that is
- * exactly the state the real chain never produces, because `InsertArticulation` moves both into
- * the `<articulationDef>` and blanks them on the instruction. Clustering read the blanked
- * attributes, so every point was `[undefined, undefined]`, every distance NaN, and the whole
+ * exactly the state the real chain never produces, because `InsertArticulation` folds both into
+ * the `<articulationDef>` and writes no modifier on the instruction at all. Clustering read the
+ * instruction, so every point was `[undefined, undefined]`, every distance NaN, and the whole
  * transformer a no-op that five green tests could not see.
  */
 
@@ -34,9 +34,7 @@ const note = (id: string, date: number, pitch: number, playedTicks: number): Msm
 /** The tempo those recorded seconds are read against. */
 const atSixtyBpm = () => {
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
     return mpm
 }
 
@@ -62,9 +60,7 @@ const stylize = (msm: MSM, mpm: MPM) =>
 
 const defaultDef = (mpm: MPM) => {
     const name = mpm.getStyles('articulation', 'global')[0]?.defaultArticulation
-    return name === undefined
-        ? null
-        : mpm.getDefinition('articulationDef', name) as ArticulationDef | null
+    return name === undefined ? null : mpm.getDefinition('articulationDef', name)
 }
 
 test('the articulations InsertArticulation wrote are clustered, not read as noise', () => {
@@ -82,7 +78,7 @@ test('the articulations InsertArticulation wrote are clustered, not read as nois
 
     const def = defaultDef(mpm)
     expect(def).not.toBeNull()
-    expect(def!.relativeDuration).toBeCloseTo(0.9, 6)
+    expect(def!.getRelativeDuration()).toBeCloseTo(0.9, 6)
     expect(mpm.getInstructions('articulation', 'global')).toHaveLength(0)
 
     // And the def they were merged out of is gone with them: leaving it would have the styleDef
@@ -107,18 +103,20 @@ test('two articulation units are kept apart, and the larger one becomes the defa
 
     const def = defaultDef(mpm)
     expect(def).not.toBeNull()
-    expect(def!.relativeDuration).toBeCloseTo(0.5, 6)
+    expect(def!.getRelativeDuration()).toBeCloseTo(0.5, 6)
 
     const left = mpm.getInstructions('articulation', 'global')
     expect(left.map(a => a.noteid).sort()).toEqual(['#n5', '#n6', '#n7'])
 
-    const longName = left[0]['name.ref']
-    expect(longName).toBeDefined()
-    expect(longName).not.toBe(def!.name)
-    expect(new Set(left.map(a => a['name.ref']))).toEqual(new Set([longName]))
+    // That each of these names *some* def is no longer worth an assertion: an `<articulation>`
+    // without `@name.ref` is not an `AddArticulationOptions` at all, so `getInstructions` would
+    // not have returned it. What still has to be checked is which def it names.
+    const longName = left[0].nameRef
+    expect(longName).not.toBe(def!.getName())
+    expect(new Set(left.map(a => a.nameRef))).toEqual(new Set([longName]))
 
-    const longDef = mpm.getDefinition('articulationDef', longName!) as ArticulationDef
-    expect(longDef.relativeDuration).toBeCloseTo(1.4, 6)
+    const longDef = mpm.getDefinition('articulationDef', longName)
+    expect(longDef!.getRelativeDuration()).toBeCloseTo(1.4, 6)
 
     // Both units were merged into definitions of this transformer's own, so neither of the
     // names they were inserted under is left behind.

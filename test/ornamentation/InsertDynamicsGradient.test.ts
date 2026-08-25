@@ -2,7 +2,7 @@
 
 import { expect, test } from 'vitest'
 import { MSM } from '../../src/msm'
-import { MPM } from '../../src/mpm'
+import { MPM, ornamentDraftOf } from '../../src/mpm'
 import { InsertDynamicsGradient } from '../../src/transformers'
 
 /**
@@ -42,6 +42,15 @@ const callTransform = (transformer: InsertDynamicsGradient, msm: MSM, mpm: MPM) 
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
+/**
+ * The ramp the transformer fitted, read off the ornament it parked it on.
+ *
+ * The two ends are `<dynamicsGradient>` fields, not `<ornament>` attributes, so they are not part
+ * of the instruction and are read through the draft rather than off the options record.
+ */
+const gradientOf = (mpm: MPM, index: number) =>
+    ornamentDraftOf(mpm.getInstructions('ornament', 'global')[index].element)
+
 test('it fits a rising chord to the crescendo gradient and flattens the velocities', () => {
     const msm = msmFixture()
     const mpm = new MPM()
@@ -55,8 +64,8 @@ test('it fits a rising chord to the crescendo gradient and flattens the velociti
 
     const ornaments = mpm.getInstructions('ornament', 'global')
     expect(ornaments).toHaveLength(1)
-    expect(ornaments[0]['transition.from']).toBe(-1)
-    expect(ornaments[0]['transition.to']).toBe(0)
+    expect(gradientOf(mpm, 0).transitionFrom).toBe(-1)
+    expect(gradientOf(mpm, 0).transitionTo).toBe(0)
     expect(ornaments[0].scale).toBe(50)
 
     // The gradient having explained the spread, every note carries the same velocity.
@@ -73,8 +82,8 @@ test('it works with the constructor defaults, which do not sort velocities', () 
 
     const ornaments = mpm.getInstructions('ornament', 'global')
     expect(ornaments).toHaveLength(1)
-    expect(ornaments[0]['transition.from']).toBe(-1)
-    expect(ornaments[0]['transition.to']).toBe(0)
+    expect(gradientOf(mpm, 0).transitionFrom).toBe(-1)
+    expect(gradientOf(mpm, 0).transitionTo).toBe(0)
 })
 
 test('a chord whose notes are equally loud gets no gradient', () => {

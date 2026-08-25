@@ -1,4 +1,4 @@
-import { AccentuationPatternDef, Accentuation, MPM } from "../../mpm";
+import { AccentuationPatternDef, definitionOf, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { InsertMetricalAccentuation } from "./InsertMetricalAccentuation";
@@ -6,6 +6,14 @@ import { InsertMetricalAccentuation } from "./InsertMetricalAccentuation";
 interface MergeMetricalAccentuationsOptions extends ScopedTransformationOptions {
     names: string[]
     into: string
+}
+
+/** One accentuation's four numbers while they are being averaged, before they are a def. */
+type MergedAccentuation = {
+    beat: number
+    value: number
+    transitionFrom: number
+    transitionTo: number
 }
 
 export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetricalAccentuationsOptions> {
@@ -21,32 +29,39 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
     }
 
     protected transform(_: MSM, mpm: MPM) {
-        const allDefs = mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', this.options.scope)
+        const allDefs = mpm.getDefinitions('accentuationPatternDef', this.options.scope)
         if (allDefs.length <= 1) return
 
-        const toMerge = allDefs.filter(a => this.options.names.includes(a.name))
+        const toMerge = allDefs.filter(a => this.options.names.includes(a.getName()))
         if (toMerge.length <= 1) return
 
         const mergedPattern = this.mergePatterns(toMerge, this.options.into)
 
-        // Remove first, then insert. The merged pattern is a fresh record rather than one of
+        // Remove first, then insert. The merged pattern is a fresh definition rather than one of
         // the originals mutated in place, so the two steps do not interfere: removing the
         // originals cannot take the merged one with it.
-        toMerge.forEach(def => mpm.removeDefinition(def))
-        mpm.insertDefinition(mergedPattern, this.options.scope)
+        toMerge.forEach(def => mpm.removeDefinition('accentuationPatternDef', def))
+        mpm.insertDefinition('accentuationPatternDef', mergedPattern, this.options.scope)
 
-        const allInstructions = mpm.getInstructions('accentuationPattern', this.options.scope)
-        allInstructions
-            .filter(a => this.options.names.includes(a["name.ref"]))
-            .forEach(a => {
-                a["name.ref"] = this.options.into
-            })
+        mpm.getInstructions('accentuationPattern', this.options.scope)
+            .filter(a => this.options.names.includes(a.accentuationPatternDefName))
+            .forEach(a => mpm.updateInstruction(a, {
+                accentuationPatternDefName: this.options.into
+            }))
     }
 
     /**
      * The running mean of the patterns' accentuations, beat by beat, as a new definition named
      * `into`. Beats the first pattern does not have are not introduced: the prototype decides
      * the beat structure, and the rest only move its values.
+     *
+     * The mean is taken over plain records and the definition is built once, at the end, from
+     * the numbers that come out. espressivo's `AccentuationPatternDef` has no setter for one
+     * accentuation's value — the alternatives were to `removeAccentuation`/`addAccentuation`
+     * per pattern per beat, which rewrites the element n times to keep an intermediate nobody
+     * reads, or to write through the `<accentuation>` element's attributes, which edits the
+     * document behind the def's own tuple list and leaves the two disagreeing. Doing the
+     * arithmetic outside the document avoids both, and keeps it literally the expression it was.
      */
     private mergePatterns(patterns: AccentuationPatternDef[], into: string): AccentuationPatternDef {
         if (patterns.length <= 1) {
@@ -54,32 +69,36 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         }
 
         const [prototype, ...rest] = patterns
-        const children: Accentuation[] = prototype.children.map(accentuation => ({
-            type: 'accentuation',
-            beat: accentuation.beat,
-            value: accentuation.value,
-            'transition.from': accentuation['transition.from'],
-            'transition.to': accentuation['transition.to'],
-        }))
+        const children: MergedAccentuation[] = prototype.getAllAccentuations()
+            .map(({ key: [beat, value, transitionFrom, transitionTo] }) => ({
+                beat,
+                value,
+                transitionFrom,
+                transitionTo,
+            }))
 
         let n = 1
         for (const pattern of rest) {
-            for (const accentuation of pattern.children) {
-                const merged = children.find(a => a.beat === accentuation.beat)
+            for (const { key: [beat, value, transitionFrom, transitionTo] } of pattern.getAllAccentuations()) {
+                const merged = children.find(a => a.beat === beat)
                 if (!merged) continue
 
-                merged.value = (merged.value * n + accentuation.value) / (n + 1)
-                merged["transition.from"] = (merged["transition.from"] * n + accentuation["transition.from"]) / (n + 1)
-                merged["transition.to"] = (merged["transition.to"] * n + accentuation["transition.to"]) / (n + 1)
+                merged.value = (merged.value * n + value) / (n + 1)
+                merged.transitionFrom = (merged.transitionFrom * n + transitionFrom) / (n + 1)
+                merged.transitionTo = (merged.transitionTo * n + transitionTo) / (n + 1)
             }
             n++
         }
 
-        return {
-            type: 'accentuationPatternDef',
-            name: into,
-            length: prototype.length,
-            children,
+        const mergedDef = definitionOf(AccentuationPatternDef.fromNameLength(into, prototype.getLength()))
+        for (const child of children) {
+            mergedDef.addAccentuation(
+                child.beat,
+                child.value,
+                child.transitionFrom,
+                child.transitionTo,
+            )
         }
+        return mergedDef
     }
 }

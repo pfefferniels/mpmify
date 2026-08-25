@@ -22,18 +22,14 @@
  * names.
  */
 import {
-    AccentuationPatternDef,
-    ArticulationDef,
     Attribute,
     collectionNameOfKind,
     Dated,
     Document,
     Element,
     Global,
-    mapOfKind,
     Mpm,
     MPM_NAMESPACE,
-    OrnamentDef,
     Part,
     Performance,
     type AnyStyle,
@@ -743,6 +739,3 @@ const transformationElement = (transformation: TransformationInfo): Element => {
     }
     return element
 }
-
-/** The espressivo def classes, so a caller can build one without deep-importing. */
-export { AccentuationPatternDef, ArticulationDef, OrnamentDef, mapOfKind }

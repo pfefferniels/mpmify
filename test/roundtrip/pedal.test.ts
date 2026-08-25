@@ -80,7 +80,7 @@ describe('pedalling reaches the renderer', () => {
         expect(movements).toHaveLength(4)
         expect(movements[0].date).toBeCloseTo(0, 6)
         expect(movements[0].position).toBe(0)
-        expect(movements[0]['transition.to']).toBe(SUSTAIN_DEPTH)
+        expect(movements[0].transitionTo).toBe(SUSTAIN_DEPTH)
         expect(movements[1].date).toBeCloseTo(RAMP_TICKS, 6)
         expect(movements[1].position).toBe(SUSTAIN_DEPTH)
 

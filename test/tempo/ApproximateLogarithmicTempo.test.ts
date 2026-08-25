@@ -2,7 +2,7 @@
 
 import { describe, test, expect } from "vitest"
 import { MSM } from "../../src/msm"
-import { MPM, Tempo } from "../../src/mpm"
+import { Instruction, MPM } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { computeMillisecondsAt, TempoWithEndDate } from "../../src/transformers/tempo/tempoCalculations"
 
@@ -74,13 +74,20 @@ function buildMsm(onsets: { date: number; onset: number }[]): MSM {
 }
 
 /**
+ * `@bpm` and `@transition.to` are `number | string`, because MPM lets either be a style-relative
+ * name. The fitter only ever writes numbers, so a test that does arithmetic on one says so here
+ * rather than casting at the site.
+ */
+const bpmOf = (value: number | string | undefined): number => Number(value)
+
+/**
  * Run the fitter for a single segment and return tempo instructions
  */
 function fitAndGetTempos(
     onsets: { date: number; onset: number }[],
     from: number, to: number, beatLength: number,
     silentOnsets: SilentOnset[] = []
-): Tempo[] {
+): Instruction<'tempo'>[] {
     const msm = buildMsm(onsets);
     const mpm = new MPM();
     const transformer = new ApproximateLogarithmicTempo({
@@ -99,12 +106,12 @@ function fitAndGetTempos(
  * fit writes one more instruction at the end of its span, holding the tempo the curve arrives
  * at. See issue #24.
  */
-function expectClosedAt(tempos: Tempo[], date: number) {
+function expectClosedAt(tempos: Instruction<'tempo'>[], date: number) {
     const closing = tempos[tempos.length - 1];
     const fitted = tempos[tempos.length - 2];
     expect(closing.date).toBe(date);
-    expect(closing.bpm).toBeCloseTo(fitted['transition.to']!, 6);
-    expect(closing['transition.to']).toBeUndefined();
+    expect(closing.bpm).toBeCloseTo(bpmOf(fitted.transitionTo), 6);
+    expect(closing.transitionTo).toBeUndefined();
     expect(closing.beatLength).toBe(fitted.beatLength);
 }
 
@@ -118,7 +125,7 @@ describe('ApproximateLogarithmicTempo', () => {
 
         expect(tempos).toHaveLength(1);
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
-        expect(tempos[0]['transition.to']).toBeUndefined();
+        expect(tempos[0].transitionTo).toBeUndefined();
     });
 
     test('linear accelerando 80 → 120 BPM', () => {
@@ -133,8 +140,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(77);
         expect(tempos[0].bpm).toBeLessThan(83);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(117);
-        expect(tempos[0]['transition.to']).toBeLessThan(123);
+        expect(tempos[0].transitionTo).toBeGreaterThan(117);
+        expect(tempos[0].transitionTo).toBeLessThan(123);
         expect(tempos[0].meanTempoAt).toBeDefined();
         expect(tempos[0].meanTempoAt!).toBeGreaterThan(0.4);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.6);
@@ -152,8 +159,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(117);
         expect(tempos[0].bpm).toBeLessThan(123);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(77);
-        expect(tempos[0]['transition.to']).toBeLessThan(83);
+        expect(tempos[0].transitionTo).toBeGreaterThan(77);
+        expect(tempos[0].transitionTo).toBeLessThan(83);
         expect(tempos[0].meanTempoAt!).toBeGreaterThan(0.4);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.6);
     });
@@ -174,9 +181,9 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(75);
         expect(tempos[0].bpm).toBeLessThan(95);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(105);
-        expect(tempos[0]['transition.to']).toBeLessThan(125);
-        expect(tempos[0]['transition.to']!).toBeGreaterThan(tempos[0].bpm);
+        expect(tempos[0].transitionTo).toBeGreaterThan(105);
+        expect(tempos[0].transitionTo).toBeLessThan(125);
+        expect(tempos[0].transitionTo!).toBeGreaterThan(bpmOf(tempos[0].bpm));
         expect(tempos[0].meanTempoAt).toBeDefined();
         expect(tempos[0].meanTempoAt!).toBeGreaterThan(0.1);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.9);
@@ -217,12 +224,12 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(76);
         expect(tempos[0].bpm).toBeLessThan(84);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(116);
-        expect(tempos[0]['transition.to']).toBeLessThan(124);
+        expect(tempos[0].transitionTo).toBeGreaterThan(116);
+        expect(tempos[0].transitionTo).toBeLessThan(124);
         expect(tempos[1].bpm).toBeGreaterThan(116);
         expect(tempos[1].bpm).toBeLessThan(124);
-        expect(tempos[1]['transition.to']).toBeGreaterThan(76);
-        expect(tempos[1]['transition.to']).toBeLessThan(84);
+        expect(tempos[1].transitionTo).toBeGreaterThan(76);
+        expect(tempos[1].transitionTo).toBeLessThan(84);
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.5);
         expect(tempos[1].meanTempoAt!).toBeGreaterThan(0.5);
     });
@@ -239,8 +246,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(57);
         expect(tempos[0].bpm).toBeLessThan(63);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(117);
-        expect(tempos[0]['transition.to']).toBeLessThan(123);
+        expect(tempos[0].transitionTo).toBeGreaterThan(117);
+        expect(tempos[0].transitionTo).toBeLessThan(123);
     });
 
     test('meanTempoAt is in valid range for transitions', () => {
@@ -268,8 +275,8 @@ describe('ApproximateLogarithmicTempo', () => {
         expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(78);
         expect(tempos[0].bpm).toBeLessThan(82);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(118);
-        expect(tempos[0]['transition.to']).toBeLessThan(122);
+        expect(tempos[0].transitionTo).toBeGreaterThan(118);
+        expect(tempos[0].transitionTo).toBeLessThan(122);
     });
 
     test('rit → acc valley keeps a rounded two-segment gesture (continue)', () => {
@@ -312,7 +319,7 @@ describe('ApproximateLogarithmicTempo', () => {
         expect(tempos[1].meanTempoAt!).toBeGreaterThan(0.5);
         expect(tempos[0].meanTempoAt! + tempos[1].meanTempoAt!).toBeGreaterThan(0.85);
         expect(tempos[0].meanTempoAt! + tempos[1].meanTempoAt!).toBeLessThan(1.15);
-        expect(Math.abs(tempos[0]['transition.to']! - tempos[1].bpm)).toBeLessThan(2.5);
+        expect(Math.abs(bpmOf(tempos[0].transitionTo) - bpmOf(tempos[1].bpm))).toBeLessThan(2.5);
     });
 
     test('chained segments preserve inferred acc → rit direction (continue)', () => {
@@ -350,16 +357,15 @@ describe('ApproximateLogarithmicTempo', () => {
 
         expect(tempos).toHaveLength(3);
         expectClosedAt(tempos, totalTicks);
-        expect(tempos[0]['transition.to']).toBeGreaterThan(tempos[0].bpm);
-        expect(tempos[1]['transition.to']).toBeLessThan(tempos[1].bpm);
+        expect(tempos[0].transitionTo).toBeGreaterThan(bpmOf(tempos[0].bpm));
+        expect(tempos[1].transitionTo).toBeLessThan(bpmOf(tempos[1].bpm));
     });
 
     test('keeps existing tempos unchanged when fitting yields no segments', () => {
         const msm = new MSM([], { numerator: 4, denominator: 4 });
         const mpm = new MPM();
-        mpm.insertInstruction({
-            type: 'tempo',
-            'xml:id': 'tempo_existing',
+        mpm.insertInstruction('tempo', {
+            id: 'tempo_existing',
             date: 0,
             bpm: 88,
             beatLength: 0.25
@@ -384,24 +390,21 @@ describe('ApproximateLogarithmicTempo', () => {
             { date: 2 * BEAT, onset: 1 }
         ]);
         const mpm = new MPM();
-        mpm.insertInstructions([
+        mpm.insertInstructions('tempo', [
             {
-                type: 'tempo',
-                'xml:id': 'tempo_1',
+                id: 'tempo_1',
                 date: 0,
                 bpm: 90,
                 beatLength: 0.25
             },
             {
-                type: 'tempo',
-                'xml:id': 'tempo_2',
+                id: 'tempo_2',
                 date: BEAT,
                 bpm: 91,
                 beatLength: 0.25
             },
             {
-                type: 'tempo',
-                'xml:id': 'tempo_boundary',
+                id: 'tempo_boundary',
                 date: 2 * BEAT,
                 bpm: 150,
                 beatLength: 0.25
@@ -428,17 +431,15 @@ describe('ApproximateLogarithmicTempo', () => {
             { date: BEAT, onset: 1 }
         ]);
         const mpm = new MPM();
-        mpm.insertInstructions([
+        mpm.insertInstructions('tempo', [
             {
-                type: 'tempo',
-                'xml:id': 'tempo_1',
+                id: 'tempo_1',
                 date: 0,
                 bpm: 50,
                 beatLength: 0.25
             },
             {
-                type: 'tempo',
-                'xml:id': 'tempo_2',
+                id: 'tempo_2',
                 date: BEAT / 2,
                 bpm: 200,
                 beatLength: 0.25
@@ -527,7 +528,7 @@ describe('ApproximateLogarithmicTempo', () => {
 
         expect(tempos).toHaveLength(2);
         for (const tempo of tempos) {
-            for (const bpm of [tempo.bpm, tempo['transition.to']]) {
+            for (const bpm of [tempo.bpm, tempo.transitionTo]) {
                 if (bpm === undefined) continue;
                 expect(Number.isFinite(bpm)).toBe(true);
                 expect(bpm).toBeGreaterThanOrEqual(5);
@@ -546,9 +547,8 @@ describe('ApproximateLogarithmicTempo', () => {
         const mpm = new MPM();
 
         // Insert a predecessor with different beatLength
-        mpm.insertInstruction({
-            type: 'tempo',
-            'xml:id': 'tempo_other',
+        mpm.insertInstruction('tempo', {
+            id: 'tempo_other',
             date: 0,
             bpm: 60,
             beatLength: 0.5
@@ -589,9 +589,13 @@ describe('ApproximateLogarithmicTempo', () => {
 describe('recovering a curve the renderer can draw exactly (#39)', () => {
     const NBEATS = 16;
 
-    const truthSpan = (bpm: number, to: number, im: number, beats: number): TempoWithEndDate => ({
-        type: 'tempo', 'xml:id': 'truth', date: 0, endDate: beats * BEAT,
-        beatLength: 0.25, bpm, 'transition.to': to, meanTempoAt: im,
+    // `bpm` and `to` are as wide as the attributes are, so a span refitted from what the document
+    // says goes back in without a conversion step that could quietly change the number.
+    const truthSpan = (
+        bpm: number | string, to: number | string, im: number, beats: number
+    ): TempoWithEndDate => ({
+        id: 'truth', date: 0, endDate: beats * BEAT,
+        beatLength: 0.25, bpm, transitionTo: to, meanTempoAt: im,
     });
 
     const renderOnsets = (span: TempoWithEndDate, beats: number) =>
@@ -628,7 +632,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
 
             expect(fitted).toHaveLength(1);
             const refit = truthSpan(
-                fitted[0].bpm, fitted[0]['transition.to'] ?? fitted[0].bpm,
+                fitted[0].bpm, fitted[0].transitionTo ?? fitted[0].bpm,
                 fitted[0].meanTempoAt ?? 0.5, NBEATS);
 
             for (const { date, onset } of onsets) {
@@ -649,7 +653,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         }, buildMsm(onsets));
 
         expect(fitted[0].bpm).toBeCloseTo(60, 2);
-        expect(fitted[0]['transition.to']!).toBeCloseTo(120, 2);
+        expect(fitted[0].transitionTo!).toBeCloseTo(120, 2);
         expect(fitted[0].meanTempoAt!).toBeCloseTo(0.7, 3);
     });
 
@@ -672,7 +676,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         }, new MSM(notes, { numerator: 4, denominator: 4 }));
 
         expect(fitted[0].bpm).toBeCloseTo(90, 2);
-        expect(fitted[0]['transition.to']!).toBeCloseTo(45, 2);
+        expect(fitted[0].transitionTo!).toBeCloseTo(45, 2);
         expect(fitted[0].meanTempoAt!).toBeCloseTo(0.7, 3);
     });
 
@@ -688,7 +692,7 @@ describe('recovering a curve the renderer can draw exactly (#39)', () => {
         const second = ApproximateLogarithmicTempo.preview(request, buildMsm(onsets));
 
         expect(second[0].bpm).toBe(first[0].bpm);
-        expect(second[0]['transition.to']).toBe(first[0]['transition.to']);
+        expect(second[0].transitionTo).toBe(first[0].transitionTo);
         expect(second[0].meanTempoAt).toBe(first[0].meanTempoAt);
     });
 });

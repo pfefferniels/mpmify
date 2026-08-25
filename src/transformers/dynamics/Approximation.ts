@@ -1,7 +1,6 @@
-import { bezierPoint, innerControlPointsXPositions, tForDate } from "espressivo"
+import { bezierPoint, innerControlPointsXPositions, tForDate, type AddMovementOptions, type Normalized } from "espressivo"
 import { v4 } from "uuid"
 import { DynamicsWithEndDate } from "./InsertDynamicsInstructions"
-import { Movement } from "../../mpm"
 import { hashSeed, Random, seededRandom } from "../../utils/random"
 
 export type DynamicsPoints = {
@@ -63,13 +62,29 @@ const transitionValueAt = (
     return bezierPoint(span.x1, span.x2, span.date, span.endDate, from, to, t)[1]
 }
 
-/** What the fitted `<dynamics>` sounds `date` at. */
+/**
+ * What the fitted `<dynamics>` sounds `date` at.
+ *
+ * `@volume` and `@transition.to` are `number | string` — espressivo writes a style-relative name
+ * such as `"forte"` verbatim, so the wording a document used round-trips — and the `+` is what
+ * this evaluator has always done with them. It is applied *after* the `??`, so a target of **0**
+ * is still a target; see the header on issue #46.
+ */
 export const volumeAtDate = (instruction: DynamicsWithEndDate & InnerControlPoints, date: number) =>
-    transitionValueAt(instruction, +instruction.volume, instruction["transition.to"] ?? +instruction.volume, date)
+    transitionValueAt(instruction, +instruction.volume, +(instruction.transitionTo ?? instruction.volume), date)
 
-/** Where the fitted `<movement>` puts its controller at `date`. */
-export const positionAtDate = (instruction: Movement & { endDate: number } & InnerControlPoints, date: number) =>
-    transitionValueAt(instruction, +instruction.position, instruction["transition.to"] ?? +instruction.position, date)
+/**
+ * Where the fitted `<movement>` puts its controller at `date`.
+ *
+ * `@position` is optional on the element — a `<movement>` with none inherits where the previous
+ * one ended — but that is a question only the map can answer, so this asks for the resolved
+ * position it is going to interpolate from.
+ */
+export const positionAtDate = (
+    instruction: AddMovementOptions & { position: Normalized, endDate: number } & InnerControlPoints,
+    date: number,
+) =>
+    transitionValueAt(instruction, instruction.position, instruction.transitionTo ?? instruction.position, date)
 
 const computeError = (instruction: DynamicsWithEndDate, points: DynamicsPoints[]) => {
     const computedInstruction = {
@@ -118,8 +133,7 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
     }
     else if (points.length === 1) {
         return {
-            type: 'dynamics',
-            "xml:id": `dynamics_${v4()}`,
+            id: `dynamics_${v4()}`,
             date: points[0].date,
             endDate: points[0].date,
             volume: points[0].velocity,
@@ -129,24 +143,22 @@ export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDa
     const equal = points[0].velocity === points[points.length - 1].velocity;
     if (points.length === 2 || equal) {
         return {
-            type: 'dynamics',
-            "xml:id": `dynamics_${v4()}`,
+            id: `dynamics_${v4()}`,
             date: points[0].date,
             endDate: points[points.length - 1].date,
             volume: points[0].velocity,
-            "transition.to": equal ? undefined : points[points.length - 1].velocity,
+            transitionTo: equal ? undefined : points[points.length - 1].velocity,
             protraction: 0,
             curvature: 0.5
         }
     }
 
     const initial: DynamicsWithEndDate = {
-        type: 'dynamics',
-        "xml:id": `dynamics_${v4()}`,
+        id: `dynamics_${v4()}`,
         date: points[0].date,
         endDate: points[points.length - 1].date,
         volume: points[0].velocity,
-        "transition.to": points[points.length - 1].velocity,
+        transitionTo: points[points.length - 1].velocity,
         protraction: 0,
         curvature: 0.5
     }

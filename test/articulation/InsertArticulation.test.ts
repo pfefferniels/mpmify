@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { ArticulationDef, MPM, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers"
 
 /**
@@ -60,9 +60,7 @@ const msmFixture = () => new MSM([
 /** The tempo the recorded seconds above are read against. */
 const atSixtyBpm = () => {
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
     return mpm
 }
 
@@ -91,10 +89,12 @@ test('it writes one <articulation> per note, each naming the definition', () => 
     const articulations = mpm.getInstructions('articulation', 'global')
     expect(articulations).toHaveLength(2)
     expect(articulations.map(a => a.noteid).sort()).toEqual(['#note0', '#note1'])
-    expect(articulations.map(a => a['name.ref'])).toEqual(['my-articulation', 'my-articulation'])
+    expect(articulations.map(a => a.nameRef)).toEqual(['my-articulation', 'my-articulation'])
     // One id each: they share a date, and `generateId` numbers by what the map already holds.
-    expect(new Set(articulations.map(a => a['xml:id'])).size).toBe(2)
-    // The measured values moved into the definition; the instructions only refer to it.
+    expect(new Set(articulations.map(a => a.id)).size).toBe(2)
+    // The measured values moved into the definition; the instructions only refer to it. Read
+    // as options rather than as rendering data, so an absent `@relativeDuration` is `undefined`
+    // here and not the 1.0 the renderer would apply in its place.
     expect(articulations.map(a => a.relativeDuration)).toEqual([undefined, undefined])
 })
 
@@ -104,10 +104,10 @@ test('the definition holds the mean of the measured aspect', () => {
 
     run(msm, mpm)
 
-    const def = mpm.getDefinition('articulationDef', 'my-articulation') as ArticulationDef
+    const def = mpm.getDefinition('articulationDef', 'my-articulation')
     expect(def).not.toBeNull()
     // 360/720 = 0.5 and 1440/720 = 2 → mean 1.25
-    expect(def.relativeDuration).toBeCloseTo(1.25, 10)
+    expect(def!.getRelativeDuration()).toBeCloseTo(1.25, 10)
 })
 
 

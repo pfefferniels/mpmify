@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM, Tempo } from "../../src/mpm"
+import { InstructionOptions, MPM } from "../../src/mpm"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 import { placeTempos, segmentAtMs } from "../../src/transformers/tempo/placedTempos"
 
@@ -47,9 +47,7 @@ const score = () => {
 const twoTempi = () => {
     const mpm = new MPM()
     for (const [id, date] of [['t0', 0], ['t1', BOUNDARY]] as const) {
-        mpm.insertInstruction<Tempo>({
-            type: 'tempo', 'xml:id': id, date, bpm: 60, beatLength: 0.25,
-        }, 'global')
+        mpm.insertInstruction('tempo', { id, date, bpm: 60, beatLength: 0.25 }, 'global')
     }
     return mpm
 }
@@ -105,24 +103,26 @@ describe('every recorded event gets a position', () => {
 })
 
 /**
- * The walk starts from a `<tempo>` *record*, and a record does not say plainly what curve it
+ * The walk starts from what the *document* says, and that does not say plainly what curve it
  * describes: `resolveTempo` decides that, and for two spellings the answer is not the one the
  * attributes read like. Both used to be inverted at `@bpm`, because the old test for whether an
- * instruction ramps was `tempo["transition.to"] && tempo.meanTempoAt` on the record — which calls
+ * instruction ramps was a truthiness check on its target and its shape — which calls
  * `@meanTempoAt="0"` false, `0` being falsy, and an absent `@meanTempoAt` false as well.
  *
  * The defect itself cannot come back the way it went: `dateAtMilliseconds` takes a *resolved*
- * span now, so there is no record left for it to misread. What these two guard is the one step
- * where the decision is still open — `resolveSpan`, where an `@meanTempoAt` of 0 handed on as
- * `meanTempoAt ? ... : null` becomes a linear ramp again, which is the same falsy-zero mistake
- * one level up.
+ * span now, so there is nothing unresolved left for it to misread. What these two guard is the
+ * one step where the decision is still open — `resolveSpan`, where an `@meanTempoAt` of 0 handed
+ * on as `meanTempoAt ? ... : null` becomes a linear ramp again, which is the same falsy-zero
+ * mistake one level up.
  */
 describe('the walk reads an instruction the way the renderer resolves it', () => {
-    const under = (tempo: Partial<Tempo>) => {
+    const under = (tempo: Partial<InstructionOptions<'tempo'>>) => {
         const mpm = new MPM()
-        mpm.insertInstruction<Tempo>({
-            type: 'tempo', 'xml:id': 't', date: 0, bpm: 60, beatLength: 0.25, ...tempo,
-        } as Tempo, 'global')
+        mpm.insertInstruction(
+            'tempo',
+            { id: 't', date: 0, bpm: 60, beatLength: 0.25, ...tempo },
+            'global'
+        )
         return computeTickTimes(score(), mpm)
     }
 
@@ -132,7 +132,7 @@ describe('the walk reads an instruction the way the renderer resolves it', () =>
      * with a quarter-note beat is 1 440 ticks; read at `@bpm` it would have been 720.
      */
     test('@meanTempoAt="0" places notes at the target tempo, not the starting one', () => {
-        const times = under({ 'transition.to': 120, meanTempoAt: 0 })
+        const times = under({ transitionTo: 120, meanTempoAt: 0 })
         expect(times.notes.get('n1')!.tickDate).toBeCloseTo(1440, 6)
     })
 
@@ -142,7 +142,7 @@ describe('the walk reads an instruction the way the renderer resolves it', () =>
      * closed form put it exactly on the lower one.
      */
     test('a @transition.to with no @meanTempoAt places notes on the ramp', () => {
-        const onRamp = under({ 'transition.to': 120 })!.notes.get('n1')!.tickDate!
+        const onRamp = under({ transitionTo: 120 })!.notes.get('n1')!.tickDate!
 
         expect(onRamp).toBeGreaterThan(720)
         expect(onRamp).toBeLessThan(1440)

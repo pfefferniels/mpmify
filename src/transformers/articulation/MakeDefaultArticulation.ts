@@ -1,8 +1,9 @@
-import { ArticulationDef, MPM } from "../../mpm";
+import { MPM } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { TranslatePhysicalTimeToTicks } from "../tempo";
 import { deriveResidual } from "../../residual";
+import { makeArticulationDef } from "./InsertArticulation";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
@@ -74,13 +75,9 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
 
         const mean = relativeDurations.reduce((acc, curr) => acc + curr, 0) / relativeDurations.length
 
-        const def: ArticulationDef = {
-            name: 'default articulation',
-            relativeDuration: mean,
-            type: 'articulationDef',
-        }
-        mpm.insertDefinition(def, this.options.scope)
+        const def = makeArticulationDef('default articulation', { relativeDuration: mean })
+        mpm.insertDefinition('articulationDef', def, this.options.scope)
 
-        mpm.ensureDefaultStyle('articulation', this.options.scope, { defaultArticulation: def.name })
+        mpm.ensureDefaultStyle('articulation', this.options.scope, { defaultArticulation: def.getName() })
     }
 }

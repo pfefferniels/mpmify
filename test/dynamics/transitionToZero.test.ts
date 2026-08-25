@@ -1,45 +1,54 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
+import type { Normalized } from "espressivo"
 import {
     computeInnerControlPointsXPositions,
     positionAtDate,
     volumeAtDate,
 } from "../../src/transformers/dynamics/Approximation"
 import { DynamicsWithEndDate } from "../../src/transformers/dynamics/InsertDynamicsInstructions"
-import { Movement } from "../../src/mpm"
+import { InstructionOptions } from "../../src/mpm"
 
 /**
  * A `@transition.to` of **0** is a target, not an absence.
  *
- * Both evaluators used to test it for truthiness — `!instruction["transition.to"]` for dynamics,
- * `=== undefined` for movement — and the dynamics one therefore read a fade to silence as *no
- * transition at all*, holding the start volume flat across the whole span. A `<movement>` lifting
- * a pedal fully is the same shape. See issue #46.
+ * Both evaluators used to test the attribute for truthiness — `!` of it for dynamics, `=== undefined`
+ * for movement — and the dynamics one therefore read a fade to silence as *no transition at all*,
+ * holding the start volume flat across the whole span. A `<movement>` lifting a pedal fully is
+ * the same shape. See issue #46.
  *
  * This is a behaviour change on documents that already exist: anything fitted against the
  * held-flat reading now renders as the fade it always said it was.
  */
 const straightRamp = computeInnerControlPointsXPositions(0.0, 0.0)
 
+/**
+ * A 0..1 quantity as `<movement>` types one. The brand is compile-time only and espressivo emits
+ * no converter for it (`units.ts` is required to produce no JavaScript), so a plain number
+ * reaches it through an assertion — the same one `InsertPedal` makes.
+ */
+const normalized = (value: number) => value as Normalized
+
 const fadeToSilence: DynamicsWithEndDate & typeof straightRamp = {
-    type: 'dynamics',
-    'xml:id': 'd0',
+    id: 'd0',
     date: 0,
     endDate: 720,
     volume: 100,
-    'transition.to': 0,
+    transitionTo: 0,
     ...straightRamp,
 }
 
-const pedalFullyUp: Movement & { endDate: number } & typeof straightRamp = {
-    type: 'movement',
-    'xml:id': 'm0',
+const pedalFullyUp:
+    InstructionOptions<'movement'>
+    & { position: Normalized, endDate: number }
+    & typeof straightRamp = {
+    id: 'm0',
     date: 0,
     endDate: 720,
-    position: 1,
+    position: normalized(1),
     controller: 'sustain',
-    'transition.to': 0,
+    transitionTo: normalized(0),
     ...straightRamp,
 }
 
@@ -68,7 +77,7 @@ test('an absent @transition.to is still a held level', () => {
     // The other half of the distinction: absence really does mean "no transition", and `??` has
     // to keep answering that where `||` accidentally did.
     const held: DynamicsWithEndDate & typeof straightRamp = {
-        ...fadeToSilence, 'transition.to': undefined,
+        ...fadeToSilence, transitionTo: undefined,
     }
     expect(volumeAtDate(held, 360)).toBe(100)
     expect(volumeAtDate(held, 720)).toBe(100)

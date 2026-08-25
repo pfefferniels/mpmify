@@ -1,10 +1,18 @@
-import { Dynamics, MPM, Scope } from "../../mpm"
+import type { AddDynamicsOptions } from "espressivo"
+import { Instruction, MPM, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, DynamicsPoints } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
-export type DynamicsWithEndDate = Dynamics & WithEndDate
+/**
+ * A fitted `<dynamics>` plus the window it was fitted over.
+ *
+ * `endDate` is not an MPM attribute and is not in `AddDynamicsOptions`; it travels with the fit
+ * only as far as {@link InsertDynamicsInstructions.transform}, which takes it back off before the
+ * record reaches the document.
+ */
+export type DynamicsWithEndDate = AddDynamicsOptions & WithEndDate
 
 export interface InsertDynamicsInstructionsOptions extends ScopedTransformationOptions {
     from: number
@@ -36,13 +44,18 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // `endDate` is the window the curve was fitted over — a working field, not an MPM
         // attribute. It used to be written into the document; a reader gets the span from the
         // next <dynamics> instead. See old-bugs.md.
-        const { endDate: fittingWindow, ...instruction } = fitted
-        instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
+        //
+        // This destructuring is now the *only* thing keeping it out: the serializer used to write
+        // from a table of attribute spellings, which had no row for `endDate`, and espressivo
+        // writes what its options type names instead. Taking it off here is load-bearing, not
+        // belt-and-braces.
+        const { endDate: fittingWindow, ...fit } = fitted
+        const instruction = { ...fit, id: generateId('dynamics', fit.date, mpm) }
 
         // The view the document ended up with, not the record handed in: an instruction already
         // at that date is merged into rather than replaced, so this is what the curve to be
         // closed actually says.
-        const inserted = mpm.insertInstruction(instruction, this.options?.scope)
+        const inserted = mpm.insertInstruction('dynamics', instruction, this.options?.scope)
         this.closeTransition(mpm, inserted, fittingWindow)
     }
 
@@ -60,16 +73,15 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
      * An instruction already at that date already closes the span — in a chain each segment is
      * closed by the next — and is left alone.
      */
-    private closeTransition(mpm: MPM, instruction: Dynamics, endDate: number) {
-        const target = instruction["transition.to"]
+    private closeTransition(mpm: MPM, instruction: Instruction<'dynamics'>, endDate: number) {
+        const target = instruction.transitionTo
         if (target === undefined || endDate <= instruction.date) return
 
         const existing = mpm.getInstructions('dynamics', this.options.scope)
         if (existing.some(dynamics => dynamics.date === endDate)) return
 
-        mpm.insertInstruction({
-            type: 'dynamics',
-            'xml:id': generateId('dynamics', endDate, mpm),
+        mpm.insertInstruction('dynamics', {
+            id: generateId('dynamics', endDate, mpm),
             date: endDate,
             volume: target
         }, this.options.scope)

@@ -45,11 +45,9 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
 
         this.removeAffectedTempoInstructions(mpm, scope, from, to)
 
-        const tempo = {
-            type: 'tempo' as const,
-            'xml:id': generateId('tempo', from, mpm),
+        const tempo: InstructionOptions<'tempo'> = {
+            id: generateId('tempo', from, mpm),
             date: from,
-            endDate: to,
             bpm,
             beatLength,
             ...(transitionTo !== undefined ? {
@@ -58,7 +56,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
             } : {})
         }
 
-        mpm.insertInstruction('tempo', tempo as InstructionOptions<'tempo'>, scope, true)
+        mpm.insertInstruction('tempo', tempo, scope, true)
     }
 
     private removeAffectedTempoInstructions(mpm: MPM, scope: Scope, from: number, to: number) {

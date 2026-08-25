@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, MPM } from "../../mpm"
+import { ArticulationDef, definitionOf, MPM } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -11,6 +11,42 @@ export type ArticulationProperty =
     | 'absoluteDuration'
     | 'absoluteDurationChange'
 
+/** The subset of an `<articulationDef>` mpmify ever states: the four it measures. */
+export type ArticulationModifiers = Partial<Record<ArticulationProperty, number>>
+
+/** One setter per modifier, so a caller states the name once and never the spelling. */
+const setModifier: Record<ArticulationProperty, (def: ArticulationDef, value: number) => void> = {
+    relativeDuration: (def, value) => def.setRelativeDuration(value),
+    relativeVelocity: (def, value) => def.setRelativeVelocity(value),
+    absoluteDuration: (def, value) => def.setAbsoluteDuration(value),
+    absoluteDurationChange: (def, value) => def.setAbsoluteDurationChange(value),
+}
+
+/**
+ * A fresh `<articulationDef>` of this name, stating exactly the modifiers it is given.
+ *
+ * A modifier left out is left unstated rather than written at its neutral value — which the
+ * three transformers here depend on in both directions: `MakeDefaultArticulation` writes a def
+ * that says nothing but a duration, and `StylizeArticulation` reads silence as "this def cannot
+ * stand in for that articulation".
+ *
+ * espressivo answers a `Result` because the same factory also parses an existing element; built
+ * from a name it cannot fail, since the one thing that can go wrong is a missing `@name` and
+ * this writes one. Hence {@link definitionOf}, which reads the failure arm as the caller bug it
+ * would be rather than a case to branch on.
+ */
+export const makeArticulationDef = (
+    name: string,
+    modifiers: ArticulationModifiers
+): ArticulationDef => {
+    const def = definitionOf(ArticulationDef.createArticulationDef(name))
+
+    for (const [modifier, value] of Object.entries(modifiers)) {
+        if (value !== undefined) setModifier[modifier as ArticulationProperty](def, value)
+    }
+    return def
+}
+
 export type ArticulationUnit = {
     noteIDs: string[]
     name: string
@@ -18,6 +54,18 @@ export type ArticulationUnit = {
 }
 
 export type InsertArticulationOptions = ScopedTransformationOptions & ArticulationUnit
+
+/**
+ * What one note's articulation measured out as, before any of it is written.
+ *
+ * Not an `AddArticulationOptions`, because none of the four modifiers ever reaches an
+ * `<articulation>`: they are averaged into the definition and the instruction is written
+ * pointing at it. What the instruction takes from here is the date and the note it names.
+ */
+type MeasuredArticulation = ArticulationModifiers & {
+    date: number
+    noteid: string
+}
 
 /**
  * Defines the articulation of a note through the attributes relativeDuration and
@@ -54,7 +102,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         aspects: Set<ArticulationProperty>,
         note: MsmNote,
         residual: NoteResidual | undefined
-    ): Articulation {
+    ): MeasuredArticulation {
         const tickDuration = residual?.tickDuration
         const relativeDuration = tickDuration ? (tickDuration / note.duration) : undefined
 
@@ -76,8 +124,6 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             tickDuration === undefined ? undefined : tickDuration - note.duration
 
         return {
-            type: 'articulation',
-            'xml:id': `articulation_${v4()}`,
             date: note.date,
             noteid: '#' + note['xml:id'],
             relativeDuration: aspects.has('relativeDuration') ? relativeDuration : undefined,
@@ -98,10 +144,10 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // earlier transformer subtracted what.
         const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
 
-        const articulations: Articulation[] = affectedNotes
+        const articulations: MeasuredArticulation[] = affectedNotes
             .map(note => this.noteToArticulation(aspects, note, residual.of(note)))
 
-        const avgs: Record<string, number> = {}
+        const avgs: ArticulationModifiers = {}
         Array
             .from(aspects)
             .map(aspect => {
@@ -117,13 +163,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
                 avgs[aspect] = values.reduce((acc, v) => acc + v, 0) / values.length
             })
 
-        const def: ArticulationDef = {
-            type: 'articulationDef',
-            name,
-            ...avgs
-        }
-
-        mpm.insertDefinition(def, this.options.scope)
+        mpm.insertDefinition('articulationDef', makeArticulationDef(name, avgs), this.options.scope)
 
         // A <style> switch is what puts the styleDef holding `def` in scope; without one the
         // @name.ref below resolves to nothing and the articulation is inert. Only
@@ -144,11 +184,13 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // The id is minted immediately before each insertion, not for the batch up front:
         // `generateId` numbers by how many instructions the map already holds at that date, so
         // a batch that no longer has one entry per date has to let it see each one land.
-        for (const articulation of articulations) {
-            aspects.forEach(aspect => articulation[aspect] = undefined)
-            articulation['name.ref'] = name
-            articulation['xml:id'] = generateId('articulation', articulation.date, mpm)
-            mpm.insertInstruction(articulation, this.options.scope)
+        for (const { date, noteid } of articulations) {
+            mpm.insertInstruction('articulation', {
+                date,
+                noteid,
+                nameRef: name,
+                id: generateId('articulation', date, mpm),
+            }, this.options.scope)
         }
     }
 }

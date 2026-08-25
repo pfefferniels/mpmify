@@ -11,8 +11,7 @@ const QUARTER = 720
 const START = 2160
 
 const span = (over: Partial<TempoWithEndDate> = {}): TempoWithEndDate => ({
-    type: 'tempo',
-    'xml:id': 't',
+    id: 't',
     date: START,
     endDate: START + 4 * QUARTER,
     beatLength: 0.25,
@@ -21,25 +20,25 @@ const span = (over: Partial<TempoWithEndDate> = {}): TempoWithEndDate => ({
 } as TempoWithEndDate)
 
 /**
- * The shapes a `<tempo>` can take, as the renderer resolves them — not as the record spells them.
+ * The shapes a `<tempo>` can take, as the renderer resolves them — not as the options spell them.
  *
  * The last two are here because they used to be inverted against the wrong curve. `meanTempoAt`
  * of 0 resolves to a *constant at `@transition.to`*, and a `@transition.to` with no
- * `@meanTempoAt` resolves to a *linear ramp*; the old test for which arm to take read
- * `tempo["transition.to"] && tempo.meanTempoAt`, which calls the first false (0 is falsy) and the
- * second false as well, and inverted both at `@bpm`.
+ * `@meanTempoAt` resolves to a *linear ramp*; the old test for which arm to take was a
+ * truthiness check on the two fields, which calls the first false (0 is falsy) and the second
+ * false as well, and inverted both at `@bpm`.
  */
 const SHAPES: [string, TempoWithEndDate][] = [
     ['a constant tempo', span()],
     ['a very slow constant tempo', span({ bpm: 2 })],
-    ['a linear accelerando', span({ 'transition.to': 90, meanTempoAt: 0.5 })],
-    ['a convex accelerando', span({ 'transition.to': 90, meanTempoAt: 0.3 })],
-    ['a concave accelerando', span({ 'transition.to': 90, meanTempoAt: 0.75 })],
-    ['a ritardando', span({ bpm: 144, 'transition.to': 72, meanTempoAt: 0.4 })],
-    ['a transition between very slow tempi', span({ bpm: 2, 'transition.to': 3, meanTempoAt: 0.6 })],
-    ['a half-note beat unit', span({ beatLength: 0.5, 'transition.to': 100, meanTempoAt: 0.35 })],
-    ['@meanTempoAt="0", which resolves to a constant at the target', span({ 'transition.to': 90, meanTempoAt: 0 })],
-    ['a @transition.to with no @meanTempoAt, which resolves to a linear ramp', span({ 'transition.to': 90 })],
+    ['a linear accelerando', span({ transitionTo: 90, meanTempoAt: 0.5 })],
+    ['a convex accelerando', span({ transitionTo: 90, meanTempoAt: 0.3 })],
+    ['a concave accelerando', span({ transitionTo: 90, meanTempoAt: 0.75 })],
+    ['a ritardando', span({ bpm: 144, transitionTo: 72, meanTempoAt: 0.4 })],
+    ['a transition between very slow tempi', span({ bpm: 2, transitionTo: 3, meanTempoAt: 0.6 })],
+    ['a half-note beat unit', span({ beatLength: 0.5, transitionTo: 100, meanTempoAt: 0.35 })],
+    ['@meanTempoAt="0", which resolves to a constant at the target', span({ transitionTo: 90, meanTempoAt: 0 })],
+    ['a @transition.to with no @meanTempoAt, which resolves to a linear ramp', span({ transitionTo: 90 })],
 ]
 
 /**
@@ -96,7 +95,7 @@ describe('dateAtMilliseconds inverts millisecondsAt', () => {
      */
     test('a time before the span is placed at the tempo the span departs from', () => {
         for (const meanTempoAt of [0.3, 0.5, 0.75]) {
-            const resolved = resolveSpan(span({ 'transition.to': 90, meanTempoAt }))
+            const resolved = resolveSpan(span({ transitionTo: 90, meanTempoAt }))
             expect(dateAtMilliseconds(-200, resolved)).toBeCloseTo(START - 144, 9)
         }
     })
@@ -107,7 +106,7 @@ describe('dateAtMilliseconds inverts millisecondsAt', () => {
      * resolution. `msToTicks` used to read the attribute straight off the record.
      */
     test('a time after the span is placed at the tempo the span arrives at', () => {
-        const resolved = resolveSpan(span({ 'transition.to': 120, meanTempoAt: 0.4 }))
+        const resolved = resolveSpan(span({ transitionTo: 120, meanTempoAt: 0.4 }))
         const spanMs = millisecondsAt(resolved.endDate, resolved)
         // 200 ms at 120 bpm with a quarter-note beat is 288 ticks.
         expect(dateAtMilliseconds(spanMs + 200, resolved)).toBeCloseTo(resolved.endDate + 288, 6)
@@ -119,7 +118,7 @@ describe('dateAtMilliseconds inverts millisecondsAt', () => {
      * multiplier above 2 in absolute value and walks away from the answer.
      */
     test('a tempo slow enough to make the old fixed step diverge', () => {
-        const resolved = resolveSpan(span({ bpm: 2, 'transition.to': 3, meanTempoAt: 0.6 }))
+        const resolved = resolveSpan(span({ bpm: 2, transitionTo: 3, meanTempoAt: 0.6 }))
         const date = dateAtMilliseconds(5000, resolved)
         expect(millisecondsAt(date, resolved)).toBeCloseTo(5000, 6)
     })
@@ -131,7 +130,7 @@ describe('dateAtMilliseconds inverts millisecondsAt', () => {
      * nothing exited as though it had converged and returned its untouched initial guess.
      */
     test('an unknown time gives NaN rather than a plausible tick', () => {
-        const resolved = resolveSpan(span({ 'transition.to': 90, meanTempoAt: 0.3 }))
+        const resolved = resolveSpan(span({ transitionTo: 90, meanTempoAt: 0.3 }))
         expect(dateAtMilliseconds(NaN, resolved)).toBeNaN()
         expect(dateAtMilliseconds(Infinity, resolved)).toBeNaN()
     })
@@ -188,7 +187,7 @@ describe('millisecondsAt is defined everywhere and increases', () => {
  * `TempoMap.renderTempoToMap`. Doing both keeps the two in step.
  */
 test('getTempoAt clamps to the span rather than continuing the curve past it', () => {
-    const tempo = span({ 'transition.to': 90, meanTempoAt: 0.3 })
+    const tempo = span({ transitionTo: 90, meanTempoAt: 0.3 })
 
     expect(getTempoAt(tempo.date - 1000, tempo)).toBe(60)
     expect(getTempoAt(tempo.date, tempo)).toBe(60)

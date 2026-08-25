@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { expect, test } from "vitest"
+import { FrameDomain } from "espressivo"
 import { MSM } from "../../src/msm"
-import { MPM, Ornament, Tempo } from "../../src/mpm"
+import { InstructionOptions, MPM, OrnamentDraft, ornamentDraftOf, setOrnamentDraft } from "../../src/mpm"
 import { TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
 import { deriveResidual } from "../../src/residual"
 
@@ -60,13 +61,12 @@ const msmFixture = new MSM(
 // lives. This transformer no longer touches the score at all.
 test('at 60bpm a recorded onset lands on the tick the beat length implies', () => {
     const mpm = new MPM()
-    mpm.insertInstructions([{
-        'xml:id': 'tempo_el',
-        type: 'tempo',
+    mpm.insertInstructions('tempo', [{
+        id: 'tempo_el',
         bpm: 60,
         beatLength: 0.25,
         date: 0
-    } as Tempo], 'global')
+    }], 'global')
 
     const residual = deriveResidual(msmFixture, mpm)
 
@@ -84,37 +84,30 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     ], { numerator: 4, denominator: 4 })
 
     const mpm = new MPM()
-    mpm.insertInstructions([{
-        type: 'tempo',
+    mpm.insertInstructions('tempo', [{
         date: 0,
-        'xml:id': 'tempo_1',
+        id: 'tempo_1',
         beatLength: 0.25,
         bpm: 60,
-    }] as Tempo[], 'global')
+    }], 'global')
 
-    const physicalArpeggios: Ornament[] = [
-        {
-            type: 'ornament',
-            date: 720,
-            'xml:id': 'ornament_720',
-            "frame.start": -50,
-            frameLength: 100,
-            'time.unit': 'milliseconds',
-            'note.order': 'ascending pitch',
-            'name.ref': 'arpeggio'
-        },
-        {
-            type: 'ornament',
-            date: 1440,
-            'xml:id': 'ornament_1440',
-            "frame.start": -25,
-            frameLength: 50,
-            'time.unit': 'milliseconds',
-            'note.order': 'ascending pitch',
-            'name.ref': 'arpeggio'
-        }
+    // The frame is not an `<ornament>` attribute — it describes the `<temporalSpread>` of the def
+    // the `@name.ref` points at, and until `StylizeOrnamentation` builds that def it is parked on
+    // the element as a draft. So the fixture is written in two halves, the instruction and the
+    // draft, which is exactly how `InsertTemporalSpread` writes one.
+    const physicalArpeggios: [InstructionOptions<'ornament'>, OrnamentDraft][] = [
+        [
+            { date: 720, id: 'ornament_720', noteOrder: 'ascending pitch', nameRef: 'arpeggio' },
+            { frameStart: -50, frameLength: 100, frameDomain: FrameDomain.Milliseconds },
+        ],
+        [
+            { date: 1440, id: 'ornament_1440', noteOrder: 'ascending pitch', nameRef: 'arpeggio' },
+            { frameStart: -25, frameLength: 50, frameDomain: FrameDomain.Milliseconds },
+        ]
     ]
-    mpm.insertInstructions(physicalArpeggios, 'global')
+    for (const [options, draft] of physicalArpeggios) {
+        setOrnamentDraft(mpm.insertInstruction('ornament', options, 'global').element, draft)
+    }
 
     // Act
     const translate = new TranslatePhysicalTimeToTicks({
@@ -123,8 +116,9 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     callTransform(translate, msm, mpm)
 
     // Assert
-    const transformed = mpm.getInstructions('ornament', 'global')
-    expect(transformed.every(arpeggio => arpeggio["time.unit"] === 'ticks')).toBeTruthy()
-    expect(transformed.map(a => a["frame.start"])).toEqual([-36, -18])
-    expect(transformed.map(a => a.frameLength)).toEqual([72, 36])
+    const drafts = mpm.getInstructions('ornament', 'global')
+        .map(arpeggio => ornamentDraftOf(arpeggio.element))
+    expect(drafts.every(draft => draft.frameDomain === FrameDomain.Ticks)).toBeTruthy()
+    expect(drafts.map(d => d.frameStart)).toEqual([-36, -18])
+    expect(drafts.map(d => d.frameLength)).toEqual([72, 36])
 })

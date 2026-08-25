@@ -1,12 +1,12 @@
-import { MPM, Ornament } from "../../mpm"
+import { MPM, setOrnamentDraft } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 
 /**
- * The velocity ramp across an arpeggio, in the normalized units an `<ornament>`'s
- * `transition.from`/`transition.to` use. Named apart from the MPM `dynamicsGradient` element
- * of `mpm/types.ts`, which it is fitted into but is not.
+ * The velocity ramp across an arpeggio, in the normalized units a `<dynamicsGradient>`'s
+ * `transition.from`/`transition.to` use. Named apart from espressivo's `DynamicsGradient`, the
+ * `<ornamentDef>` child it is fitted into but is not.
  */
 export type GradientRange = { from: number, to: number }
 export type DatedGradientRange = Map<number, GradientRange>
@@ -108,16 +108,20 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
         if (scale === 0) return
 
-        const ornament: Ornament = {
-            'type': 'ornament',
-            'xml:id': generateId('ornament', date, mpm),
+        const ornament = mpm.insertInstruction('ornament', {
+            id: generateId('ornament', date, mpm),
             date,
-            'name.ref': 'neutralArpeggio',
-            'transition.from': gradient.from,
-            'transition.to': gradient.to,
+            nameRef: 'neutralArpeggio',
             scale
-        }
-        mpm.insertInstruction(ornament, this.options.scope)
+        }, this.options.scope)
+
+        // The ramp's two ends belong on the `<dynamicsGradient>` of the def this ornament will
+        // come to name, and MPM has no place for them on the instruction. They travel parked on
+        // the element until `StylizeOrnamentation` decides which ornaments share a definition.
+        setOrnamentDraft(ornament.element, {
+            transitionFrom: gradient.from,
+            transitionTo: gradient.to
+        })
 
         arpeggioNotes.forEach(note => {
             note['midi.velocity'] = standard

@@ -1,4 +1,5 @@
-import { MPM, Rubato } from "../../mpm"
+import type { AddRubatoOptions } from "espressivo"
+import { MPM } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp } from "../../utils/utils"
@@ -103,9 +104,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
         const intensity = determineIntensity(scaledDates)
 
-        const rubato: Rubato = {
-            type: 'rubato',
-            'xml:id': generateId('rubato', frame.date, mpm),
+        const rubato: AddRubatoOptions = {
+            id: generateId('rubato', frame.date, mpm),
             date: frame.date,
             frameLength: frame.length,
             intensity,
@@ -113,7 +113,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             lateStart,
         }
 
-        mpm.insertInstruction(rubato, this.options.scope)
+        mpm.insertInstruction('rubato', rubato, this.options.scope)
     }
 
 }

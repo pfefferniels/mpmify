@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { performMsmToData } from "espressivo"
-import { MPM, ArticulationDef } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
 import { InsertDynamicsInstructions } from "../../src/transformers/dynamics"

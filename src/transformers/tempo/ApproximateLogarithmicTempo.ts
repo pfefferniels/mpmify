@@ -1,6 +1,6 @@
 import { v4 } from "uuid";
 import type { Tempo as ResolvedTempo } from "espressivo";
-import { MPM, Scope, Tempo } from "../../mpm";
+import { Instruction, InstructionOptions, MPM, Scope } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
@@ -182,8 +182,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // field, not an MPM attribute; it used to be written into the document. See old-bugs.md.
         for (const fitted of tempos) {
             const { endDate: _fittingWindow, ...tempo } = fitted;
-            tempo['xml:id'] = generateId('tempo', tempo.date, mpm);
-            mpm.insertInstruction(tempo, this.options?.scope, true);
+            mpm.insertInstruction(
+                'tempo',
+                { ...tempo, id: generateId('tempo', tempo.date, mpm) },
+                this.options.scope,
+                true
+            );
         }
 
         // When using continue, removeAffectedTempoInstructions may restore a
@@ -215,15 +219,14 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
      * left alone.
      */
     private closeTransition(mpm: MPM, last: TempoWithEndDate) {
-        const target = last['transition.to'];
+        const target = last.transitionTo;
         if (target === undefined || last.endDate <= last.date) return;
 
         const existing = mpm.getInstructions('tempo', this.options.scope);
         if (existing.some(tempo => tempo.date === last.endDate)) return;
 
-        mpm.insertInstruction({
-            type: 'tempo',
-            'xml:id': generateId('tempo', last.endDate, mpm),
+        mpm.insertInstruction('tempo', {
+            id: generateId('tempo', last.endDate, mpm),
             date: last.endDate,
             bpm: target,
             beatLength: last.beatLength
@@ -257,7 +260,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         const isCovered = (date: number) =>
             sortedRanges.some(range => date >= range.from && date < range.to);
 
-        const restoreAtBoundaries: Tempo[] = [];
+        const restoreAtBoundaries: InstructionOptions<'tempo'>[] = [];
         for (const range of sortedRanges) {
             const boundary = range.to;
 
@@ -282,8 +285,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
             const bpmAtBoundary = getTempoAt(boundary, tempoWithEndDate);
 
             restoreAtBoundaries.push({
-                type: 'tempo',
-                'xml:id': `tempo_${v4()}`,
+                id: `tempo_${v4()}`,
                 date: boundary,
                 beatLength: effectiveTempo.beatLength,
                 bpm: bpmAtBoundary
@@ -297,8 +299,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         }
 
         for (const tempo of restoreAtBoundaries) {
-            tempo['xml:id'] = generateId('tempo', tempo.date, mpm);
-            mpm.insertInstruction(tempo, scope, false);
+            mpm.insertInstruction(
+                'tempo',
+                { ...tempo, id: generateId('tempo', tempo.date, mpm) },
+                scope,
+                false
+            );
         }
     }
 }
@@ -346,7 +352,7 @@ function reconstructChain(mpm: MPM, scope: Scope, from: number, beatLength: numb
     return chain;
 }
 
-const findEffectiveTempoIndex = (tempos: Tempo[], date: number): number => {
+const findEffectiveTempoIndex = (tempos: Instruction<'tempo'>[], date: number): number => {
     let found = -1;
     for (let i = 0; i < tempos.length; i++) {
         if (tempos[i].date <= date) found = i;
@@ -445,8 +451,7 @@ function fitSegments(
         const distTicks = onsetPairs[onsetPairs.length - 1].date - onsetPairs[0].date;
         const bpm = 60000 * distTicks / (elapsed * beatLengthTicks);
         return chainSegments.map(seg => ({
-            type: 'tempo' as const,
-            'xml:id': `tempo_${v4()}`,
+            id: `tempo_${v4()}`,
             bpm, date: seg.from, endDate: seg.to, beatLength
         }));
     }
@@ -532,15 +537,14 @@ function fitSegments(
         const hasTransition = Math.abs(bestTau[k] - bestTau[k + 1]) > 0.01;
 
         const t: TempoWithEndDate = {
-            type: 'tempo',
-            'xml:id': `tempo_${v4()}`,
+            id: `tempo_${v4()}`,
             bpm: bestTau[k],
             date: chainSegments[k].from,
             endDate: chainSegments[k].to,
             beatLength,
             ...(hasTransition
                 ? {
-                    'transition.to': bestTau[k + 1],
+                    transitionTo: bestTau[k + 1],
                     // Keep the optimized segment shape, so chain-level smoothing
                     // survives into the exported meanTempoAt parameter.
                     meanTempoAt: bestShapes[k]
@@ -856,13 +860,11 @@ function segmentCurve(
     tau0: number, tau1: number, im: number, spanTicks: number, beatLength: number
 ): ResolvedTempo {
     return resolveSpan({
-        type: 'tempo',
-        'xml:id': '',
         date: 0,
         endDate: spanTicks,
         beatLength,
         bpm: tau0,
-        'transition.to': tau1,
+        transitionTo: tau1,
         meanTempoAt: im
     });
 }

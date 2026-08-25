@@ -2,9 +2,22 @@
 
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { Articulation, ArticulationDef, MPM, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { MakeDefaultArticulation } from "../../src/transformers/articulation/MakeDefaultArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
+
+/**
+ * The `@name.ref` the hand-built articulations below carry, naming no `<articulationDef>` that
+ * exists.
+ *
+ * These fixtures are about an articulation that states its own `@relativeDuration` and
+ * `@relativeVelocity` and inherits nothing, which is what they used to say by carrying no
+ * `@name.ref` at all. That spelling is no longer available: `@name.ref` is required by
+ * `AddArticulationOptions`, and an `<articulation>` without one reads back as no instruction.
+ * Naming a def that was never defined says the same thing — `StylizeArticulation` looks it up,
+ * finds nothing, and falls back to the two values on the instruction, exactly as before.
+ */
+const UNRESOLVED = 'measured'
 
 /**
  * A note that was played for `tickDuration` ticks.
@@ -30,9 +43,7 @@ const note = (id: string, date: number, pitch: number, tickDuration: number): Ms
 /** The tempo those recorded seconds are read against. */
 const atSixtyBpm = () => {
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
     return mpm
 }
 
@@ -58,14 +69,14 @@ test('MakeDefaultArticulation excludes the notes a date-scoped <articulation> al
     ], { numerator: 4, denominator: 4 })
 
     const mpm = atSixtyBpm()
-    mpm.insertInstruction({
-        type: 'articulation', 'xml:id': 'articulation_0', date: 0, 'name.ref': 'explicit',
-    } as Articulation, 'global')
+    mpm.insertInstruction('articulation', {
+        id: 'articulation_0', date: 0, nameRef: 'explicit',
+    }, 'global')
 
     callTransform(new MakeDefaultArticulation({ scope: 'global' }), msm, mpm)
 
-    const def = mpm.getDefinition('articulationDef', 'default articulation') as ArticulationDef
-    expect(def.relativeDuration).toBeCloseTo(1, 10)
+    const def = mpm.getDefinition('articulationDef', 'default articulation')
+    expect(def!.getRelativeDuration()).toBeCloseTo(1, 10)
 })
 
 test('StylizeArticulation tells the notes of a chord apart', () => {
@@ -81,20 +92,20 @@ test('StylizeArticulation tells the notes of a chord apart', () => {
     ], { numerator: 4, denominator: 4 })
 
     const mpm = atSixtyBpm()
-    mpm.insertInstructions([
+    mpm.insertInstructions('articulation', [
         {
-            type: 'articulation', 'xml:id': 'articulation_0', date: 0, noteid: '#n0',
+            id: 'articulation_0', date: 0, noteid: '#n0', nameRef: UNRESOLVED,
             relativeDuration: 2, relativeVelocity: 1,
         },
         {
-            type: 'articulation', 'xml:id': 'articulation_0_1', date: 0, noteid: '#n1',
+            id: 'articulation_0_1', date: 0, noteid: '#n1', nameRef: UNRESOLVED,
             relativeDuration: 2, relativeVelocity: 1,
         },
         {
-            type: 'articulation', 'xml:id': 'articulation_720', date: 720, noteid: '#n2',
+            id: 'articulation_720', date: 720, noteid: '#n2', nameRef: UNRESOLVED,
             relativeDuration: 2, relativeVelocity: 1,
         },
-    ] as Articulation[], 'global')
+    ], 'global')
 
     callTransform(new StylizeArticulation({ volumeTolerance: 0.01, relativeDurationTolerance: 0.2 }), msm, mpm)
 
@@ -102,9 +113,10 @@ test('StylizeArticulation tells the notes of a chord apart', () => {
         .getInstructions('articulation', 'global')
         .find(a => a.noteid === id)
 
-    // The lower note is the conflict, and keeps what it measured.
+    // The lower note is the conflict, and keeps what it measured: still its own
+    // `@relativeDuration`, and still pointing at nothing rather than at the cluster's def.
     expect(byNote('#n0')).toBeDefined()
-    expect(byNote('#n0')!['name.ref']).toBeUndefined()
+    expect(byNote('#n0')!.nameRef).toBe(UNRESOLVED)
     expect(byNote('#n0')!.relativeDuration).toBe(2)
 
     // The upper one joined the cluster that became the default, and the style now says so on
@@ -132,10 +144,10 @@ test('a chain running both transformers leaves exactly one <style> in the articu
     ], { numerator: 4, denominator: 4 })
 
     const mpm = atSixtyBpm()
-    mpm.insertInstructions(([0, 720, 1440, 2160]).map((date, i) => ({
-        type: 'articulation', 'xml:id': `articulation_${i}`, date, noteid: `#n${i}`,
+    mpm.insertInstructions('articulation', ([0, 720, 1440, 2160]).map((date, i) => ({
+        id: `articulation_${i}`, date, noteid: `#n${i}`, nameRef: UNRESOLVED,
         relativeDuration: 0.5, relativeVelocity: 1,
-    })) as Articulation[], 'global')
+    })), 'global')
 
     callTransform(new StylizeArticulation({ volumeTolerance: 0.01, relativeDurationTolerance: 0.2 }), msm, mpm)
     callTransform(new MakeDefaultArticulation(), msm, mpm)

@@ -1,4 +1,4 @@
-import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM } from "../../mpm";
+import { AccentuationPatternDef, definitionOf, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
@@ -18,6 +18,22 @@ export interface InsertMetricalAccentuationOptions extends ScopedTransformationO
 type Velocity = {
     beat: number
     avgVelocityChange: number
+}
+
+/**
+ * One fitted accentuation, before it is an `<accentuation>` child of anything.
+ *
+ * espressivo's `AccentuationPatternDef.addAccentuation` takes the four numbers positionally and
+ * owns the element from then on, so the fit passes this record around and the def is built in
+ * exactly one place ({@link InsertMetricalAccentuation.buildDef}). `id` is optional because the
+ * neutral pattern's single accentuation has never carried one.
+ */
+type FittedAccentuation = {
+    id?: string
+    beat: number
+    value: number
+    transitionFrom: number
+    transitionTo: number
 }
 
 export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetricalAccentuationOptions> {
@@ -68,7 +84,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         return Math.max(...velocities.map(v => Math.abs(v.avgVelocityChange)))
     }
 
-    private calculateAccentuations(velocities: Velocity[], neutralEnd?: boolean): Accentuation[] {
+    private calculateAccentuations(velocities: Velocity[], neutralEnd?: boolean): FittedAccentuation[] {
         const scale = this.calculateScale(velocities)
         if (scale === 0) return []
 
@@ -83,32 +99,45 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
                 const scaled = v.avgVelocityChange / scale
                 return ({
-                    type: 'accentuation' as const,
-                    'xml:id': 'accentuation_' + v4(),
+                    id: 'accentuation_' + v4(),
                     beat: v.beat,
                     value: scaled,
-                    'transition.from': scaled,
-                    'transition.to': transitionTo
+                    transitionFrom: scaled,
+                    transitionTo
                 })
             })
             .filter(a => a !== null)
     }
 
+    /** An `accentuationPatternDef` carrying these accentuations. */
+    private buildDef(
+        name: string,
+        length: number,
+        accentuations: readonly FittedAccentuation[],
+    ): AccentuationPatternDef {
+        const def = definitionOf(AccentuationPatternDef.fromNameLength(name, length))
+        for (const accentuation of accentuations) {
+            def.addAccentuation(
+                accentuation.beat,
+                accentuation.value,
+                accentuation.transitionFrom,
+                accentuation.transitionTo,
+                accentuation.id,
+            )
+        }
+        return def
+    }
+
     protected transform(msm: MSM, mpm: MPM) {
-        if (!mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', this.options.scope)
-            .find(def => def.name === 'neutral')) {
-            mpm.insertDefinition({
-                type: 'accentuationPatternDef',
-                name: 'neutral',
-                length: 0.25,
-                children: [{
-                    type: 'accentuation',
-                    beat: 1,
-                    value: 0,
-                    "transition.from": 0,
-                    "transition.to": 0
-                }]
-            }, this.options.scope)
+        if (!mpm.getDefinitions('accentuationPatternDef', this.options.scope)
+            .find(def => def.getName() === 'neutral')) {
+            mpm.insertDefinition(
+                'accentuationPatternDef',
+                this.buildDef('neutral', 0.25, [
+                    { beat: 1, value: 0, transitionFrom: 0, transitionTo: 0 }
+                ]),
+                this.options.scope
+            )
         }
 
         const cell = {
@@ -193,32 +222,28 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             acceptedThrough = currentCell.end
         }
 
-        const accentuationPatternDef: AccentuationPatternDef = {
-            type: 'accentuationPatternDef',
-            name: this.options.name,
-            length: ((cell.end - cell.start) / PULSES_PER_WHOLE) * (msm.timeSignature?.denominator || 4),
-            children: accentuations,
-        }
+        const accentuationPatternDef = this.buildDef(
+            this.options.name,
+            ((cell.end - cell.start) / PULSES_PER_WHOLE) * (msm.timeSignature?.denominator || 4),
+            accentuations,
+        )
 
-        mpm.insertDefinition(accentuationPatternDef, this.options.scope)
+        mpm.insertDefinition('accentuationPatternDef', accentuationPatternDef, this.options.scope)
 
         const loop = acceptedThrough > cell.end
-        const newPattern: AccentuationPattern = {
-            type: 'accentuationPattern',
-            'name.ref': accentuationPatternDef.name,
-            "xml:id": generateId('accentuationPattern', cell.start, mpm),
+        mpm.insertInstruction('accentuationPattern', {
+            accentuationPatternDefName: accentuationPatternDef.getName(),
+            id: generateId('accentuationPattern', cell.start, mpm),
             date: cell.start,
             scale,
             loop: loop || undefined,
-        }
-        mpm.insertInstruction(newPattern, this.options.scope)
+        }, this.options.scope)
 
         if (loop) {
-            mpm.insertInstruction({
-                type: 'accentuationPattern',
-                'name.ref': 'neutral',
+            mpm.insertInstruction('accentuationPattern', {
+                accentuationPatternDefName: 'neutral',
                 date: acceptedThrough,
-                "xml:id": generateId('accentuationPattern', acceptedThrough, mpm),
+                id: generateId('accentuationPattern', acceptedThrough, mpm),
                 scale: 0,
                 loop: undefined
             }, this.options.scope)
@@ -226,51 +251,5 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
 
         mpm.ensureDefaultStyle('accentuationPattern', this.options.scope)
-    }
-
-
-    private accentuationAt(beat: number, def: AccentuationPatternDef): number {
-        // Read once. Every `def.children` access re-reads the child elements and hands back a
-        // *new* array (see `mpm/view.ts`), so sorting the property sorted a throwaway and each
-        // read below got the document order back. Nothing downstream saw a sorted pattern.
-        const children = [...def.children].sort((a, b) => a.beat - b.beat)
-
-        if (children.length === 0) {
-            return 0
-        }
-
-        if (beat < children[0].beat) {
-            return 0
-        }
-        if (beat >= def.length + 1) {
-            const last = children[children.length - 1]
-            const result = last["transition.to"] || last.value;
-            return result;
-        }
-
-        let selectedAccent: Accentuation | undefined;
-        let segmentEnd: number = def.length + 1;
-
-        // Traverse the accentuations in reverse order
-        for (let i = children.length - 1; i >= 0; --i) {
-            const accent = children[i];
-            if (beat === accent.beat) {
-                return accent.value;
-            }
-
-            if (beat > accent.beat) {
-                selectedAccent = accent;
-                if (i < children.length - 1) {
-                    // There is a subsequent accentuation; set its beat as the segment end
-                    segmentEnd = children[i + 1].beat;
-                }
-                break;
-            }
-        }
-
-        const result = (((beat - selectedAccent!.beat) *
-            ((selectedAccent!["transition.to"] - selectedAccent!["transition.from"]))) /
-            (segmentEnd - selectedAccent!.beat)) + selectedAccent!["transition.from"];
-        return result;
     }
 }

@@ -1,13 +1,32 @@
-import { Articulation, ArticulationDef, MPM, Scope } from "../../mpm";
+import { ArticulationDef, Instruction, MPM, Scope } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dbscan, IPoint } from "../../utils/dbscan";
-import { InsertArticulation } from "./InsertArticulation";
+import { InsertArticulation, makeArticulationDef } from "./InsertArticulation";
 import { deriveResidual, Residual } from "../../residual";
+
+type Articulation = Instruction<'articulation'>
 
 interface StylizeArticulationOptions extends TransformationOptions {
     volumeTolerance: number
     relativeDurationTolerance: number
+}
+
+/**
+ * What an `<articulationDef>` *states* about one modifier, or `undefined` where it states
+ * nothing.
+ *
+ * espressivo's getters cannot answer this, and deliberately so: they report what the renderer
+ * will do, so a def that mentions no duration reads back as `getRelativeDuration() === 1.0` and
+ * one that mentions no absolute duration as `getAbsoluteDuration() === null`. Silence is exactly
+ * the distinction this transformer turns on — an articulation whose def states no relative pair
+ * has no position in the clustering space, and one whose def states an absolute attribute is no
+ * candidate for a shared def at all, since the defs written here carry only the relative two.
+ * So the attribute is read off the element, which is the only place absence is still absence.
+ */
+const statedNumber = (def: ArticulationDef | null, modifier: string): number | undefined => {
+    const value = def?.getXml().getAttributeValue(modifier)
+    return value === null || value === undefined ? undefined : parseFloat(value)
 }
 
 /**
@@ -47,24 +66,21 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
      *
      * Reading the instruction alone made this transformer a no-op in the very chain it exists
      * for (issue #25). `InsertArticulation` — the transformer it `requires`, and the only one
-     * that writes `<articulation>` — folds the values it measured into a def and blanks them on
-     * every instruction before inserting it, so both attributes read here were `undefined` for
+     * that writes `<articulation>` — folds the values it measured into a def and states no
+     * modifier on the instruction at all, so both attributes read here were `undefined` for
      * all of them, `Math.abs(undefined - x)` was NaN, and `NaN <= epsilon` put every point in
      * nobody's neighbourhood: no cluster, no def, no default, nothing written. The values were
      * never lost, only moved one reference away, which is where they are read from now.
      */
     private effectiveOf(articulation: Articulation, mpm: MPM): EffectiveArticulation {
-        const name = articulation['name.ref']
-        const def = name !== undefined
-            ? mpm.getDefinition('articulationDef', name) as ArticulationDef | null
-            : null
+        const def = mpm.getDefinition('articulationDef', articulation.nameRef)
 
         return {
-            relativeDuration: articulation.relativeDuration ?? def?.relativeDuration,
-            relativeVelocity: articulation.relativeVelocity ?? def?.relativeVelocity,
+            relativeDuration: articulation.relativeDuration ?? statedNumber(def, 'relativeDuration'),
+            relativeVelocity: articulation.relativeVelocity ?? statedNumber(def, 'relativeVelocity'),
             absolute:
-                (articulation.absoluteDuration ?? def?.absoluteDuration) !== undefined
-                || (articulation.absoluteDurationChange ?? def?.absoluteDurationChange) !== undefined,
+                (articulation.absoluteDuration ?? statedNumber(def, 'absoluteDuration')) !== undefined
+                || (articulation.absoluteDurationChange ?? statedNumber(def, 'absoluteDurationChange')) !== undefined,
         }
     }
 
@@ -171,16 +187,16 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         const referenced = new Set<string>()
         for (const one of mpm.scopes()) {
             for (const articulation of mpm.getInstructions('articulation', one)) {
-                if (articulation['name.ref'] !== undefined) referenced.add(articulation['name.ref'])
+                referenced.add(articulation.nameRef)
             }
             for (const style of mpm.getStyles('articulation', one)) {
                 if (style.defaultArticulation !== undefined) referenced.add(style.defaultArticulation)
             }
         }
 
-        mpm.getDefinitions<ArticulationDef>('articulationDef', scope)
-            .filter(def => previouslyReferenced.has(def.name) && !referenced.has(def.name))
-            .forEach(def => mpm.removeDefinition(def))
+        mpm.getDefinitions('articulationDef', scope)
+            .filter(def => previouslyReferenced.has(def.getName()) && !referenced.has(def.getName()))
+            .forEach(def => mpm.removeDefinition('articulationDef', def))
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -197,11 +213,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
             // Taken before anything is rewritten: what these articulations inherited from is
             // the only thing this transformer can orphan.
-            const previouslyReferenced = new Set(
-                articulations
-                    .map(a => a['name.ref'])
-                    .filter((name): name is string => name !== undefined)
-            )
+            const previouslyReferenced = new Set(articulations.map(a => a.nameRef))
 
             const clusters: [string, IPoint[]][] = Object
                 .entries(Object.groupBy(points, p => p.label))
@@ -209,19 +221,17 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                 .map(([label, cluster = []]) => [label, cluster])
 
             const defs = new Map<string, ArticulationDef>(clusters
-                .map(([label, cluster]) => {
+                .map(([label, cluster]): [string, ArticulationDef] => {
                     const relativeDuration = cluster.reduce((acc, p) => acc + p.value[0], 0) / cluster.length
                     const relativeVelocity = cluster.reduce((acc, p) => acc + p.value[1], 0) / cluster.length
 
-                    return [label, {
-                        type: 'articulationDef',
-                        name: `def_${label}`,
+                    return [label, makeArticulationDef(`def_${label}`, {
                         relativeDuration,
                         relativeVelocity
-                    }]
+                    })]
                 }))
 
-            mpm.insertDefinitions([...defs.values()], scope)
+            for (const def of defs.values()) mpm.insertDefinition('articulationDef', def, scope)
 
             const labeledArticulations = points.reduce<Record<number, Articulation[]>>((acc, p, i) => {
                 if (p.label === -1) return acc
@@ -232,7 +242,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
             const conflictList = []
             for (const [label, cluster] of Object.entries(labeledArticulations)) {
-                const meanRelativeDuration = defs.get(label)?.relativeDuration
+                const meanRelativeDuration = defs.get(label)?.getRelativeDuration()
                 if (meanRelativeDuration === undefined) continue
                 conflictList.push(...this.findConflicts(msm.allNotes, cluster, meanRelativeDuration, residual))
             }
@@ -241,9 +251,13 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                 if (conflictList.includes(articulations[i])) continue
                 if (points[i].label === -1) continue
 
-                articulations[i]["name.ref"] = `def_${points[i].label}`
-                articulations[i].relativeDuration = undefined
-                articulations[i].relativeVelocity = undefined
+                // What it articulates is the cluster's def from here on, so the two values it
+                // states itself are removed rather than left to override it.
+                mpm.updateInstruction(articulations[i], {
+                    nameRef: `def_${points[i].label}`,
+                    relativeDuration: undefined,
+                    relativeVelocity: undefined,
+                })
             }
 
             // Find default articulation
@@ -256,7 +270,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
             if (bestCluster) {
                 const defName = `def_${bestCluster[0]}`
                 mpm.getInstructions('articulation', scope)
-                    .filter(a => a["name.ref"] === defName)
+                    .filter(a => a.nameRef === defName)
                     .forEach(a => mpm.removeInstruction(a))
 
                 mpm.ensureDefaultStyle('articulation', scope, { defaultArticulation: defName })

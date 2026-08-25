@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { AccentuationPatternDef, Dynamics, MPM, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { InsertMetricalAccentuation } from "../../src/transformers/accentuation"
 import { PULSES_PER_QUARTER } from "../../src/ppq"
 
@@ -70,12 +70,8 @@ const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
     const msm = new MSM(notes, { numerator: 4, denominator: 4 })
 
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 120, beatLength: 0.25,
-    }, 'global')
-    mpm.insertInstruction<Dynamics>({
-        type: 'dynamics', 'xml:id': 'd1', date: 0, volume: VOLUME,
-    }, 'global')
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global')
+    mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: VOLUME }, 'global')
 
     return { msm, mpm }
 }
@@ -96,7 +92,7 @@ const run = (msm: MSM, mpm: MPM, scaleTolerance: number) => {
 
 const fitted = (mpm: MPM) => mpm
     .getInstructions('accentuationPattern', 'global')
-    .find(p => p["name.ref"] === 'metre')!
+    .find(p => p.accentuationPatternDefName === 'metre')!
 
 describe('the fixture drives the loop it claims to', () => {
     // Everything below reads `@scale` as a mean over a known set of bars. That only means
@@ -111,14 +107,17 @@ describe('the fixture drives the loop it claims to', () => {
 
         // The neutral pattern closing the loop marks where the fold stopped: after bar 3.
         const neutral = mpm.getInstructions('accentuationPattern', 'global')
-            .find(p => p["name.ref"] === 'neutral')!
+            .find(p => p.accentuationPatternDefName === 'neutral')!
         expect(neutral.date).toBe(12 * PULSES_PER_QUARTER)
 
         // The definition is the prototype's shape, normalised by the prototype's own scale.
-        const def = mpm.getDefinitions<AccentuationPatternDef>('accentuationPatternDef', 'global')
-            .find(d => d.name === 'metre')!
-        expect(def.children.map(a => a.beat)).toEqual([1, 2, 3, 4])
-        expect(def.children.map(a => a.value)).toEqual(SHAPE)
+        // Each accentuation is espressivo's `[beat, value, transition.from, transition.to]`
+        // tuple, so the first two slots are what the shape is read out of.
+        const def = mpm.getDefinitions('accentuationPatternDef', 'global')
+            .find(d => d.getName() === 'metre')!
+        const accentuations = def.getAllAccentuations().map(a => a.key)
+        expect(accentuations.map(([beat]) => beat)).toEqual([1, 2, 3, 4])
+        expect(accentuations.map(([, value]) => value)).toEqual(SHAPE)
     })
 })
 
@@ -172,7 +171,7 @@ describe('the scale tolerance is measured against the prototype', () => {
         expect(pattern.scale).toBe(12)
 
         const neutral = mpm.getInstructions('accentuationPattern', 'global')
-            .find(p => p["name.ref"] === 'neutral')!
+            .find(p => p.accentuationPatternDefName === 'neutral')!
         expect(neutral.date).toBe(12 * PULSES_PER_QUARTER)
     })
 
@@ -194,7 +193,7 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
     // the loop had validated, cancelling it.
     const neutralsIn = (mpm: MPM) => mpm
         .getInstructions('accentuationPattern', 'global')
-        .filter(p => p["name.ref"] === 'neutral')
+        .filter(p => p.accentuationPatternDefName === 'neutral')
 
     test('a piece ending on the bar line closes the loop after the last bar, not before it', () => {
         // Without the closing downbeat the last note fills bar 3, so `msm.end` is the bar line
@@ -218,10 +217,9 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
 
         // A second accentuation desk starting at bar 4 — the ordinary shape of two adjacent
         // desks, and what makes this exit reachable on a piece that does not end flush.
-        mpm.insertInstruction({
-            type: 'accentuationPattern',
-            'xml:id': 'next_desk',
-            'name.ref': 'other',
+        mpm.insertInstruction('accentuationPattern', {
+            id: 'next_desk',
+            accentuationPatternDefName: 'other',
             date: 12 * PULSES_PER_QUARTER,
             scale: 7,
         }, 'global')
@@ -239,8 +237,8 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
         expect(neutralsIn(mpm).filter(n => n.date < 12 * PULSES_PER_QUARTER)).toEqual([])
 
         const nextDesk = mpm.getInstructions('accentuationPattern', 'global')
-            .find(p => p["xml:id"] === 'next_desk')!
-        expect(nextDesk["name.ref"]).toBe('other')
+            .find(p => p.id === 'next_desk')!
+        expect(nextDesk.accentuationPatternDefName).toBe('other')
         expect(nextDesk.scale).toBe(7)
     })
 })
