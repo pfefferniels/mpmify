@@ -93,6 +93,12 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
 
             if (filteredOrnaments.length === 0 && gradientOnly.length === 0) continue
 
+            // Which ornaments this run actually gave a definition to. The cleanup below is
+            // restricted to these: an ornament that was skipped keeps its attributes, so it
+            // still describes something, rather than being emptied out while pointing at a
+            // definition that does not exist.
+            const defined = new Set<Ornament>()
+
             const clusters = this.generateClusters(filteredOrnaments)
 
             // Group points by label
@@ -107,7 +113,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             for (const label in clustersByLabel) {
                 const group = clustersByLabel[label]
                 if (label === "-1") {
-                    group.forEach(({ ornament }) => this.defineAndName(mpm, scope, ornament))
+                    group.forEach(({ ornament }) => this.defineAndName(mpm, scope, ornament, defined))
                     continue
                 }
 
@@ -124,16 +130,19 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                     const subgroup = subClustersByLabel[subLabel]
 
                     if (subLabel === "-1") {
-                        subgroup.forEach(ornament => this.defineAndName(mpm, scope, ornament))
+                        subgroup.forEach(ornament => this.defineAndName(mpm, scope, ornament, defined))
                     } else {
                         const def = this.mergedDef(subgroup, `def_${scope}_${label}_${subLabel}`)
                         mpm.insertDefinition(def, scope)
-                        subgroup.forEach(ornament => { ornament["name.ref"] = def.name })
+                        subgroup.forEach(ornament => {
+                            ornament["name.ref"] = def.name
+                            defined.add(ornament)
+                        })
                     }
                 }
             }
 
-            this.defineGradientOnly(mpm, scope, gradientOnly)
+            this.defineGradientOnly(mpm, scope, gradientOnly, defined)
 
             mpm.insertStyle({
                 date: 0,
@@ -142,16 +151,19 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 'name.ref': DEFAULT_STYLE_NAME,
             }, 'ornament', scope)
 
-            // Remove temporary fields from ornaments
-            ornaments.forEach(o => {
-                if (o["name.ref"]) {
-                    delete o['noteoff.shift']
-                    delete o['time.unit']
-                    delete o['transition.from']
-                    delete o['transition.to']
-                    delete o["frame.start"]
-                    delete o["frameLength"]
-                }
+            // The working attributes move into the definition, so they come off the
+            // instruction — but only for the ornaments that got one. This used to test
+            // `name.ref` for truthiness, which is true of an ornament that merely *arrived*
+            // carrying a reference: `InsertDynamicsGradient` writes `neutralArpeggio`, a name
+            // no definition ever has. Those were stripped of the gradient they were fitted with
+            // and left pointing at nothing.
+            defined.forEach(ornament => {
+                delete ornament['noteoff.shift']
+                delete ornament['time.unit']
+                delete ornament['transition.from']
+                delete ornament['transition.to']
+                delete ornament["frame.start"]
+                delete ornament["frameLength"]
             })
         }
     }
@@ -211,7 +223,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * definition each. Without this the whole family reached the document as `@name.ref`
      * pointing at nothing — well-formed, and silent.
      */
-    private defineGradientOnly(mpm: MPM, scope: Scope, ornaments: Ornament[]) {
+    private defineGradientOnly(mpm: MPM, scope: Scope, ornaments: Ornament[], defined: Set<Ornament>) {
         if (ornaments.length === 0) return
 
         const clusters = this.generateSubClusters(ornaments)
@@ -226,7 +238,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             const group = byLabel[label]
 
             if (label === "-1") {
-                group.forEach(ornament => this.defineAndName(mpm, scope, ornament))
+                group.forEach(ornament => this.defineAndName(mpm, scope, ornament, defined))
                 continue
             }
 
@@ -246,7 +258,10 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             }
 
             mpm.insertDefinition(def, scope)
-            group.forEach(ornament => { ornament["name.ref"] = def.name })
+            group.forEach(ornament => {
+                ornament["name.ref"] = def.name
+                defined.add(ornament)
+            })
         }
     }
 
@@ -299,7 +314,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * apart. An ornament whose frame did not survive translation gets neither: it keeps whatever
      * `@name.ref` it already had rather than gaining a dangling one.
      */
-    private defineAndName(mpm: MPM, scope: Scope, ornament: Ornament) {
+    private defineAndName(mpm: MPM, scope: Scope, ornament: Ornament, defined: Set<Ornament>) {
         const frameStart = ornament["frame.start"]
         const frameLength = ornament.frameLength
         const hasFrame = frameStart !== undefined && frameLength !== undefined
@@ -314,5 +329,6 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         const def = this.asDef(ornament)
         mpm.insertDefinition(def, scope)
         ornament["name.ref"] = def.name
+        defined.add(ornament)
     }
 }
