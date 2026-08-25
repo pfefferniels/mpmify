@@ -34,10 +34,18 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
     name = 'StylizeArticulation'
     requires = [InsertArticulation]
 
-    constructor(options?: StylizeArticulationOptions) {
+    /**
+     * `??`, not `||`: a tolerance of `0` is a legitimate request — it asks dbscan for exact
+     * matches only, which is the same thing the fourth dimension of
+     * `StylizeOrnamentation.generateClusters` already does deliberately. Under `||` it fell back
+     * to the default with nothing to indicate it (issue #33), which is a bad way to answer a
+     * caller who is asking for exact matches precisely because they are diagnosing this
+     * transformer.
+     */
+    constructor(options?: Partial<StylizeArticulationOptions>) {
         super({
-            volumeTolerance: options?.volumeTolerance || 0.01,
-            relativeDurationTolerance: options?.relativeDurationTolerance || 0.2,
+            volumeTolerance: options?.volumeTolerance ?? 0.01,
+            relativeDurationTolerance: options?.relativeDurationTolerance ?? 0.2,
         })
     }
 
