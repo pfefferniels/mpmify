@@ -1,4 +1,4 @@
-import { InstructionOptions, MPM, fillInAt, setOrnamentDraft } from "../../mpm"
+import { InstructionOptions, Mpm, fillInAt, requireMap, setOrnamentDraft } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
@@ -68,7 +68,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
      * its only bulk caller was already iterating exactly that map, so the whole score was
      * regrouped once per chord in it.
      */
-    private applyGradient = (mpm: MPM, date: number, chord: MsmNote[], gradient?: GradientRange) => {
+    private applyGradient = (mpm: Mpm, date: number, chord: MsmNote[], gradient?: GradientRange) => {
         let arpeggioNotes = chord
         if (arpeggioNotes.length === 0) return
 
@@ -110,7 +110,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
         // `fillInAt`, not `addOrnamentV3`: `InsertTemporalSpread` describes the other half of
         // this same `<ornament>`, and whichever runs second has to find the first's element.
-        const map = mpm.requireMap('ornament', this.options.scope)
+        const map = requireMap(mpm, 'ornament', this.options.scope)
         const options: InstructionOptions<'ornament'> = {
             id: generateId('ornament', date, mpm),
             date,
@@ -137,7 +137,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         const chords = msm.asChords(this.options?.scope)
 
         if (isSingleGradient(this.options)) {

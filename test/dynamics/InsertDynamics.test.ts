@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { Mpm, createMpm, exportMPM, getInstructions } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
 import { deriveResidual } from "../../src/residual"
 
@@ -43,12 +43,12 @@ const msmFixture = () => new MSM([
     { numerator: 3, denominator: 4 })
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: InsertDynamicsInstructions, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const callTransform = (transformer: InsertDynamicsInstructions, msm: MSM, mpm: Mpm) => {
+    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const run = (msm: MSM, mpm: MPM) => callTransform(new InsertDynamicsInstructions({
+const run = (msm: MSM, mpm: Mpm) => callTransform(new InsertDynamicsInstructions({
     scope: 'global',
     from: 0,
     to: msm.lastDate(),
@@ -57,11 +57,11 @@ const run = (msm: MSM, mpm: MPM) => callTransform(new InsertDynamicsInstructions
 
 test('it fits one <dynamics> across the range, from the first velocity to the last', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
-    const dynamics = mpm.getInstructions('dynamics', 'global')
+    const dynamics = getInstructions(mpm, 'dynamics', 'global')
     expect(dynamics[0].date).toBe(0)
     expect(dynamics[0].volume).toBe(50)
     expect(dynamics[0].transitionTo).toBe(100)
@@ -74,7 +74,7 @@ test('it fits one <dynamics> across the range, from the first velocity to the la
 
 test('the fitted curve explains the notes at both ends of its span exactly', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
@@ -92,12 +92,12 @@ test('the fitted curve explains the notes at both ends of its span exactly', () 
 
 test('the fitting window is not written into the document', () => {
     const msm = msmFixture()
-    const mpm = new MPM()
+    const mpm = createMpm()
 
     run(msm, mpm)
 
     // `endDate` is a working field of the fit, not an MPM attribute. See old-bugs.md.
-    expect(mpm.toXML()).not.toContain('endDate')
+    expect(exportMPM(mpm)).not.toContain('endDate')
 })
 
 

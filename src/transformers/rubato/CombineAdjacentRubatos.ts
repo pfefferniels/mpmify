@@ -1,4 +1,4 @@
-import { Instruction, MPM } from "../../mpm"
+import { getInstructions, Instruction, Mpm, removeInstruction, requireMap } from "../../mpm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { InsertRubato } from "./InsertRubato"
 import { MSM } from "../../msm"
@@ -35,13 +35,13 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        const rubatos = mpm.getInstructions('rubato', this.options.scope)
+    protected transform(msm: MSM, mpm: Mpm) {
+        const rubatos = getInstructions(mpm, 'rubato', this.options.scope)
         if (rubatos.length <= 1) return
 
         // The map every write below goes through. It exists — `getInstructions` just read
         // instructions out of it.
-        const map = mpm.requireMap('rubato', this.options.scope)
+        const map = requireMap(mpm, 'rubato', this.options.scope)
 
         const lastDate = msm.lastDate()
 
@@ -107,7 +107,7 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
                     const folded = map.getRubatoOptionsOf(index)
                     if (folded) ref = { ...folded, type: 'rubato', element: ref.element, scope: ref.scope }
 
-                    mpm.removeInstruction(current)
+                    removeInstruction(mpm, current)
                     rubatos.splice(rubatos.indexOf(current), 1)
                 } else {
                     stoppedAt = date
@@ -125,12 +125,10 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
             // that it found a frame it could not merge: that frame *is* what stops the loop, and
             // a neutral rubato beside it would be a second `<rubato>` at one date.
             //
-            // This used to fall out of `MPM.insertInstruction`, which merged into an instruction
-            // at the same `@date` rather than duplicating it. The merge was a no-op here — a
-            // frame already standing at that date carries `@date`, `@frameLength` and an
-            // `xml:id`, which is every field the closer names, and the merge left a field the
-            // existing instruction already had alone. espressivo's `addRubato` appends, so what
-            // was implicit in the writer has to be said here.
+            // espressivo's `addRubato` appends: it does not merge into an instruction already
+            // standing at the same `@date`, so the check has to be made here rather than left to
+            // the writer.
+            //
             // Asked of the MAP and not of `rubatos`: that array is the snapshot this pass
             // started from, and a closer written by an earlier pass of the outer loop is in the
             // document without being in it. Checking the stale copy wrote a second `<rubato>` at

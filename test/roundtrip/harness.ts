@@ -1,7 +1,7 @@
 import { performMsmToData } from "espressivo"
 import type { PerformanceData, PerformedNote } from "espressivo"
 import { MSM } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { createMpm, exportMPM, Mpm } from "../../src/mpm"
 import { Transformer } from "../../src/transformers/Transformer"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
@@ -107,7 +107,7 @@ export interface RoundTripResult {
     truthPerformance: PerformanceData
     /** The MSM the chain was given: the score, carrying the truth's performance. */
     performed: MSM
-    fitted: MPM
+    fitted: Mpm
     fittedXml: string
     refitPerformance: PerformanceData
     errors: Errors
@@ -142,11 +142,11 @@ export const roundTrip = (spec: Case): RoundTripResult => {
 
     const performed = withPerformance(buildScore(spec.score), truthPerformance)
 
-    const fitted = new MPM()
+    const fitted = createMpm()
     const transformers = chainFor(spec, performed)
     for (const transformer of transformers) transformer.run(performed, fitted)
 
-    const fittedXml = fitted.toXML()
+    const fittedXml = exportMPM(fitted)
     const refitPerformance = performMsmToData({ msm: scoreXml, mpm: fittedXml })
     const baseline = performMsmToData({ msm: scoreXml, mpm: EMPTY_MPM })
 

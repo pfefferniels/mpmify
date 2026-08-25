@@ -19,12 +19,16 @@ Both of the MEI's recordings are kept — the same roll read twice — because t
 `MakeChoice`, and with one recording there would be nothing to choose. Ten pedal `<when>`s fall
 inside the excerpt's window.
 
-`chain.json` holds 84 calls in 20 argumentations: 15 `InsertTemporalSpread`, 12 `InsertPedal`,
-11 `InsertMetricalAccentuation`, 10 `InsertTempo`, 10 `InsertRubato`, 9
+`chain.json` is a work file: a `provenance` of 84 calls, and 20 `segments` that group them by
+call id and say why. The calls are 15 `InsertTemporalSpread`, 12 `InsertPedal`, 11
+`InsertMetricalAccentuation`, 10 `InsertTempo`, 10 `InsertRubato`, 9
 `InsertDynamicsInstructions`, 8 `InsertArticulation`, 3 `Modify`, and one each of `MakeChoice`,
 `InsertDynamicsGradient`, `TranslatePhyiscalTimeToTicks` (the misspelling the registry has an
 alias for), `StylizeOrnamentation`, `MergeMetricalAccentuations` and `InsertMetadata`. That is
 every aspect the issue asked the fixture to exercise, plus pedalling.
+
+Each segment's `elements` is empty. It is filled in on export from what the calls created, and
+the bake derives its own from a run rather than reading it back.
 
 ## Where it came from
 

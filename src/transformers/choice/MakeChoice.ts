@@ -1,4 +1,4 @@
-import { MPM } from "../../mpm"
+import { Mpm } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
@@ -36,7 +36,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
         })
     }
 
-    protected transform(msm: MSM, _: MPM) {
+    protected transform(msm: MSM, _: Mpm) {
         let affected: MsmNote[] = []
 
         // (1) range mode

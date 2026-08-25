@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { Mpm, createMpm, getDefinitions, getInstructions, requireMap } from "../../src/mpm"
 import { InsertMetricalAccentuation } from "../../src/transformers/accentuation"
 import { PULSES_PER_QUARTER } from "../../src/ppq"
 
@@ -69,15 +69,15 @@ const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
 
     const msm = new MSM(notes, { numerator: 4, denominator: 4 })
 
-    const mpm = new MPM()
-    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
-    mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: VOLUME })
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+    requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: VOLUME })
 
     return { msm, mpm }
 }
 
 /** Call the protected `transform` method for testing */
-const run = (msm: MSM, mpm: MPM, scaleTolerance: number) => {
+const run = (msm: MSM, mpm: Mpm, scaleTolerance: number) => {
     const transformer = new InsertMetricalAccentuation({
         scope: 'global',
         name: 'metre',
@@ -86,12 +86,11 @@ const run = (msm: MSM, mpm: MPM, scaleTolerance: number) => {
         beatLength: 0.25,
         scaleTolerance,
     })
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const fitted = (mpm: MPM) => mpm
-    .getInstructions('accentuationPattern', 'global')
+const fitted = (mpm: Mpm) => getInstructions(mpm, 'accentuationPattern', 'global')
     .find(p => p.accentuationPatternDefName === 'metre')!
 
 describe('the fixture drives the loop it claims to', () => {
@@ -106,14 +105,14 @@ describe('the fixture drives the loop it claims to', () => {
         expect(pattern.loop).toBe(true)
 
         // The neutral pattern closing the loop marks where the fold stopped: after bar 3.
-        const neutral = mpm.getInstructions('accentuationPattern', 'global')
+        const neutral = getInstructions(mpm, 'accentuationPattern', 'global')
             .find(p => p.accentuationPatternDefName === 'neutral')!
         expect(neutral.date).toBe(12 * PULSES_PER_QUARTER)
 
         // The definition is the prototype's shape, normalised by the prototype's own scale.
         // Each accentuation is espressivo's `[beat, value, transition.from, transition.to]`
         // tuple, so the first two slots are what the shape is read out of.
-        const def = mpm.getDefinitions('accentuationPatternDef', 'global')
+        const def = getDefinitions(mpm, 'accentuationPatternDef', 'global')
             .find(d => d.getName() === 'metre')!
         const accentuations = def.getAllAccentuations().map(a => a.key)
         expect(accentuations.map(([beat]) => beat)).toEqual([1, 2, 3, 4])
@@ -170,7 +169,7 @@ describe('the scale tolerance is measured against the prototype', () => {
         const pattern = fitted(mpm)
         expect(pattern.scale).toBe(12)
 
-        const neutral = mpm.getInstructions('accentuationPattern', 'global')
+        const neutral = getInstructions(mpm, 'accentuationPattern', 'global')
             .find(p => p.accentuationPatternDefName === 'neutral')!
         expect(neutral.date).toBe(12 * PULSES_PER_QUARTER)
     })
@@ -191,8 +190,7 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
     // the `while` condition simply goes false there is no rejected cell: `currentCell` is the
     // one that was just accepted, and the neutral landed a bar early, on top of a repetition
     // the loop had validated, cancelling it.
-    const neutralsIn = (mpm: MPM) => mpm
-        .getInstructions('accentuationPattern', 'global')
+    const neutralsIn = (mpm: Mpm) => getInstructions(mpm, 'accentuationPattern', 'global')
         .filter(p => p.accentuationPatternDefName === 'neutral')
 
     test('a piece ending on the bar line closes the loop after the last bar, not before it', () => {
@@ -217,7 +215,7 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
 
         // A second accentuation desk starting at bar 4 — the ordinary shape of two adjacent
         // desks, and what makes this exit reachable on a piece that does not end flush.
-        mpm.requireMap('accentuationPattern', 'global').addAccentuationPattern({
+        requireMap(mpm, 'accentuationPattern', 'global').addAccentuationPattern({
             id: 'next_desk',
             accentuationPatternDefName: 'other',
             date: 12 * PULSES_PER_QUARTER,
@@ -242,7 +240,7 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
         // element itself — but they do not see the neutral sitting on top of it.
         expect(neutralsIn(mpm).filter(n => n.date < 12 * PULSES_PER_QUARTER)).toEqual([])
 
-        const nextDesk = mpm.getInstructions('accentuationPattern', 'global')
+        const nextDesk = getInstructions(mpm, 'accentuationPattern', 'global')
             .find(p => p.id === 'next_desk')!
         expect(nextDesk.accentuationPatternDefName).toBe('other')
         expect(nextDesk.scale).toBe(7)

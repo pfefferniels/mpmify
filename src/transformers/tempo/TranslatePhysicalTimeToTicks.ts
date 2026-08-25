@@ -1,5 +1,5 @@
 import { FrameDomain } from "espressivo";
-import { MPM, ornamentDraftOf, setOrnamentDraft } from "../../mpm";
+import { getInstructions, Mpm, ornamentDraftOf, scopesOf, setOrnamentDraft } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dateAtMilliseconds, millisecondsAt } from "./tempoCalculations";
@@ -44,7 +44,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
     }
 
@@ -91,11 +91,11 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      * given MPM and translates them into tick values.
      * @todo Currently, only ornaments are taken into account.
      */
-    translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
-        for (const scope of mpm.scopes()) {
+    translatePhysicalMPMModifiers(mpm: Mpm, msm: MSM) {
+        for (const scope of scopesOf(mpm)) {
             const segments = placeTempos(msm, mpm, scope)
 
-            const ornaments = mpm.getInstructions('ornament', scope)
+            const ornaments = getInstructions(mpm, 'ornament', scope)
             for (const ornament of ornaments) {
                 // The frame is not an `<ornament>` attribute and never was — it belongs to the
                 // `<temporalSpread>` of the def `StylizeOrnamentation` will build, and until then

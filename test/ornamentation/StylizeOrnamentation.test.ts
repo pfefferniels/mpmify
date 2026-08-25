@@ -2,7 +2,11 @@
 
 import { describe, expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { FrameDomain, InstructionOptions, MPM, NoteOffShift, OrnamentDraft, fillInAt, ornamentDraftOf, setOrnamentDraft } from "../../src/mpm"
+import {
+    FrameDomain, InstructionOptions, Mpm, NoteOffShift, OrnamentDraft, createMpm,
+    fillInAt, findInstructionById, getDefinitions, getInstructions, ornamentDraftOf,
+    requireMap, setOrnamentDraft,
+} from "../../src/mpm"
 import { StylizeOrnamentation } from "../../src/transformers"
 
 /**
@@ -15,20 +19,20 @@ import { StylizeOrnamentation } from "../../src/transformers"
  * the fitters leave them and the shapes below are ones the ordinary chain no longer produces.
  */
 
-const callTransform = (transformer: StylizeOrnamentation, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const callTransform = (transformer: StylizeOrnamentation, msm: MSM, mpm: Mpm) => {
+    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
-const run = (mpm: MPM) => callTransform(
+const run = (mpm: Mpm) => callTransform(
     new StylizeOrnamentation({ tickTolerance: 10, gradientTolerance: 0.1, intensityTolerance: 0.3 }),
     new MSM([], { numerator: 4, denominator: 4 }),
     mpm)
 
-const defNames = (mpm: MPM) =>
-    mpm.getDefinitions('ornamentDef', 'global').map(def => def.getName())
+const defNames = (mpm: Mpm) =>
+    getDefinitions(mpm, 'ornamentDef', 'global').map(def => def.getName())
 
-const ornaments = (mpm: MPM) => mpm.getInstructions('ornament', 'global')
+const ornaments = (mpm: Mpm) => getInstructions(mpm, 'ornament', 'global')
 
 /**
  * An `<ornament>` as the fitters leave it — in the two goes it takes to write one.
@@ -40,11 +44,11 @@ const ornaments = (mpm: MPM) => mpm.getInstructions('ornament', 'global')
  * ornament nothing had fitted.
  */
 const insertOrnament = (
-    mpm: MPM,
+    mpm: Mpm,
     options: InstructionOptions<'ornament'>,
     draft: OrnamentDraft,
 ) => {
-    const map = mpm.requireMap('ornament', 'global')
+    const map = requireMap(mpm, 'ornament', 'global')
     const element = fillInAt(map, options, {
         localName: 'ornament',
         add: o => map.addOrnamentV3(o),
@@ -58,7 +62,7 @@ const insertOrnament = (
 /**
  * Give an ornament already in the document a frame of literal `NaN`.
  *
- * No transformer can produce one: `MPM.audit` sweeps the attributes an instruction states and
+ * No transformer can produce one: `auditInstructions` sweeps the attributes an instruction states and
  * `AbstractTransformer.run` fails the run on a non-finite one, so nothing an ornament *says*
  * survives as NaN. Its draft can — parking is plain attribute writing, onto attributes no options
  * type names, so the sweep never looks at them — which is the shape an ornament arrives in out
@@ -70,8 +74,8 @@ const insertOrnament = (
  * NaN. The check below is what stops a fixture that quietly stopped writing a frame from moving
  * these tests onto the ramp-only path instead.
  */
-const spoilFrame = (mpm: MPM, id: string) => {
-    const instruction = mpm.findInstructionById(id)
+const spoilFrame = (mpm: Mpm, id: string) => {
+    const instruction = findInstructionById(mpm, id)
     if (!instruction) throw new Error(`no ornament #${id} to spoil`)
 
     const fitted = ornamentDraftOf(instruction.element)
@@ -83,7 +87,7 @@ const spoilFrame = (mpm: MPM, id: string) => {
 
 describe('an ornament and its definition do not come apart (#28)', () => {
     test('an unusable frame leaves the ornament untouched rather than half-processed', () => {
-        const mpm = new MPM()
+        const mpm = createMpm()
         insertOrnament(mpm,
             { id: 'orn_broken', date: 0, nameRef: 'neutralArpeggio', scale: 25 },
             {
@@ -106,7 +110,7 @@ describe('an ornament and its definition do not come apart (#28)', () => {
     })
 
     test('an ornament with a ramp and no roll still gets a definition', () => {
-        const mpm = new MPM()
+        const mpm = createMpm()
         for (const date of [0, 1440]) {
             insertOrnament(mpm,
                 { id: `orn_${date}`, date, nameRef: 'neutralArpeggio', scale: 25 },
@@ -118,7 +122,7 @@ describe('an ornament and its definition do not come apart (#28)', () => {
         // `InsertDynamicsGradient` fits exactly this shape. Clustering keys on the frame, so
         // these used to fall out of it and keep pointing at `neutralArpeggio`, a name no
         // definition carries.
-        const defs = mpm.getDefinitions('ornamentDef', 'global')
+        const defs = getDefinitions(mpm, 'ornamentDef', 'global')
         expect(defs).toHaveLength(1)
         expect(defs[0].getDynamicsGradient()).not.toBeNull()
         expect(defs[0].getDynamicsGradient()!.transitionFrom).toBeCloseTo(-1, 10)
@@ -131,7 +135,7 @@ describe('an ornament and its definition do not come apart (#28)', () => {
     })
 
     test('every @name.ref a run writes resolves to a definition it wrote', () => {
-        const mpm = new MPM()
+        const mpm = createMpm()
         // A mixture: two rolls that cluster, one ramp-only, and one that cannot be used.
         for (const date of [0, 1440]) {
             insertOrnament(mpm,
@@ -169,7 +173,7 @@ describe('an ornament and its definition do not come apart (#28)', () => {
     })
 
     test('a gradient is kept when transition.to is 0, which is a legal end (#46)', () => {
-        const mpm = new MPM()
+        const mpm = createMpm()
         insertOrnament(mpm,
             { id: 'crescendo', date: 0, nameRef: 'neutralArpeggio', scale: 25 },
             {
@@ -185,7 +189,7 @@ describe('an ornament and its definition do not come apart (#28)', () => {
 
         run(mpm)
 
-        const defs = mpm.getDefinitions('ornamentDef', 'global')
+        const defs = getDefinitions(mpm, 'ornamentDef', 'global')
         expect(defs).toHaveLength(1)
         expect(defs[0].getDynamicsGradient()).not.toBeNull()
         expect(defs[0].getDynamicsGradient()!.transitionTo).toBe(0)

@@ -9,11 +9,10 @@
  *
  * They are still parked *on the element*, as attributes, and that is deliberate rather than
  * lazy. `InsertDynamicsGradient` writes the gradient half and `InsertTemporalSpread` the spread
- * half, at the same date, and `MPM.insertInstruction` merges the two into a single `<ornament>`
- * — the element is the only thing the two transformers share. A side table keyed by element
- * would work until something serialized the document between them, and the parking has to
- * survive whatever `TranslatePhyiscalTimeToTicks` does in between, which is to rewrite two of
- * these fields.
+ * half, at the same date, and {@link fillInAt} makes the two a single `<ornament>` — the element
+ * is the only thing the two transformers share. A side table keyed by element would work until
+ * something serialized the document between them, and the parking has to survive whatever
+ * `TranslatePhyiscalTimeToTicks` does in between, which is to rewrite two of these fields.
  *
  * `StylizeOrnamentation` is the end of their life: it moves them into a real `<ornamentDef>` and
  * calls {@link clearOrnamentDraft}. A finished mpmify document carries none of them. If one

@@ -1,5 +1,5 @@
-import { MPM, MSM, AbstractTransformer, generateId } from 'mpmify'
-import type { InstructionOptions, Scope, ScopedTransformationOptions } from 'mpmify'
+import { MSM, AbstractTransformer, generateId, getInstructions, removeInstruction, requireMap } from 'mpmify'
+import type { InstructionOptions, Mpm, Scope, ScopedTransformationOptions } from 'mpmify'
 
 interface InsertTempoOptions extends ScopedTransformationOptions {
     from: number
@@ -17,20 +17,9 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
 
     constructor(options?: InsertTempoOptions) {
         super(options || { scope: 'global', from: 0, to: 0, bpm: 120, beatLength: 0.25 })
-        if (options) {
-            this.argumentation = {
-                id: this.id,
-                type: 'simpleArgumentation',
-                conclusion: {
-                    id: this.id,
-                    motivation: 'move',
-                    certainty: 'authentic'
-                }
-            }
-        }
     }
 
-    public run(msm: MSM, mpm: MPM) {
+    public run(msm: MSM, mpm: Mpm) {
         this._boundaryId = undefined
         super.run(msm, mpm)
         if (this._boundaryId) {
@@ -38,7 +27,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
         }
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         msm.shiftToFirstOnset()
         const { from, to, bpm, transitionTo, meanTempoAt, beatLength } = this.options
         const scope = this.options.scope
@@ -56,11 +45,11 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
             } : {})
         }
 
-        mpm.requireMap('tempo', scope).addTempo(tempo)
+        requireMap(mpm, 'tempo', scope).addTempo(tempo)
     }
 
-    private removeAffectedTempoInstructions(mpm: MPM, scope: Scope, from: number, to: number) {
-        const existing = mpm.getInstructions('tempo', scope)
+    private removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, from: number, to: number) {
+        const existing = getInstructions(mpm, 'tempo', scope)
             .slice()
             .sort((a, b) => a.date - b.date)
         if (existing.length === 0) return
@@ -81,16 +70,16 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
                     }
                     this._boundaryId = restore.id
                     for (const t of existing) {
-                        if (isCovered(t.date)) mpm.removeInstruction(t)
+                        if (isCovered(t.date)) removeInstruction(mpm, t)
                     }
-                    mpm.requireMap('tempo', scope).addTempo(restore)
+                    requireMap(mpm, 'tempo', scope).addTempo(restore)
                     return
                 }
             }
         }
 
         for (const t of existing) {
-            if (isCovered(t.date)) mpm.removeInstruction(t)
+            if (isCovered(t.date)) removeInstruction(mpm, t)
         }
     }
 }

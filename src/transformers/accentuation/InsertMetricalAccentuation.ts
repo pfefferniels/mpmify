@@ -1,4 +1,13 @@
-import { AccentuationPatternDef, definitionOf, MPM } from "../../mpm";
+import {
+    AccentuationPatternDef,
+    ensureDefaultStyle,
+    getDefinitions,
+    getInstructions,
+    insertDefinition,
+    Mpm,
+    requireMap,
+    unwrap,
+} from "../../mpm";
 import { MSM } from "../../msm";
 import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
@@ -115,7 +124,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         length: number,
         accentuations: readonly FittedAccentuation[],
     ): AccentuationPatternDef {
-        const def = definitionOf(AccentuationPatternDef.fromNameLength(name, length))
+        const def = unwrap(AccentuationPatternDef.fromNameLength(name, length))
         for (const accentuation of accentuations) {
             def.addAccentuation(
                 accentuation.beat,
@@ -128,10 +137,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         return def
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        if (!mpm.getDefinitions('accentuationPatternDef', this.options.scope)
+    protected transform(msm: MSM, mpm: Mpm) {
+        if (!getDefinitions(mpm, 'accentuationPatternDef', this.options.scope)
             .find(def => def.getName() === 'neutral')) {
-            mpm.insertDefinition(
+            insertDefinition(
+                mpm,
                 'accentuationPatternDef',
                 this.buildDef('neutral', 0.25, [
                     { beat: 1, value: 0, transitionFrom: 0, transitionTo: 0 }
@@ -147,7 +157,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             neutralEnd: this.options.neutralEnd
         }
 
-        const nextCell = mpm.getInstructions('accentuationPattern', this.options.scope)
+        const nextCell = getInstructions(mpm, 'accentuationPattern', this.options.scope)
             .find(c => c.date > this.options.from);
 
         // What the dynamics curve leaves unexplained, per note — the quantity this used to read
@@ -228,10 +238,10 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             accentuations,
         )
 
-        mpm.insertDefinition('accentuationPatternDef', accentuationPatternDef, this.options.scope)
+        insertDefinition(mpm, 'accentuationPatternDef', accentuationPatternDef, this.options.scope)
 
         const loop = acceptedThrough > cell.end
-        const map = mpm.requireMap('accentuationPattern', this.options.scope)
+        const map = requireMap(mpm, 'accentuationPattern', this.options.scope)
         map.addAccentuationPattern({
             accentuationPatternDefName: accentuationPatternDef.getName(),
             id: generateId('accentuationPattern', cell.start, mpm),
@@ -251,6 +261,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
 
 
-        mpm.ensureDefaultStyle('accentuationPattern', this.options.scope)
+        ensureDefaultStyle(mpm, 'accentuationPattern', this.options.scope)
     }
 }

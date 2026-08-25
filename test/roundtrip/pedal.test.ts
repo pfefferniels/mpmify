@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { performMsmToData } from "espressivo"
-import { MPM } from "../../src/mpm"
+import { createMpm, exportMPM, getInstructions } from "../../src/mpm"
 import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
 import { InsertPedal } from "../../src/transformers/pedal/InsertPedalInstructions"
@@ -45,7 +45,7 @@ const pedalledScore = () => {
 }
 
 const fitPedals = (score: ReturnType<typeof pedalledScore>) => {
-    const mpm = new MPM()
+    const mpm = createMpm()
     const chain = [
         new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: 7 * QUARTER, beatLength: 0.25, silentOnsets: [],
@@ -73,7 +73,7 @@ describe('pedalling reaches the renderer', () => {
         const score = pedalledScore()
         const mpm = fitPedals(score)
 
-        const movements = mpm.getInstructions('movement', 'global')
+        const movements = getInstructions(mpm, 'movement', 'global')
             .sort((a, b) => a.date - b.date)
 
         // Two pedal marks, each a start and the point it arrives at full depth.
@@ -94,7 +94,7 @@ describe('pedalling reaches the renderer', () => {
     })
 
     test('the fitted movementMap is structurally sound', () => {
-        assertWellFormed(fitPedals(pedalledScore()).toXML(), 'the fitted pedal MPM')
+        assertWellFormed(exportMPM(fitPedals(pedalledScore())), 'the fitted pedal MPM')
     })
 
     /**
@@ -107,7 +107,7 @@ describe('pedalling reaches the renderer', () => {
         const mpm = fitPedals(score)
         const msmXml = score.serialize(false)!
 
-        const stream = sustainStream(msmXml, mpm.toXML())
+        const stream = sustainStream(msmXml, exportMPM(mpm))
         expect(stream, 'no sustain stream in the rendered performance').toBeDefined()
         expect(stream!.ccNumber).toBe(64)
         expect(stream!.points.length).toBeGreaterThan(1)

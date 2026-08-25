@@ -1,21 +1,20 @@
 /**
- * What mpmify's transformers call an MPM instruction — which is now espressivo's own answer,
- * not a parallel one.
+ * The names mpmify uses for what espressivo already models, and nothing else.
  *
- * These used to be twenty-odd record interfaces re-declaring every MPM attribute, plus a table
- * in `schema.ts` re-declaring how each one is spelled as text. espressivo already owns both:
- * `Add<X>Options` is the exact set of attributes its `add<X>` writes, and `get<X>OptionsOf`
- * reads an element back into one. So the instruction half of this file is a mapping from
- * mpmify's type names to those, and nothing else.
+ * There is no record model here. `Add<X>Options` is the exact set of attributes espressivo's
+ * `add<X>` writes, and `get<X>OptionsOf` reads an element back into one, so an instruction's
+ * shape is espressivo's answer and this file only says which of its types goes with which name.
  *
- * Two things stayed:
+ * Three things are mpmify's own and stay:
  *
- * - **`Scope`.** MSM speaks it too, and espressivo's answer to the same question is a
- *   `Global | Part` object rather than an index. `MPM` converts.
- * - **The names.** mpmify says `tempo` where a `<dated>` child is called `tempoMap`, and
- *   `articulationDef` where a `<header>` collection is called `articulationStyles`. Both
- *   tables below are `satisfies`-checked against espressivo's own key types, so a name it
- *   renames stops compiling here rather than failing at runtime.
+ * - **`Scope`.** MSM names a part `'global'` or by index; espressivo names it with a `Global`
+ *   or `Part` object. `document.ts` converts.
+ * - **The element names.** MPM calls the element `<tempo>` and the map it lives in `tempoMap`,
+ *   and mpmify asks its questions in element names. {@link mapNames} is that one-line pairing,
+ *   `satisfies`-checked against espressivo's `MapKind`, so a map it renames stops compiling
+ *   here rather than failing at runtime.
+ * - **{@link Instruction}**, the result of a query: espressivo's options for an element,
+ *   together with the element they were read from.
  */
 import type {
     AddAccentuationPatternOptions,
@@ -30,6 +29,7 @@ import type {
     ArticulationDef,
     Element,
     MapKind,
+    MapOfKind,
     OrnamentDef,
     StyleKind,
 } from 'espressivo'
@@ -76,14 +76,14 @@ export const instructionTypes = [
 /**
  * One instruction as it stands in the document: everything it says, plus where it is.
  *
- * A **snapshot**, not a live view. Under mpm-ts these records were the document and assigning
- * to one edited it; the espressivo port kept that with a proxy, which meant a value that looked
- * like data and was not. Reading is now reading and writing is `MPM.updateInstruction`, which
- * says at the call site that the document changed.
+ * A **snapshot**, not a live view — the result of a query, the way a row is the result of a
+ * `SELECT`. Under mpm-ts these records *were* the document and assigning to one edited it,
+ * which made a value that looks like data silently not be. Reading is reading; writing is a
+ * call on the espressivo map, which says at the call site that the document changed.
  *
- * `element` is the identity that survives the snapshot — what `updateInstruction` and
- * `removeInstruction` find the instruction by, and what {@link corresp} and the ornament draft
- * hang off. Do not read attributes off it directly; that is what the options are for.
+ * `element` is the identity that survives the snapshot — what `removeInstruction` finds the
+ * instruction by, and what the ornament draft hangs off. Do not read attributes off it
+ * directly; that is what the options are for.
  */
 export type Instruction<K extends InstructionType> = InstructionOptions<K> & {
     readonly type: K
@@ -105,6 +105,9 @@ export const mapNames = {
     tempo: 'tempoMap',
     accentuationPattern: 'metricalAccentuationMap',
 } as const satisfies Record<InstructionType, MapKind>
+
+/** The espressivo map class an instruction type is written through. */
+export type MapFor<K extends InstructionType> = MapOfKind[(typeof mapNames)[K]]
 
 // ── definitions ───────────────────────────────────────────────────
 
@@ -147,50 +150,3 @@ export interface Style {
  * than one style per collection, and the `<style>` switches it emits all name this one.
  */
 export const DEFAULT_STYLE_NAME = 'performance_style'
-
-// ── metadata ──────────────────────────────────────────────────────
-
-export type RelatedResourceSpec = {
-    uri: string
-    type: string
-}
-
-export interface Author {
-    number: number
-    text: string
-}
-
-export interface Comment {
-    text: string
-}
-
-export interface TransformationInfo {
-    'xml:id': string
-    name: string
-    cdata: string
-    notes: string[]
-}
-
-/**
- * `<appInfo>` and its `<transformation>` children.
- *
- * **This is not MPM.** The ODD gives `<metadata>` exactly `author*`, `comment*` and one
- * optional `<relatedResources>` (`axelberndt/MPM`, `src/specs/metadata.xml`) — there is no
- * `appInfo` element in the schema, and the comment that used to sit here claiming otherwise was
- * wrong. mpmify writes it anyway, because the transformation record is what a work file is for;
- * it is written by hand, here, rather than through espressivo, which correctly has no class for
- * an element the format does not define.
- */
-export interface AppInfo {
-    version: string
-    name: string
-    url: string
-    transformations: TransformationInfo[]
-}
-
-export interface Metadata {
-    authors?: Author[]
-    comments?: Comment[]
-    relatedResources?: RelatedResourceSpec[]
-    appInfo?: AppInfo
-}

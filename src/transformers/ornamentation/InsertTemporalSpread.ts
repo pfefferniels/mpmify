@@ -1,5 +1,5 @@
 import { AddOrnamentOptions, FrameDomain, NoteOffShift } from "espressivo"
-import { MPM, OrnamentDraft, fillInAt, setOrnamentDraft } from "../../mpm"
+import { Mpm, OrnamentDraft, fillInAt, requireMap, setOrnamentDraft } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
@@ -87,7 +87,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         // Each ornament is written in two goes: what MPM lets an `<ornament>` say, and the
         // `<temporalSpread>` fields that have no place on one and are parked on its element for
         // `StylizeOrnamentation` to collect.
@@ -211,7 +211,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
 
         // `fillInAt`, not `addOrnamentV3`: `InsertDynamicsGradient` may already have written
         // the ornament at this date, and the two describe one element between them.
-        const map = mpm.requireMap('ornament', this.options.scope)
+        const map = requireMap(mpm, 'ornament', this.options.scope)
         for (const { options, draft } of ornaments) {
             setOrnamentDraft(fillInAt(map, options, {
             localName: 'ornament',

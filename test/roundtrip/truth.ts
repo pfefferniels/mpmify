@@ -3,11 +3,11 @@ import { PPQ } from "./score"
 /**
  * The ground-truth MPM, as literal XML.
  *
- * Deliberately **not** built with mpmify's own `MPM` class. If the truth went through the same
- * serializer as the fit, a bug in that serializer would corrupt both sides equally and the
- * round trip would pass on wrong output. The only code this path shares with the code under
- * test is espressivo's renderer — which is the point: the renderer is the arbiter of what an
- * MPM document *means*, and the fit is being measured against that meaning.
+ * Deliberately **not** built through the same writing path as the fit. If the truth were
+ * serialized by the code under test, a bug in that serializer would corrupt both sides equally
+ * and the round trip would pass on wrong output. The only code this path shares with the code
+ * under test is espressivo's renderer — which is the point: the renderer is the arbiter of what
+ * an MPM document *means*, and the fit is being measured against that meaning.
  */
 
 export interface TempoSpan {

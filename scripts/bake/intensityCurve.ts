@@ -59,10 +59,11 @@ export type IntensityCurve = {
 /**
  * Sum every segment into one curve of rising and falling intensity.
  *
- * Each segment contributes a half-sine bump: upwards for `intensify`/`move`,
- * downwards for `relax`/`calm`, and taller the longer it lasts. The sum is
- * integrated, de-trended and scaled to 0..1, so the curve reads as a shape
- * rather than as a stack of individual claims.
+ * Each segment contributes a half-sine bump: upwards where its intensity is
+ * positive, downwards where it is negative, as tall as the intensity is strong
+ * and taller the longer the segment lasts. The sum is integrated, de-trended and
+ * scaled to 0..1, so the curve reads as a shape rather than as a stack of
+ * individual claims.
  */
 export const negotiateIntensityCurve = (
     segments: Segment[],
@@ -89,15 +90,9 @@ export const negotiateIntensityCurve = (
 
         // sign: positive = increase, negative = decrease
         // gain: strong (1.0) vs gentle (0.5)
-        let sign: number;
-        let gain: number;
-        switch (segment.motivation) {
-            case "intensify": sign = +1; gain = 1.0; break;
-            case "move":      sign = +1; gain = 0.5; break;
-            case "relax":     sign = -1; gain = 1.0; break;
-            case "calm":      sign = -1; gain = 0.5; break;
-            default: continue;
-        }
+        const sign = Math.sign(segment.intensity);
+        const gain = Math.abs(segment.intensity);
+        if (segment.intensity === 0) continue;
 
         const start = segment.from;
         let length = Math.max(200, segment.to - start + 1);

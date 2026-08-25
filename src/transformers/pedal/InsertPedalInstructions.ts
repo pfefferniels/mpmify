@@ -1,5 +1,5 @@
 import type { Normalized } from "espressivo"
-import { MPM } from "../../mpm"
+import { Mpm, requireMap } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
@@ -51,7 +51,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         // Where each pedal fell on the score grid, under the MPM as it stands. `movement` is
         // held out for the same reason every other fitter holds its own dimension out, though
         // it changes nothing here: a movementMap moves controllers, not the pedal marks this
@@ -77,7 +77,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         const depth = normalized(this.options.depth || 1)
         const released = normalized(0)
 
-        const map = mpm.requireMap('movement', 'global')
+        const map = requireMap(mpm, 'movement', 'global')
 
         for (const pedal of validPedals) {
             const tickDate = residual.ofPedal(pedal)!.tickDate!

@@ -1,5 +1,5 @@
 import type { AddDynamicsOptions } from "espressivo"
-import { InstructionOptions, MPM, Scope, fillInAt } from "../../mpm"
+import { getInstructions, InstructionOptions, Mpm, requireMap, Scope, fillInAt } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, DynamicsPoints } from "./Approximation"
@@ -33,7 +33,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         const points = this.asPoints(msm, this.options.scope)
         const { from, to } = this.options
 
@@ -57,7 +57,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // previous segment's `closeTransition` already wrote a closing `<dynamics>` at. One
         // element has to carry both — the closing volume and this curve — or the closer sits in
         // front of the curve and shadows it.
-        const map = mpm.requireMap('dynamics', this.options.scope)
+        const map = requireMap(mpm, 'dynamics', this.options.scope)
         fillInAt(map, instruction, {
             localName: 'dynamics',
             add: o => map.addDynamics(o),
@@ -81,14 +81,14 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
      * An instruction already at that date already closes the span — in a chain each segment is
      * closed by the next — and is left alone.
      */
-    private closeTransition(mpm: MPM, instruction: AddDynamicsOptions, endDate: number) {
+    private closeTransition(mpm: Mpm, instruction: AddDynamicsOptions, endDate: number) {
         const target = instruction.transitionTo
         if (target === undefined || endDate <= instruction.date) return
 
-        const existing = mpm.getInstructions('dynamics', this.options.scope)
+        const existing = getInstructions(mpm, 'dynamics', this.options.scope)
         if (existing.some(dynamics => dynamics.date === endDate)) return
 
-        mpm.requireMap('dynamics', this.options.scope).addDynamics({
+        requireMap(mpm, 'dynamics', this.options.scope).addDynamics({
             id: generateId('dynamics', endDate, mpm),
             date: endDate,
             volume: target

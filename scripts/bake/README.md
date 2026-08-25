@@ -12,7 +12,7 @@ An excerpt of those inputs *is* in this repo now — `test/fixtures/roundtrip`, 
 `test/roundtrip/aligned.test.ts` renders `runPipeline`'s MPM back and compares it against the
 recording, and `test/roundtrip/bake.test.ts` asserts what `bakeSegments.ts` checks before it
 writes. The first thing they found was that the bake did not run at all: `getRange` needs a
-residual to place a pedal, neither `derive` nor `mergeArgumentations` passed one, and every real
+residual to place a pedal, neither `derive` nor the segment merge passed one, and every real
 `info.json` has `InsertPedal` calls in it.
 
 ## What it does
@@ -38,10 +38,10 @@ node_modules/.bin/vite-node scripts/bake/verifySegments.ts                      
 | File | Role |
 |---|---|
 | `bakeSegments.ts` | CLI wrapper: sets up jsdom globals, runs `derive`, writes `public/` |
-| `deriveSegments.ts` | The bake itself — `runPipeline` runs the transformers, `derive` groups the argumentations into segments |
+| `deriveSegments.ts` | The bake itself — `runPipeline` runs the transformers, `derive` groups the calls into segments |
 | `verifySegments.ts` | Re-derives and diffs against what was written |
 | `asMSM.ts` | Enriches a converted MSM with the performance data encoded in the MEI |
-| `mergeArgumentations.ts` | Folds argumentations covering the same ticks into one |
+| `mergeSegments.ts` | Folds segments covering the same ticks into one |
 | `InsertTempo.ts` | A custom transformer, registered after `ApproximateLogarithmicTempo` |
 | `Reconstruction.ts` | Copy of mpm-desk's `src/model/Reconstruction.ts` — the output shape |
 | `intensityCurve.ts` | Copy of mpm-desk's `src/utils/intensityCurve.ts` — `verifySegments` check 4 needs it |

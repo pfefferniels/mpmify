@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { Mpm, createMpm, getDefinition, getInstructions, getStyles, requireMap } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers/articulation/InsertArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
 
@@ -33,16 +33,16 @@ const note = (id: string, date: number, pitch: number, playedTicks: number): Msm
 
 /** The tempo those recorded seconds are read against. */
 const atSixtyBpm = () => {
-    const mpm = new MPM()
-    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
-type Transformable = { transform(msm: MSM, mpm: MPM): void }
+type Transformable = { transform(msm: MSM, mpm: Mpm): void }
 const callTransform = (
     transformer: InsertArticulation | StylizeArticulation,
     msm: MSM,
-    mpm: MPM
+    mpm: Mpm
 ) => (transformer as unknown as Transformable).transform(msm, mpm)
 
 const BOTH = new Set(['relativeDuration', 'relativeVelocity'] as const)
@@ -50,17 +50,17 @@ const BOTH = new Set(['relativeDuration', 'relativeVelocity'] as const)
 /** Eight notes on eight pitches, so no stretched note can run into a repeat of its own. */
 const PITCHES = [60, 62, 64, 65, 67, 69, 71, 72]
 
-const insert = (msm: MSM, mpm: MPM, name: string, ids: string[]) =>
+const insert = (msm: MSM, mpm: Mpm, name: string, ids: string[]) =>
     callTransform(new InsertArticulation({
         scope: 'global', noteIDs: ids, aspects: new Set(BOTH), name,
     }), msm, mpm)
 
-const stylize = (msm: MSM, mpm: MPM) =>
+const stylize = (msm: MSM, mpm: Mpm) =>
     callTransform(new StylizeArticulation(), msm, mpm)
 
-const defaultDef = (mpm: MPM) => {
-    const name = mpm.getStyles('articulation', 'global')[0]?.defaultArticulation
-    return name === undefined ? null : mpm.getDefinition('articulationDef', name)
+const defaultDef = (mpm: Mpm) => {
+    const name = getStyles(mpm, 'articulation', 'global')[0]?.defaultArticulation
+    return name === undefined ? null : getDefinition(mpm, 'articulationDef', name)
 }
 
 test('the articulations InsertArticulation wrote are clustered, not read as noise', () => {
@@ -79,11 +79,11 @@ test('the articulations InsertArticulation wrote are clustered, not read as nois
     const def = defaultDef(mpm)
     expect(def).not.toBeNull()
     expect(def!.getRelativeDuration()).toBeCloseTo(0.9, 6)
-    expect(mpm.getInstructions('articulation', 'global')).toHaveLength(0)
+    expect(getInstructions(mpm, 'articulation', 'global')).toHaveLength(0)
 
     // And the def they were merged out of is gone with them: leaving it would have the styleDef
     // say the same thing twice, once under the name nothing refers to any more.
-    expect(mpm.getDefinition('articulationDef', 'a')).toBeNull()
+    expect(getDefinition(mpm, 'articulationDef', 'a')).toBeNull()
 })
 
 test('two articulation units are kept apart, and the larger one becomes the default', () => {
@@ -105,7 +105,7 @@ test('two articulation units are kept apart, and the larger one becomes the defa
     expect(def).not.toBeNull()
     expect(def!.getRelativeDuration()).toBeCloseTo(0.5, 6)
 
-    const left = mpm.getInstructions('articulation', 'global')
+    const left = getInstructions(mpm, 'articulation', 'global')
     expect(left.map(a => a.noteid).sort()).toEqual(['#n5', '#n6', '#n7'])
 
     // That each of these names *some* def is no longer worth an assertion: an `<articulation>`
@@ -115,11 +115,11 @@ test('two articulation units are kept apart, and the larger one becomes the defa
     expect(longName).not.toBe(def!.getName())
     expect(new Set(left.map(a => a.nameRef))).toEqual(new Set([longName]))
 
-    const longDef = mpm.getDefinition('articulationDef', longName)
+    const longDef = getDefinition(mpm, 'articulationDef', longName)
     expect(longDef!.getRelativeDuration()).toBeCloseTo(1.4, 6)
 
     // Both units were merged into definitions of this transformer's own, so neither of the
     // names they were inserted under is left behind.
-    expect(mpm.getDefinition('articulationDef', 'short')).toBeNull()
-    expect(mpm.getDefinition('articulationDef', 'long')).toBeNull()
+    expect(getDefinition(mpm, 'articulationDef', 'short')).toBeNull()
+    expect(getDefinition(mpm, 'articulationDef', 'long')).toBeNull()
 })

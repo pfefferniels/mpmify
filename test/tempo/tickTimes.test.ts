@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { InstructionOptions, MPM } from "../../src/mpm"
+import { InstructionOptions, createMpm, requireMap } from "../../src/mpm"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 import { placeTempos, segmentAtMs } from "../../src/transformers/tempo/placedTempos"
 
@@ -45,8 +45,8 @@ const score = () => {
 }
 
 const twoTempi = () => {
-    const mpm = new MPM()
-    const tempi = mpm.requireMap('tempo', 'global')
+    const mpm = createMpm()
+    const tempi = requireMap(mpm, 'tempo', 'global')
     for (const [id, date] of [['t0', 0], ['t1', BOUNDARY]] as const) {
         tempi.addTempo({ id, date, bpm: 60, beatLength: 0.25 })
     }
@@ -118,8 +118,8 @@ describe('every recorded event gets a position', () => {
  */
 describe('the walk reads an instruction the way the renderer resolves it', () => {
     const under = (tempo: Partial<InstructionOptions<'tempo'>>) => {
-        const mpm = new MPM()
-        mpm.requireMap('tempo', 'global').addTempo(
+        const mpm = createMpm()
+        requireMap(mpm, 'tempo', 'global').addTempo(
             { id: 't', date: 0, bpm: 60, beatLength: 0.25, ...tempo }
         )
         return computeTickTimes(score(), mpm)
@@ -190,9 +190,9 @@ describe('the millisecond windows are a partition', () => {
     /** With no `<tempo>` in scope there is no timeline to divide, and no position to invent. */
     test('a scope with no tempo yields no segments and no positions', () => {
         const msm = score()
-        const times = computeTickTimes(msm, new MPM())
+        const times = computeTickTimes(msm, createMpm())
 
-        expect(placeTempos(msm, new MPM(), 'global')).toHaveLength(0)
+        expect(placeTempos(msm, createMpm(), 'global')).toHaveLength(0)
         expect(times.notes.size).toBe(0)
         expect(times.pedals.size).toBe(0)
     })

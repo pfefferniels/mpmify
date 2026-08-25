@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { createMpm, requireMap } from "../../src/mpm"
 import { deriveResidual } from "../../src/residual"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 
@@ -25,8 +25,8 @@ const fixture = () => new MSM(
 )
 
 const withTempo = () => {
-    const mpm = new MPM()
-    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
@@ -56,7 +56,7 @@ describe('deriveResidual, tick domain', () => {
     })
 
     test('an MPM with no tempo leaves the tick figures unknown, not zero', () => {
-        const derived = deriveResidual(fixture(), new MPM())
+        const derived = deriveResidual(fixture(), createMpm())
         expect(derived.notes.map(n => n.tickDate)).toEqual([undefined, undefined, undefined])
     })
 })
@@ -71,17 +71,17 @@ describe('deriveResidual, velocity', () => {
 
     test('measures against the curve once there is one', () => {
         const mpm = withTempo()
-        mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
+        requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
 
         const derived = deriveResidual(fixture(), mpm)
         expect(derived.notes.map(n => n.velocity)).toEqual([20, 20, 0])
     })
 
-    // `without` is what replaces each transformer subtracting its own share: hold your own
+    // `withoutMaps` is what replaces each transformer subtracting its own share: hold your own
     // dimension out and what comes back is what the rest of the MPM leaves for you.
     test('without holds a dimension out of the measurement', () => {
         const mpm = withTempo()
-        mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
+        requireMap(mpm, 'dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
 
         const withDynamics = deriveResidual(fixture(), mpm)
         const withoutDynamics = deriveResidual(fixture(), mpm, { without: ['dynamics'] })

@@ -8,12 +8,6 @@
  */
 
 /**
- * The activity motivations the intensity curve responds to: the first two raise
- * it, the last two lower it.
- */
-export type Motivation = 'move' | 'intensify' | 'relax' | 'calm';
-
-/**
  * One performance gesture inside a segment: a run of MPM elements of a single
  * type, over the ticks the gesture covers.
  *
@@ -32,20 +26,23 @@ export interface Span {
     elements: string[];
 }
 
-/** A stretch of the piece argued to move, intensify, relax or calm. */
+/** A stretch of the piece one group of calls accounts for. */
 export interface Segment {
     id: string;
-    /** A {@link Motivation}, or another word the corpus uses — `unknown` leaves the curve flat. */
-    motivation: string;
-    /** How sure the claim is: `plausible`, `likely`, `possible`, `speculative`, `unlikely`. */
-    certainty: string;
-    /** Why — shown when the segment is hovered or opened. */
+    /** Why this group belongs together — shown when the segment is hovered or opened. */
     note?: string;
-    /** Id of the segment this one continues, forming a chain. */
-    continue?: string;
     from: number;
     /** Equal to `from` for a segment that acts on a single point in time. */
     to: number;
+    /**
+     * How hard the segment pushes the intensity curve, as a signed weight in `[-1, 1]`.
+     *
+     * Read off the MPM the spans name rather than declared: `Math.sign` of what the tempo
+     * travels from its first value to its last, plus `Math.sign` of what the dynamics travel,
+     * each worth half. Both rising is `+1`, both falling `-1`, one moving alone `±0.5`, and a
+     * segment that is mixed or names neither is `0` — the curve passes over it.
+     */
+    intensity: number;
     spans: Span[];
 }
 

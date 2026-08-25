@@ -1,4 +1,4 @@
-import { MPM } from "../../mpm"
+import { Mpm } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer"
 
@@ -24,7 +24,7 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
         })
     }
 
-    protected transform(msm: MSM, _mpm: MPM) {
+    protected transform(msm: MSM, _mpm: Mpm) {
         const { aspect, change } = this.options
 
         const notes = ('noteIDs' in this.options)

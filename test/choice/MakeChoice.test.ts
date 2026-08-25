@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { MPM } from "../../src/mpm"
+import { Mpm, createMpm } from "../../src/mpm"
 import { MSM, MsmNote, MsmPedal } from "../../src/msm"
 import { MakeChoice } from "../../src/transformers/choice/MakeChoice"
 
@@ -37,15 +37,15 @@ const pedal = (id: string, source: string): MsmPedal => ({
 })
 
 /** Call the protected `transform` method for testing */
-const callTransform = (transformer: MakeChoice, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const callTransform = (transformer: MakeChoice, msm: MSM, mpm: Mpm) => {
+    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
 test('the notes of the rejected reading are gone, the chosen one kept once', () => {
     const msm = new MSM([note('a', 'take1', 40), note('b', 'take2', 90)])
 
-    callTransform(new MakeChoice({ scope: 'global', prefer: 'take2' }), msm, new MPM())
+    callTransform(new MakeChoice({ scope: 'global', prefer: 'take2' }), msm, createMpm())
 
     expect(msm.allNotes).toHaveLength(1)
     expect(msm.allNotes[0].source).toBe('take2')
@@ -60,7 +60,7 @@ test('a split preference takes the velocity from one reading and the timing from
         timing: 'take2',
         velocity: 'take1',
         pedalling: 'take2',
-    }), msm, new MPM())
+    }), msm, createMpm())
 
     expect(msm.allNotes).toHaveLength(1)
     expect(msm.allNotes[0].source).toBe('take2')
@@ -78,7 +78,7 @@ test('adjacent pedals from the rejected reading are both dropped', () => {
         from: 0,
         to: 720,
         prefer: 'take2',
-    }), msm, new MPM())
+    }), msm, createMpm())
 
     expect(msm.pedals.map(p => p['xml:id'])).toEqual(['p1', 'p4'])
 })

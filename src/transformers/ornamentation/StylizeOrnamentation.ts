@@ -1,5 +1,17 @@
 import { Element, FrameDomain, NoteOffShift, OrnamentDef } from "espressivo"
-import { clearOrnamentDraft, Instruction, MPM, OrnamentDraft, ornamentDraftOf, Scope } from "../../mpm"
+import {
+    clearOrnamentDraft,
+    ensureDefaultStyle,
+    getInstructions,
+    Instruction,
+    insertDefinition,
+    Mpm,
+    OrnamentDraft,
+    ornamentDraftOf,
+    requireMap,
+    Scope,
+    scopesOf,
+} from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -112,10 +124,9 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        for (const scope of mpm.scopes()) {
-            const ornaments: FittedOrnament[] = mpm
-                .getInstructions('ornament', scope)
+    protected transform(msm: MSM, mpm: Mpm) {
+        for (const scope of scopesOf(mpm)) {
+            const ornaments: FittedOrnament[] = getInstructions(mpm, 'ornament', scope)
                 .map(instruction => ({ instruction, draft: ornamentDraftOf(instruction.element) }))
 
             const filteredOrnaments = ornaments.filter(({ draft }) =>
@@ -140,7 +151,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             // restricted to these: an ornament that was skipped keeps its draft, so it still
             // describes something, rather than being emptied out while pointing at a definition
             // that does not exist. Keyed by element rather than by instruction, since an
-            // instruction is a snapshot and `updateInstruction` replaces it with a fresh one.
+            // instruction is a snapshot and the element is what survives being rewritten.
             const defined = new Set<Element>()
 
             const clusters = this.generateClusters(filteredOrnaments)
@@ -179,7 +190,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                         const def = this.mergedDef(subgroup, `def_${scope}_${label}_${subLabel}`)
                         if (!def) continue
 
-                        mpm.insertDefinition('ornamentDef', def, scope)
+                        insertDefinition(mpm, 'ornamentDef', def, scope)
                         subgroup.forEach(ornament => this.nameAfter(mpm, ornament, def, defined))
                     }
                 }
@@ -187,7 +198,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
 
             this.defineGradientOnly(mpm, scope, gradientOnly, defined)
 
-            mpm.ensureDefaultStyle('ornament', scope)
+            ensureDefaultStyle(mpm, 'ornament', scope)
 
             // The working fields move into the definition, so they come off the instruction —
             // but only for the ornaments that got one. This used to test `name.ref` for
@@ -322,7 +333,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * definition each. Without this the whole family reached the document as `@name.ref`
      * pointing at nothing — well-formed, and silent.
      */
-    private defineGradientOnly(mpm: MPM, scope: Scope, ornaments: FittedOrnament[], defined: Set<Element>) {
+    private defineGradientOnly(mpm: Mpm, scope: Scope, ornaments: FittedOrnament[], defined: Set<Element>) {
         if (ornaments.length === 0) return
 
         const clusters = this.generateSubClusters(ornaments)
@@ -352,7 +363,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
             }, undefined)
             if (!def) continue
 
-            mpm.insertDefinition('ornamentDef', def, scope)
+            insertDefinition(mpm, 'ornamentDef', def, scope)
             group.forEach(ornament => this.nameAfter(mpm, ornament, def, defined))
         }
     }
@@ -381,7 +392,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * apart. An ornament whose frame did not survive translation gets neither: it keeps whatever
      * `@name.ref` it already had rather than gaining a dangling one.
      */
-    private defineAndName(mpm: MPM, scope: Scope, ornament: FittedOrnament, defined: Set<Element>) {
+    private defineAndName(mpm: Mpm, scope: Scope, ornament: FittedOrnament, defined: Set<Element>) {
         const { draft } = ornament
         const hasFrame = draft.frameStart !== undefined && draft.frameLength !== undefined
 
@@ -397,7 +408,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
         const def = this.asDef(ornament)
         if (!def) return
 
-        mpm.insertDefinition('ornamentDef', def, scope)
+        insertDefinition(mpm, 'ornamentDef', def, scope)
         this.nameAfter(mpm, ornament, def, defined)
     }
 
@@ -405,8 +416,8 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * Point an ornament at the definition just written for it, and record that this run is the
      * one that defined it — which is what licenses taking the draft back off afterwards.
      */
-    private nameAfter(mpm: MPM, ornament: FittedOrnament, def: OrnamentDef, defined: Set<Element>) {
-        const map = mpm.requireMap('ornament', ornament.instruction.scope)
+    private nameAfter(mpm: Mpm, ornament: FittedOrnament, def: OrnamentDef, defined: Set<Element>) {
+        const map = requireMap(mpm, 'ornament', ornament.instruction.scope)
         map.updateOrnamentAt(
             map.getElementIndexOf(ornament.instruction.element),
             { nameRef: def.getName() }

@@ -1,42 +1,8 @@
-import { addCorresp, InstructionType, MPM, Scope } from "../mpm";
+import { auditInstructions, fingerprintInstructions, getInstructions, InstructionType, Scope } from "../mpm";
 import { MSM } from "../msm";
 import { Residual } from "../residual";
+import { Mpm } from "espressivo";
 import { v4 } from "uuid";
-type WithId = { id: string };
-type WithActor = { actor?: { name: string; sameAs: string[]; role?: string } };
-type WithNote = { note?: string };
-
-export const beliefValues = [
-    'authentic',
-    'plausible',
-    'speculative',
-    'unfounded'
-] as const;
-
-export type Certainty = typeof beliefValues[number];
-
-export interface Argumentation<T extends string = 'simpleArgumentation'> extends WithActor, WithNote, WithId {
-    type: T;
-    conclusion: ActivityBelief;
-    continue?: string;  // id of the predecessor argumentation in the chain
-}
-
-export const activityMotivations = [
-    'move',
-    'intensify',
-    'relax',
-    'calm',
-] as const;
-
-export type ActivityMotivation = typeof activityMotivations[number];
-
-/**
- * For now both, E7 and I2
- */
-export interface ActivityBelief extends WithId, WithNote {
-    motivation: ActivityMotivation
-    certainty: Certainty
-}
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface TransformationOptions {
@@ -60,10 +26,15 @@ export interface Transformer {
     id: string
     readonly name: string
     options: TransformationOptions
+    /**
+     * The `xml:id`s of the MPM elements this call is answerable for, as of its last run.
+     *
+     * Derived, never declared — see {@link AbstractTransformer.run}. It is what a work file's
+     * segments name, and what the bake turns into spans.
+     */
     created: string[]
-    run(msm: MSM, mpm: MPM): void
+    run(msm: MSM, mpm: Mpm): void
     readonly requires: Array<TransformerConstructor>
-    argumentation: Argumentation
 }
 
 /**
@@ -75,18 +46,6 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
     options: OptionsType
     created: string[] = []
 
-    /**
-     * Assigned by whoever builds the chain — `importWork` off a saved file, the desk when the
-     * user creates or edits one — never by the transformer itself, which is why there is no
-     * initializer here and why `run` reads it through `?.`.
-     *
-     * Declared as definitely assigned rather than optional because the contract holds on every
-     * transformer that reaches a chain, and `Transformer.argumentation` is consumed as required
-     * downstream. The window in which it is genuinely absent is between `new` and the caller's
-     * next statement.
-     */
-    argumentation!: Argumentation;
-
     abstract readonly requires: Array<TransformerConstructor>
 
     protected constructor(options: OptionsType) {
@@ -97,22 +56,20 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
      * Run the transformer and record which MPM elements it is answerable for.
      *
      * `created` is **derived**, by fingerprinting every instruction before and after — the same
-     * move `src/residual/` made, and for the same reason. It used to be intercepted: `transform`
-     * was handed a subclass of `MPM` that pushed an id on every `insertInstruction`, which meant
-     * every write had to go through one generic method, which is why one existed. Transformers
-     * can now write through espressivo's own maps, and nothing has to funnel.
+     * move `src/residual/` made, and for the same reason. Nothing intercepts a write, which is
+     * what lets `transform` write straight through espressivo's own maps.
      *
-     * Deriving is also more accurate. Interception saw insertions only, so a transformer that
-     * *changed* an instruction — `StylizeArticulation` naming one, `CombineAdjacentRubatos`
-     * folding two together — went unattributed for it. A diff of the elements sees both.
+     * "Answerable for", not "inserted": the diff sees an instruction a transformer *changed* as
+     * well as one it added, so `StylizeArticulation` naming an articulation and
+     * `CombineAdjacentRubatos` folding two frames together are both attributed.
      *
      * Not to be overridden.
      */
-    public run(msm: MSM, mpm: MPM) {
-        const before = mpm.fingerprints()
+    public run(msm: MSM, mpm: Mpm) {
+        const before = fingerprintInstructions(mpm)
         this.transform(msm, mpm)
 
-        const { fingerprints, unnamed, nonFinite } = mpm.audit()
+        const { fingerprints, unnamed, nonFinite } = auditInstructions(mpm)
 
         if (unnamed.length > 0) {
             throw new Error(
@@ -132,28 +89,15 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         this.created = [...fingerprints]
             .filter(([id, xml]) => before.get(id) !== xml)
             .map(([id]) => id)
-
-        this.insertMetadata(mpm)
     }
 
-    protected abstract transform(msm: MSM, mpm: MPM): void
-
-    private insertMetadata(mpm: MPM) {
-        this.created.forEach(id => {
-            const instruction = mpm.findInstructionById(id)
-            if (!instruction) {
-                return
-            }
-
-            addCorresp(instruction.element, this.argumentation?.id || this.id)
-        })
-    }
+    protected abstract transform(msm: MSM, mpm: Mpm): void
 }
 
 export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
 
-export const generateId = (type: InstructionType, date: number, mpm: MPM) => {
-    const instructions = mpm.getInstructions(type)
+export const generateId = (type: InstructionType, date: number, mpm: Mpm) => {
+    const instructions = getInstructions(mpm, type)
     const n = instructions.filter(i => i.date === date).length
     if (n === 0) return `${type}_${date}`
     return `${type}_${date}_${n}`

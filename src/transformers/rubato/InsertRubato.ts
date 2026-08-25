@@ -1,5 +1,5 @@
 import type { AddRubatoOptions } from "espressivo"
-import { MPM } from "../../mpm"
+import { Mpm, requireMap } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp } from "../../utils/utils"
@@ -49,7 +49,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         // Where the notes fell under the tempo, with rubato held out — this is what fits it.
         // Holding it out also means a second call over a looping frame reads the same raw
         // positions the first one did, rather than positions the first call has compensated.
@@ -113,7 +113,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             lateStart,
         }
 
-        mpm.requireMap('rubato', this.options.scope).addRubato(rubato)
+        requireMap(mpm, 'rubato', this.options.scope).addRubato(rubato)
     }
 
 }

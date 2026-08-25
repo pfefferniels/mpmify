@@ -20,7 +20,7 @@
  * The walk itself now lives in `placedTempos.ts`, which states that rule once for the four
  * callers that used to each carry their own copy of it.
  */
-import { MPM } from "../../mpm";
+import { getInstructions, Mpm, scopesOf } from "../../mpm";
 import { MSM } from "../../msm";
 import { dateAtMilliseconds } from "./tempoCalculations";
 import { coversDate, placeTempos, PlacedTempo, segmentAtMs } from "./placedTempos";
@@ -93,11 +93,11 @@ const offsetMs = (event: { 'midi.onset': number, 'midi.duration': number }) =>
  * that can be asked of it is which segment its *recording* falls in.
  *
  * And `msm.pedals` is not scoped, so with a part-scoped tempo map in the document every scope
- * would place every pedal. The first one to reach it keeps it — `scopes()` puts `global` first,
+ * would place every pedal. The first one to reach it keeps it — `scopesOf` puts `global` first,
  * which is the map a sustain pedal belongs under.
  */
-const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
-    for (const scope of mpm.scopes()) {
+const addTickOnsets = (msm: MSM, mpm: Mpm, times: TickTimes) => {
+    for (const scope of scopesOf(mpm)) {
         const segments = placeTempos(msm, mpm, scope)
         if (segments.length === 0) continue
 
@@ -130,8 +130,8 @@ const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
  * Where the onset was never placed there is nothing to measure from, and the duration stays
  * unknown rather than becoming the difference between a tick and `undefined`.
  */
-const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
-    for (const scope of mpm.scopes()) {
+const addTickDurations = (msm: MSM, mpm: Mpm, times: TickTimes) => {
+    for (const scope of scopesOf(mpm)) {
         const segments = placeTempos(msm, mpm, scope)
         if (segments.length === 0) continue
 
@@ -162,7 +162,7 @@ const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
  * already exist. A `<rubato>` the document holds has explained its share of the deviation, so it
  * is taken back off — leaving what nothing has explained yet, which is what a fitter wants.
  */
-export const computeTickTimes = (msm: MSM, mpm: MPM): TickTimes => {
+export const computeTickTimes = (msm: MSM, mpm: Mpm): TickTimes => {
     const times = emptyTickTimes()
 
     addTickOnsets(msm, mpm, times)
@@ -171,8 +171,8 @@ export const computeTickTimes = (msm: MSM, mpm: MPM): TickTimes => {
     // Scopes with no rubato are skipped rather than walked. If a global and a part rubato ever
     // covered the same note the removal would compound, which is not what a part map overriding
     // a global one should mean; mpmify writes rubatos in one scope, so it does not arise.
-    for (const scope of mpm.scopes()) {
-        if (mpm.getInstructions('rubato', scope).length === 0) continue
+    for (const scope of scopesOf(mpm)) {
+        if (getInstructions(mpm, 'rubato', scope).length === 0) continue
         removeRubatoDistortion(msm, mpm, scope, times)
     }
 

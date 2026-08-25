@@ -8,20 +8,21 @@
  */
 import {
     compareTransformers,
+    createMpm,
     deriveResidual,
+    getInstructions,
     getRange,
     exportMPM,
     importWork,
     InsertMetadata,
-    MPM,
     registerTransformer,
     validate,
 } from 'mpmify'
-import type { MSM, Transformer } from 'mpmify'
+import type { InstructionType, Mpm, MSM, Segment as WorkSegment, Transformer } from 'mpmify'
 import { convertMeiToMsm } from 'espressivo'
 import { InsertTempo } from './InsertTempo'
 import { asMSM } from './asMSM'
-import { mergeOverlappingArgumentations } from './mergeArgumentations'
+import { mergeOverlappingSegments } from './mergeSegments'
 import type { Reconstruction, Segment, Span } from './Reconstruction'
 
 registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' })
@@ -38,11 +39,13 @@ interface Pipeline {
     scoreMsm: string
     /** The recording on the score, as the chain left it. */
     msm: MSM
-    mpm: MPM
+    mpm: Mpm
     /** The chain's MPM, serialized. */
     mpmXml: string
     /** The chain as it ran: the file's calls, metadata substituted, in registry order. */
     transformers: Transformer[]
+    /** How the file groups those calls, by call id. */
+    segments: WorkSegment[]
     title: string
     author: string
 }
@@ -54,12 +57,16 @@ interface Derived {
     /** The run itself, for `verifySegments.ts` to compare the segments against. */
     pipeline: {
         transformers: Transformer[]
+        segments: WorkSegment[]
         msm: MSM
-        mpm: MPM
+        mpm: Mpm
     }
     stats: {
         transformers: number
-        argumentations: number
+        /** Groups the work file declares, before overlapping ones are folded together. */
+        segments: number
+        /** Calls in no segment at all — they contribute no span. */
+        ungrouped: number
         /** Spans dropped because every element they made was removed again. */
         droppedSpans: number
         /** Element ids dropped because a later transformer removed the instruction. */
@@ -80,7 +87,7 @@ export const runPipeline = (mei: string, info: string): Pipeline => {
 
     const msm = asMSM(mei, scoreMsm)
 
-    const { transformers: loaded } = importWork(info)
+    const { transformers: loaded, segments } = importWork(info)
     const messages = validate(loaded)
     if (messages.length) throw new Error(messages.map(m => m.message).join('\n'))
 
@@ -90,30 +97,56 @@ export const runPipeline = (mei: string, info: string): Pipeline => {
 
     // The app dropped the imported InsertMetadata and prepended its own, built
     // from the title and author it had extracted. Same document, one code path.
+    // It belongs to no segment: it writes `<metadata>`, not an instruction.
     const metadataTransformer = new InsertMetadata({
         authors: author ? [{ number: 0, text: author }] : [],
         comments: title ? [{ text: title }] : [],
     })
-    metadataTransformer.argumentation = {
-        note: '',
-        id: 'argumentation-metadata',
-        conclusion: { certainty: 'authentic', id: 'belief-metadata', motivation: 'calm' },
-        type: 'simpleArgumentation',
-    }
 
     const ran: Transformer[] = [
         metadataTransformer,
         ...loaded.filter(t => t.name !== 'InsertMetadata'),
     ].sort(compareTransformers)
 
-    const mpm = new MPM()
+    const mpm = createMpm()
     quiet(() => ran.forEach(transformer => transformer.run(msm, mpm)))
 
-    return { scoreMsm, msm, mpm, mpmXml: exportMPM(mpm), transformers: ran, title, author }
+    return { scoreMsm, msm, mpm, mpmXml: exportMPM(mpm), transformers: ran, segments, title, author }
+}
+
+/** The instructions of one type a set of element ids names, earliest first. */
+const named = <K extends InstructionType>(mpm: Mpm, type: K, elements: Set<string>) =>
+    getInstructions(mpm, type)
+        .filter(instruction => instruction.id !== undefined && elements.has(instruction.id))
+        .sort((a, b) => a.date - b.date)
+
+/** Only the values that are numbers: `@bpm` and `@volume` may hold a style-relative name. */
+const numeric = (values: readonly (number | string | undefined)[]): number[] =>
+    values.filter((value): value is number => typeof value === 'number')
+
+/** How far a run of values travels from where it starts to where it ends. */
+const travelled = (values: number[]): number =>
+    values.length === 0 ? 0 : values[values.length - 1] - values[0]
+
+/**
+ * The segment's weight on the intensity curve, read off what its own elements do.
+ *
+ * See {@link Segment.intensity}: half for the direction the tempo takes over the segment, half
+ * for the direction the dynamics take, so the two agreeing is worth twice one moving alone.
+ */
+const intensityOf = (mpm: Mpm, elements: Set<string>): number => {
+    const tempo = named(mpm, 'tempo', elements)
+        .flatMap(instruction => numeric([instruction.bpm, instruction.transitionTo]))
+    const dynamics = named(mpm, 'dynamics', elements)
+        .flatMap(instruction => numeric([instruction.volume, instruction.transitionTo]))
+
+    return Math.sign(travelled(tempo)) * 0.5 + Math.sign(travelled(dynamics)) * 0.5
 }
 
 export const derive = (mei: string, info: string): Derived => {
-    const { scoreMsm, msm, mpm, mpmXml, transformers: ran, title, author } = runPipeline(mei, info)
+    const {
+        scoreMsm, msm, mpm, mpmXml, transformers: ran, segments: grouping, title, author,
+    } = runPipeline(mei, info)
 
     // Where the chain's MPM puts each note and pedal on the tick grid. Only the pedal
     // transformers need it — a pedal has no symbolic date of its own — but `getRange` cannot
@@ -122,16 +155,32 @@ export const derive = (mei: string, info: string): Derived => {
     const residual = deriveResidual(msm, mpm, { without: ['movement'] })
 
     // The viewer ran this on every pipeline result, so it is part of what the
-    // segments are: argumentations covering the exact same ticks are one.
-    const transformers = mergeOverlappingArgumentations(ran, msm, residual)
+    // segments are: groups covering the exact same ticks are one.
+    const segments = mergeOverlappingSegments(grouping, ran, msm, residual)
 
-    const typeById = new Map(mpm.getInstructions().map(i => [i.id, i.type]))
+    const segmentOfCall = new Map<string, WorkSegment>()
+    for (const segment of segments) {
+        for (const call of segment.calls) segmentOfCall.set(call, segment)
+    }
 
-    const segments: Segment[] = []
+    const typeById = new Map(getInstructions(mpm).map(i => [i.id, i.type]))
+
+    // In chain order, so a segment appears where its first call runs.
+    const groups = new Map<WorkSegment, Transformer[]>()
+    let ungrouped = 0
+    for (const transformer of ran) {
+        const segment = segmentOfCall.get(transformer.id)
+        if (!segment) { ungrouped++; continue }
+        const group = groups.get(segment)
+        if (group) group.push(transformer)
+        else groups.set(segment, [transformer])
+    }
+
+    const derived: Segment[] = []
     let droppedSpans = 0
     let droppedElements = 0
 
-    for (const [argumentation, group] of Map.groupBy(transformers, t => t.argumentation)) {
+    for (const [segment, group] of groups) {
         const range = getRange(group, msm, residual)
         if (!range) continue
         const from = range.from
@@ -169,14 +218,12 @@ export const derive = (mei: string, info: string): Derived => {
         const spans = [...byId.values()]
         if (spans.length === 0) continue
 
-        segments.push({
-            id: argumentation.id,
-            motivation: argumentation.conclusion.motivation,
-            certainty: argumentation.conclusion.certainty,
-            ...(argumentation.conclusion.note ? { note: argumentation.conclusion.note } : {}),
-            ...(argumentation.continue ? { continue: argumentation.continue } : {}),
+        derived.push({
+            id: segment.id,
+            ...(segment.note ? { note: segment.note } : {}),
             from,
             to,
+            intensity: intensityOf(mpm, new Set(spans.flatMap(span => span.elements))),
             spans,
         })
     }
@@ -184,11 +231,12 @@ export const derive = (mei: string, info: string): Derived => {
     return {
         scoreMsm,
         mpmXml,
-        reconstruction: { title, author, segments },
-        pipeline: { transformers, msm, mpm },
+        reconstruction: { title, author, segments: derived },
+        pipeline: { transformers: ran, segments, msm, mpm },
         stats: {
             transformers: ran.length,
-            argumentations: new Set(ran.map(t => t.argumentation?.id)).size,
+            segments: grouping.length,
+            ungrouped,
             droppedSpans,
             droppedElements,
         },

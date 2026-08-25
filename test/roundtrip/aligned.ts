@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { performMsmToData } from "espressivo"
 import type { PerformanceData, PerformedNote } from "espressivo"
 import { MSM } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { createMpm } from "../../src/mpm"
 import { importWork } from "../../src/Work"
 import { asMSM } from "../../scripts/bake/asMSM"
 import { runPipeline } from "../../scripts/bake/deriveSegments"
@@ -93,7 +93,7 @@ export const runAligned = (): AlignedRun => {
 const recording = (mei: string, scoreMsm: string, info: string): MSM => {
     const observed = asMSM(mei, scoreMsm)
     const { transformers } = importWork(info)
-    const scratch = new MPM()
+    const scratch = createMpm()
 
     for (const transformer of transformers) {
         if (transformer.name === 'MakeChoice' || transformer.name === 'Modify') {
@@ -107,10 +107,8 @@ const recording = (mei: string, scoreMsm: string, info: string): MSM => {
 }
 
 const declaredCalls = (info: string): number => {
-    const parsed = JSON.parse(info) as {
-        creation: { argumentations: { calls: unknown[] }[] }
-    }
-    return parsed.creation.argumentations.reduce((total, a) => total + a.calls.length, 0)
+    const parsed = JSON.parse(info) as { provenance: unknown[] }
+    return parsed.provenance.length
 }
 
 /** The share of the recording's departure from the bare score that the MPM accounts for. */

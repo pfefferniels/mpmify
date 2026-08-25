@@ -43,10 +43,13 @@ import { roundTrip } from "../test/roundtrip/harness"
 const OUT = join(__dirname, 'mpm-digest.txt')
 
 /**
- * `corresp` carries a fresh `v4()` per run — it points at the argumentation call that wrote the
- * element, and the round-trip harness does not pin those the way `test/determinism.test.ts`
- * does. Each distinct id becomes `#0`, `#1`, … in first-seen order, so *which elements share an
- * argumentation* is still compared and the random part is not.
+ * One thing in a fitted document is still random: `ensureDefaultStyle` mints the `<style>`
+ * switch's `@xml:id` with `v4()`, so the same chain over the same score names it differently on
+ * every run. Definition names are not — they are derived from what they describe — so this is
+ * the whole of it.
+ *
+ * Each distinct uuid becomes `#0`, `#1`, … in first-seen order, which keeps *which elements
+ * share an id* in the comparison and leaves the random part out of it.
  */
 const canonicalIds = (attributes: string[], seen: Map<string, string>): string[] =>
     attributes.map(a => a.replace(

@@ -1,4 +1,11 @@
-import { ArticulationDef, definitionOf, MPM } from "../../mpm"
+import {
+    ArticulationDef,
+    ensureDefaultStyle,
+    insertDefinition,
+    Mpm,
+    requireMap,
+    unwrap,
+} from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -32,14 +39,14 @@ const setModifier: Record<ArticulationProperty, (def: ArticulationDef, value: nu
  *
  * espressivo answers a `Result` because the same factory also parses an existing element; built
  * from a name it cannot fail, since the one thing that can go wrong is a missing `@name` and
- * this writes one. Hence {@link definitionOf}, which reads the failure arm as the caller bug it
+ * this writes one. Hence {@link unwrap}, which reads the failure arm as the caller bug it
  * would be rather than a case to branch on.
  */
 export const makeArticulationDef = (
     name: string,
     modifiers: ArticulationModifiers
 ): ArticulationDef => {
-    const def = definitionOf(ArticulationDef.createArticulationDef(name))
+    const def = unwrap(ArticulationDef.createArticulationDef(name))
 
     for (const [modifier, value] of Object.entries(modifiers)) {
         if (value !== undefined) setModifier[modifier as ArticulationProperty](def, value)
@@ -133,7 +140,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         }
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         const { noteIDs, aspects, name } = this.options
         const affectedNotes = noteIDs
             .map(id => msm.getByID(id))
@@ -163,13 +170,13 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
                 avgs[aspect] = values.reduce((acc, v) => acc + v, 0) / values.length
             })
 
-        mpm.insertDefinition('articulationDef', makeArticulationDef(name, avgs), this.options.scope)
+        insertDefinition(mpm, 'articulationDef', makeArticulationDef(name, avgs), this.options.scope)
 
         // A <style> switch is what puts the styleDef holding `def` in scope; without one the
         // @name.ref below resolves to nothing and the articulation is inert. Only
         // StylizeArticulation and MakeDefaultArticulation used to emit it, so a chain that ran
         // neither produced definitions no renderer could reach. See old-bugs.md.
-        mpm.ensureDefaultStyle('articulation', this.options.scope)
+        ensureDefaultStyle(mpm, 'articulation', this.options.scope)
 
         // One `<articulation>` per note, and no measured values on it: what the note is
         // articulated as now comes from the definition it refers to.
@@ -184,7 +191,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // The id is minted immediately before each insertion, not for the batch up front:
         // `generateId` numbers by how many instructions the map already holds at that date, so
         // a batch that no longer has one entry per date has to let it see each one land.
-        const map = mpm.requireMap('articulation', this.options.scope)
+        const map = requireMap(mpm, 'articulation', this.options.scope)
         for (const { date, noteid } of articulations) {
             map.addArticulation({
                 date,

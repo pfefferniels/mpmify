@@ -2,13 +2,13 @@
 
 import { describe, test, expect } from "vitest"
 import { MSM } from "../../src/msm"
-import { Instruction, MPM } from "../../src/mpm"
+import { Instruction, Mpm, createMpm, getInstructions, requireMap } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { computeMillisecondsAt, TempoWithEndDate } from "../../src/transformers/tempo/tempoCalculations"
 
 /** Call the protected `transform` method for testing */
-function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: MPM) {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void };
+function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: Mpm) {
+    type Transformable = { transform(msm: MSM, mpm: Mpm): void };
     (transformer as unknown as Transformable).transform(msm, mpm);
 }
 
@@ -89,14 +89,14 @@ function fitAndGetTempos(
     silentOnsets: SilentOnset[] = []
 ): Instruction<'tempo'>[] {
     const msm = buildMsm(onsets);
-    const mpm = new MPM();
+    const mpm = createMpm();
     const transformer = new ApproximateLogarithmicTempo({
         scope: 'global',
         from, to, beatLength,
         silentOnsets
     });
     callTransform(transformer, msm, mpm);
-    return mpm.getInstructions('tempo', 'global')
+    return getInstructions(mpm, 'tempo', 'global')
         .sort((a, b) => a.date - b.date);
 }
 
@@ -202,7 +202,7 @@ describe('ApproximateLogarithmicTempo', () => {
         }, 8);
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         // Fit first segment
         const t1 = new ApproximateLogarithmicTempo({
@@ -217,7 +217,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -295,7 +295,7 @@ describe('ApproximateLogarithmicTempo', () => {
         }, 12);
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         const t1 = new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: halfTicks, beatLength: 0.25, silentOnsets: []
@@ -308,7 +308,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -339,7 +339,7 @@ describe('ApproximateLogarithmicTempo', () => {
         ];
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         const t1 = new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: halfTicks, beatLength: 0.25, silentOnsets: []
@@ -352,7 +352,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(t2, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         expect(tempos).toHaveLength(3);
@@ -363,8 +363,8 @@ describe('ApproximateLogarithmicTempo', () => {
 
     test('keeps existing tempos unchanged when fitting yields no segments', () => {
         const msm = new MSM([], { numerator: 4, denominator: 4 });
-        const mpm = new MPM();
-        mpm.requireMap('tempo', 'global').addTempo({
+        const mpm = createMpm();
+        requireMap(mpm, 'tempo', 'global').addTempo({
             id: 'tempo_existing',
             date: 0,
             bpm: 88,
@@ -378,7 +378,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         expect(tempos).toHaveLength(1);
         expect(tempos[0].date).toBe(0);
         expect(tempos[0].bpm).toBe(88);
@@ -389,8 +389,8 @@ describe('ApproximateLogarithmicTempo', () => {
             { date: BEAT, onset: 0 },
             { date: 2 * BEAT, onset: 1 }
         ]);
-        const mpm = new MPM();
-        const tempi = mpm.requireMap('tempo', 'global');
+        const mpm = createMpm();
+        const tempi = requireMap(mpm, 'tempo', 'global');
         tempi.addTempo({
             id: 'tempo_1',
             date: 0,
@@ -417,7 +417,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         const touchingBoundary = tempos.find(t => t.date === 2 * BEAT);
         expect(touchingBoundary).toBeDefined();
         expect(touchingBoundary!.bpm).toBe(150);
@@ -429,8 +429,8 @@ describe('ApproximateLogarithmicTempo', () => {
             { date: 0, onset: 0 },
             { date: BEAT, onset: 1 }
         ]);
-        const mpm = new MPM();
-        const tempi = mpm.requireMap('tempo', 'global');
+        const mpm = createMpm();
+        const tempi = requireMap(mpm, 'tempo', 'global');
         tempi.addTempo({
             id: 'tempo_1',
             date: 0,
@@ -451,7 +451,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         const continuation = tempos.find(t => t.date === BEAT);
         expect(continuation).toBeDefined();
         expect(continuation!.bpm).toBeCloseTo(200, 4);
@@ -462,7 +462,7 @@ describe('ApproximateLogarithmicTempo', () => {
         const onsets = generateOnsets(() => 100, 4);
 
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global', from: 0, to: totalTicks, beatLength: 0.25,
@@ -470,7 +470,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global');
+        const tempos = getInstructions(mpm, 'tempo', 'global');
         expect(tempos).toHaveLength(1);
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
     });
@@ -542,10 +542,10 @@ describe('ApproximateLogarithmicTempo', () => {
     test('continue chain stops at different beatLength', () => {
         const onsets = generateOnsets(() => 100, 8);
         const msm = buildMsm(onsets);
-        const mpm = new MPM();
+        const mpm = createMpm();
 
         // Insert a predecessor with different beatLength
-        mpm.requireMap('tempo', 'global').addTempo({
+        requireMap(mpm, 'tempo', 'global').addTempo({
             id: 'tempo_other',
             date: 0,
             bpm: 60,
@@ -559,7 +559,7 @@ describe('ApproximateLogarithmicTempo', () => {
         });
         callTransform(transformer, msm, mpm);
 
-        const tempos = mpm.getInstructions('tempo', 'global')
+        const tempos = getInstructions(mpm, 'tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
         // The beatLength=0.5 instruction should be untouched

@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { describe, expect, test } from "vitest"
-import { MPM } from "../../src/mpm"
+import {
+    auditInstructions,
+    createMpm,
+    exportMPM,
+    getInstructions,
+    Mpm,
+    requireMap,
+} from "../../src/mpm"
 import { MSM } from "../../src/msm"
 import { AbstractTransformer, TransformationOptions } from "../../src/transformers/Transformer"
 
@@ -14,7 +21,7 @@ import { AbstractTransformer, TransformationOptions } from "../../src/transforme
  *
  * The guard is a **sweep**, not a check on the way in. It used to be the latter, which meant it
  * only saw values passed to one generic write method — so it also meant one had to exist. Now
- * `MPM.audit()` walks the document and `AbstractTransformer.run` refuses afterwards, which
+ * `auditInstructions` walks the document and `AbstractTransformer.run` refuses afterwards, which
  * costs one pass per transformer and covers every path into the document, including a write
  * made straight through an espressivo map.
  *
@@ -38,61 +45,62 @@ class WritesTempo extends AbstractTransformer<TransformationOptions> {
     ) {
         super({})
     }
-    protected transform(_msm: MSM, mpm: MPM) {
-        mpm.requireMap('tempo', 'global')
+    protected transform(_msm: MSM, mpm: Mpm) {
+        requireMap(mpm, 'tempo', 'global')
             .addTempo({ id: this.elementId, date: 0, bpm: this.bpm, beatLength: 0.25 })
     }
 }
 
-const run = (transformer: AbstractTransformer<TransformationOptions>, mpm: MPM) =>
+const run = (transformer: AbstractTransformer<TransformationOptions>, mpm: Mpm) =>
     transformer.run(new MSM([], { numerator: 4, denominator: 4 }), mpm)
 
 describe('a non-finite number never survives a transformer', () => {
     test('NaN is refused, and the message names the attribute', () => {
-        expect(() => run(new WritesTempo(NaN, 't1'), new MPM()))
+        expect(() => run(new WritesTempo(NaN, 't1'), createMpm()))
             .toThrow(/<tempo @bpm>="NaN"/)
     })
 
     test('an infinity is refused too', () => {
-        expect(() => run(new WritesTempo(Infinity, 't1'), new MPM()))
+        expect(() => run(new WritesTempo(Infinity, 't1'), createMpm()))
             .toThrow(/must be a finite number/)
     })
 
     test('finite numbers are untouched, including zero and negatives', () => {
-        const mpm = new MPM()
-        const map = mpm.requireMap('tempo', 'global')
+        const mpm = createMpm()
+        const map = requireMap(mpm, 'tempo', 'global')
         map.addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
         map.updateTempoAt(0, { transitionTo: 0, meanTempoAt: -0.5 })
 
-        expect(mpm.audit().nonFinite).toEqual([])
-        expect(mpm.toXML()).toContain('transition.to="0"')
-        expect(mpm.toXML()).toContain('meanTempoAt="-0.5"')
+        expect(auditInstructions(mpm).nonFinite).toEqual([])
+        expect(exportMPM(mpm)).toContain('transition.to="0"')
+        expect(exportMPM(mpm)).toContain('meanTempoAt="-0.5"')
     })
 
     test('an instruction with no xml:id is refused for the same reason', () => {
-        // Not about finiteness, but the same sweep and the same moment: one without an id gets
-        // no `@corresp`, cannot be named in a work file, and has its span silently dropped.
-        expect(() => run(new WritesTempo(60), new MPM()))
+        // Not about finiteness, but the same sweep and the same moment: one without an id
+        // cannot be named in a work file's segment `elements`, so the call that wrote it goes
+        // unattributed and the bake silently drops its span.
+        expect(() => run(new WritesTempo(60), createMpm()))
             .toThrow(/no xml:id/)
     })
 })
 
 describe('a non-finite number already in a document', () => {
     test('still reads back as NaN', () => {
-        const mpm = new MPM()
-        const map = mpm.requireMap('tempo', 'global')
+        const mpm = createMpm()
+        const map = requireMap(mpm, 'tempo', 'global')
         map.addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25, meanTempoAt: 0.5 })
 
         // What a file written by an earlier version looks like once parsed.
         map.getElement(0)?.getAttribute('meanTempoAt')?.setValue('NaN')
 
-        expect(mpm.getInstructions('tempo', 'global')[0].meanTempoAt).toBeNaN()
-        expect(mpm.audit().nonFinite).toEqual(['<tempo @meanTempoAt>="NaN"'])
+        expect(getInstructions(mpm, 'tempo', 'global')[0].meanTempoAt).toBeNaN()
+        expect(auditInstructions(mpm).nonFinite).toEqual(['<tempo @meanTempoAt>="NaN"'])
     })
 
     test('@bpm is number-or-name, so a NaN there comes back as the string "NaN"', () => {
-        const mpm = new MPM()
-        const map = mpm.requireMap('tempo', 'global')
+        const mpm = createMpm()
+        const map = requireMap(mpm, 'tempo', 'global')
         map.addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
 
         // `@bpm` may name a tempo ("Allegro"), so espressivo's reader keeps anything that is
@@ -101,7 +109,7 @@ describe('a non-finite number already in a document', () => {
         // a test on the value sees an ordinary string and passes.
         map.getElement(0)?.getAttribute('bpm')?.setValue('NaN')
 
-        expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe('NaN')
-        expect(mpm.audit().nonFinite).toEqual(['<tempo @bpm>="NaN"'])
+        expect(getInstructions(mpm, 'tempo', 'global')[0].bpm).toBe('NaN')
+        expect(auditInstructions(mpm).nonFinite).toEqual(['<tempo @bpm>="NaN"'])
     })
 })

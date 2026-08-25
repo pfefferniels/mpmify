@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM } from "../../src/mpm"
+import { createMpm, Mpm, requireMap } from "../../src/mpm"
 import { computeTickTimes, emptyTickTimes } from "../../src/transformers/tempo/tickTimes"
 import { removeRubatoDistortion } from "../../src/transformers/rubato/rubatoMath"
 
@@ -28,12 +28,12 @@ const fixture = () => new MSM(
 )
 
 const withTempo = () => {
-    const mpm = new MPM()
-    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
+    const mpm = createMpm()
+    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
-const rubatoAt = (mpm: MPM, date: number) => mpm.requireMap('rubato', 'global')
+const rubatoAt = (mpm: Mpm, date: number) => requireMap(mpm, 'rubato', 'global')
     .addRubato({ id: `r${date}`, date, frameLength: FRAME, intensity: 0.65 })
 
 /**

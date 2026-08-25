@@ -1,4 +1,19 @@
-import { ArticulationDef, Instruction, MPM, Scope } from "../../mpm";
+import {
+    ArticulationDef,
+    ensureDefaultStyle,
+    getDefinition,
+    getDefinitions,
+    getInstructions,
+    getStyles,
+    Instruction,
+    insertDefinition,
+    mapOf,
+    Mpm,
+    removeDefinition,
+    removeInstruction,
+    Scope,
+    scopesOf,
+} from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dbscan, IPoint } from "../../utils/dbscan";
@@ -72,8 +87,8 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
      * nobody's neighbourhood: no cluster, no def, no default, nothing written. The values were
      * never lost, only moved one reference away, which is where they are read from now.
      */
-    private effectiveOf(articulation: Articulation, mpm: MPM): EffectiveArticulation {
-        const def = mpm.getDefinition('articulationDef', articulation.nameRef)
+    private effectiveOf(articulation: Articulation, mpm: Mpm): EffectiveArticulation {
+        const def = getDefinition(mpm, 'articulationDef', articulation.nameRef)
 
         return {
             relativeDuration: articulation.relativeDuration ?? statedNumber(def, 'relativeDuration'),
@@ -181,40 +196,40 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
      * Without this, merging leaves the styleDef holding both the def a cluster came from and the
      * def it was merged into, saying the same thing twice.
      */
-    private removeMergedDefs(mpm: MPM, scope: Scope, previouslyReferenced: Set<string>) {
+    private removeMergedDefs(mpm: Mpm, scope: Scope, previouslyReferenced: Set<string>) {
         if (previouslyReferenced.size === 0) return
 
         const referenced = new Set<string>()
-        for (const one of mpm.scopes()) {
-            for (const articulation of mpm.getInstructions('articulation', one)) {
+        for (const one of scopesOf(mpm)) {
+            for (const articulation of getInstructions(mpm, 'articulation', one)) {
                 referenced.add(articulation.nameRef)
             }
-            for (const style of mpm.getStyles('articulation', one)) {
+            for (const style of getStyles(mpm, 'articulation', one)) {
                 if (style.defaultArticulation !== undefined) referenced.add(style.defaultArticulation)
             }
         }
 
-        mpm.getDefinitions('articulationDef', scope)
+        getDefinitions(mpm, 'articulationDef', scope)
             .filter(def => previouslyReferenced.has(def.getName()) && !referenced.has(def.getName()))
-            .forEach(def => mpm.removeDefinition('articulationDef', def))
+            .forEach(def => removeDefinition(mpm, 'articulationDef', def))
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         // Where each note actually fell, under everything the MPM explains apart from
         // articulation — which is what this step is deciding. Derived once: it does not vary by
         // scope, and each call renders the document.
         const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
 
-        for (const scope of mpm.scopes()) {
+        for (const scope of scopesOf(mpm)) {
             // The scope's own `<articulationMap>`, which is where the repointing below is
             // written. A scope without one has nothing to cluster — every step in the body is a
             // no-op on an empty set of articulations — and asking for it would create an empty
             // map in a scope that never had one.
-            const map = mpm.mapOf('articulation', scope)
+            const map = mapOf(mpm, 'articulation', scope)
             if (!map) continue
 
             // Find clusters
-            const articulations = mpm.getInstructions('articulation', scope)
+            const articulations = getInstructions(mpm, 'articulation', scope)
             const effective = articulations.map(a => this.effectiveOf(a, mpm))
             const points = this.generateClusters(effective)
 
@@ -238,7 +253,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                     })]
                 }))
 
-            for (const def of defs.values()) mpm.insertDefinition('articulationDef', def, scope)
+            for (const def of defs.values()) insertDefinition(mpm, 'articulationDef', def, scope)
 
             const labeledArticulations = points.reduce<Record<number, Articulation[]>>((acc, p, i) => {
                 if (p.label === -1) return acc
@@ -277,16 +292,16 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
             if (bestCluster) {
                 const defName = `def_${bestCluster[0]}`
-                mpm.getInstructions('articulation', scope)
+                getInstructions(mpm, 'articulation', scope)
                     .filter(a => a.nameRef === defName)
-                    .forEach(a => mpm.removeInstruction(a))
+                    .forEach(a => removeInstruction(mpm, a))
 
-                mpm.ensureDefaultStyle('articulation', scope, { defaultArticulation: defName })
+                ensureDefaultStyle(mpm, 'articulation', scope, { defaultArticulation: defName })
             }
             else if (defs.size > 0) {
                 // if no best cluster could be determined, but there
                 // are clusters, insert a default style switch
-                mpm.ensureDefaultStyle('articulation', scope)
+                ensureDefaultStyle(mpm, 'articulation', scope)
             }
 
             this.removeMergedDefs(mpm, scope, previouslyReferenced)

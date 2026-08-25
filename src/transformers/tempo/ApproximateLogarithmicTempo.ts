@@ -1,6 +1,14 @@
 import { v4 } from "uuid";
 import type { Tempo as ResolvedTempo } from "espressivo";
-import { Instruction, InstructionOptions, MPM, Scope } from "../../mpm";
+import {
+    getInstructions,
+    Instruction,
+    InstructionOptions,
+    Mpm,
+    removeInstruction,
+    requireMap,
+    Scope,
+} from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
@@ -120,7 +128,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
      * the chain is reconstructed so boundary tempos are shared
      * (matching the jointly-fitted result from `insert`).
      */
-    static preview(options: ApproximateLogarithmicTempoOptions, msm: MSM, mpm?: MPM): TempoWithEndDate[] {
+    static preview(options: ApproximateLogarithmicTempoOptions, msm: MSM, mpm?: Mpm): TempoWithEndDate[] {
         const notes = msm.notesInPart(options.scope);
         const newSegment: TempoSegment = { from: options.from, to: options.to, beatLength: options.beatLength };
 
@@ -135,7 +143,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         return fitSegments(segments, notes, options.silentOnsets);
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         if (!msm.timeSignature) {
             console.warn('A time signature must be given to interpolate a tempo map.')
             return
@@ -174,7 +182,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // so we can clean up spurious restoration instructions afterward.
         const chainEnd = segments[segments.length - 1].to;
         const existedAtChainEnd = this.options.continue && segments.length > 1
-            && mpm.getInstructions('tempo', this.options.scope).some(t => t.date === chainEnd);
+            && getInstructions(mpm, 'tempo', this.options.scope).some(t => t.date === chainEnd);
 
         this.removeAffectedTempoInstructions(mpm, this.options.scope, replacementRanges);
 
@@ -185,8 +193,8 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // replacement ranges are `[from, to)` of the chain's own segments, so they tile
         // [chain start, chain end) exactly; every date written below is one of those `from`s and
         // so was just cleared. The only date the removal restores to is the chain end, which is
-        // no segment's start. That is what the `overwrite` flag this call used to pass was for.
-        const map = mpm.requireMap('tempo', this.options.scope)
+        // no segment's start.
+        const map = requireMap(mpm, 'tempo', this.options.scope)
         for (const fitted of tempos) {
             const { endDate: _fittingWindow, ...tempo } = fitted;
             map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
@@ -196,10 +204,10 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         // continuation at the chain end for an instruction that was part of the
         // old chain.  This is now superseded by the re-fitted chain, so remove it.
         if (this.options.continue && segments.length > 1 && !existedAtChainEnd) {
-            const restored = mpm.getInstructions('tempo', this.options.scope)
+            const restored = getInstructions(mpm, 'tempo', this.options.scope)
                 .find(t => t.date === chainEnd);
             if (restored) {
-                mpm.removeInstruction(restored);
+                removeInstruction(mpm, restored);
             }
         }
 
@@ -220,14 +228,14 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
      * `removeAffectedTempoInstructions` restored, or one that was there all along — and is
      * left alone.
      */
-    private closeTransition(mpm: MPM, last: TempoWithEndDate) {
+    private closeTransition(mpm: Mpm, last: TempoWithEndDate) {
         const target = last.transitionTo;
         if (target === undefined || last.endDate <= last.date) return;
 
-        const existing = mpm.getInstructions('tempo', this.options.scope);
+        const existing = getInstructions(mpm, 'tempo', this.options.scope);
         if (existing.some(tempo => tempo.date === last.endDate)) return;
 
-        mpm.requireMap('tempo', this.options.scope).addTempo({
+        requireMap(mpm, 'tempo', this.options.scope).addTempo({
             id: generateId('tempo', last.endDate, mpm),
             date: last.endDate,
             bpm: target,
@@ -235,7 +243,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         });
     }
 
-    removeAffectedTempoInstructions(mpm: MPM, scope: Scope, segments: TempoSegment[]) {
+    removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, segments: TempoSegment[]) {
         if (segments.length === 0) return;
 
         const sortedRanges = segments
@@ -254,7 +262,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
             }
         }
 
-        const existing = mpm.getInstructions('tempo', scope)
+        const existing = getInstructions(mpm, 'tempo', scope)
             .slice()
             .sort((a, b) => a.date - b.date);
         if (existing.length === 0) return;
@@ -296,12 +304,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
 
         for (const tempo of existing) {
             if (isCovered(tempo.date)) {
-                mpm.removeInstruction(tempo)
+                removeInstruction(mpm, tempo)
             }
         }
 
         // The map is there: `existing` was non-empty, or this returned above.
-        const map = mpm.requireMap('tempo', scope)
+        const map = requireMap(mpm, 'tempo', scope)
         for (const tempo of restoreAtBoundaries) {
             map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
         }
@@ -315,8 +323,8 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
  * contiguous chain of segments ending at `from` with matching `beatLength`.
  * Stops when beatLength changes or there is a gap in the chain.
  */
-function reconstructChain(mpm: MPM, scope: Scope, from: number, beatLength: number): TempoSegment[] {
-    const allInstructions = mpm.getInstructions('tempo', scope)
+function reconstructChain(mpm: Mpm, scope: Scope, from: number, beatLength: number): TempoSegment[] {
+    const allInstructions = getInstructions(mpm, 'tempo', scope)
         .filter(t => t.date < from)
         .sort((a, b) => a.date - b.date);
 

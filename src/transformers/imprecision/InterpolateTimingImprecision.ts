@@ -1,4 +1,4 @@
-import { MPM } from "../../mpm"
+import { Mpm } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
@@ -21,7 +21,7 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
         super({ predefinedImprecision: 0 })
     }
 
-    protected transform(_msm: MSM, _mpm: MPM) {
+    protected transform(_msm: MSM, _mpm: Mpm) {
         const _timingImprecision = {
             'distribution.uniform': {
                 '@': {
@@ -32,6 +32,6 @@ export class InterpolateTimingImprecision extends AbstractTransformer<Interpolat
             }
         }
 
-        // mpm.insertInstructions(..., 'global')
+        // nothing is written yet: mpmify has no `<imprecision.timing>` map to write it into.
     }
 }

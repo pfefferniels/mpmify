@@ -17,8 +17,8 @@
  *
  * The last of those is a behaviour change worth stating plainly: a document with
  * `meanTempoAt="x"` used to fit quietly against a ramp the renderer would never draw, and now
- * produces `NaN` — which `MPM.insertInstruction`'s finiteness guard refuses to write. That is the
- * intended outcome. The renderer's answer is the one that decides whether a fit is right, so
+ * produces `NaN` — which `auditInstructions` refuses to let a transformer leave standing. That is
+ * the intended outcome. The renderer's answer is the one that decides whether a fit is right, so
  * matching it is correctness and not precision.
  *
  * What is genuinely mpmify's stays here: the inverse direction — {@link ticksForConstantTempo}

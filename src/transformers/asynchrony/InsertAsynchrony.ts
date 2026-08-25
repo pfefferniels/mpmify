@@ -1,5 +1,5 @@
 import { v4 } from "uuid"
-import { MPM, Scope } from "../../mpm"
+import { Mpm, requireMap, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 
@@ -35,7 +35,7 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         const chords = Array
             .from(msm.asChords(this.options.part as Scope))
             .filter(([date, chord]) => {
@@ -59,7 +59,7 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
         
         const averageShift = shifts.reduce((acc, shift) => acc + shift, 0) / shifts.length
 
-        const map = mpm.requireMap('asynchrony', this.options.part as Scope)
+        const map = requireMap(mpm, 'asynchrony', this.options.part as Scope)
 
         map.addAsynchrony({
             id: 'asynchrony_' + v4(),

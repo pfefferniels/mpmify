@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { MPM } from "../../src/mpm"
+import { createMpm, exportMPM, Mpm, requireMap } from "../../src/mpm"
 
 /** The attribute names of the first `<tempo>`, in serialized order. */
-const tempoAttributeOrder = (mpm: MPM) => {
-    const tag = mpm.toXML().match(/<tempo [^>]*\/>/)![0]
+const tempoAttributeOrder = (mpm: Mpm) => {
+    const tag = exportMPM(mpm).match(/<tempo [^>]*\/>/)![0]
     return [...tag.matchAll(/([a-zA-Z:.]+)=/g)].map(m => m[1])
 }
 
@@ -19,8 +19,8 @@ const tempoAttributeOrder = (mpm: MPM) => {
  */
 describe('editing an instruction', () => {
     test('leaves the attribute where it was in the document', () => {
-        const mpm = new MPM()
-        const map = mpm.requireMap('tempo', 'global')
+        const mpm = createMpm()
+        const map = requireMap(mpm, 'tempo', 'global')
         const index = map.addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
 
         const before = tempoAttributeOrder(mpm)
@@ -32,26 +32,26 @@ describe('editing an instruction', () => {
         // would move `bpm` to the end and make every edited document differ from its source by
         // attribute order alone. `patchAttribute` writes through the existing attribute.
         expect(tempoAttributeOrder(mpm)).toEqual(before)
-        expect(mpm.toXML()).toContain('bpm="132"')
+        expect(exportMPM(mpm)).toContain('bpm="132"')
     })
 
     // `xml:id` is stored namespaced and its local name is `id`, so it only stays put if the
     // lookup asks for the local half. It did not, at first: removal was a silent no-op and a
     // re-set took the append arm.
     test('holds for the namespaced xml:id too', () => {
-        const mpm = new MPM()
-        const map = mpm.requireMap('tempo', 'global')
+        const mpm = createMpm()
+        const map = requireMap(mpm, 'tempo', 'global')
         const index = map.addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
 
         map.updateTempoAt(index, { id: 't2' })
 
         expect(tempoAttributeOrder(mpm)).toEqual(['date', 'bpm', 'beatLength', 'xml:id'])
-        expect(mpm.toXML()).toContain('xml:id="t2"')
+        expect(exportMPM(mpm)).toContain('xml:id="t2"')
     })
 
     test('a new attribute lands at the end rather than displacing one', () => {
-        const mpm = new MPM()
-        const map = mpm.requireMap('tempo', 'global')
+        const mpm = createMpm()
+        const map = requireMap(mpm, 'tempo', 'global')
         const index = map.addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
 
         map.updateTempoAt(index, { transitionTo: 90 })

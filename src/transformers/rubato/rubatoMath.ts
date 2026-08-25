@@ -14,7 +14,7 @@
  * a performed one.
  */
 import { resolveRubato, type AddRubatoOptions, type Rubato as ResolvedRubato } from "espressivo"
-import { MPM, Scope } from "../../mpm"
+import { instructionsEffectiveAtDate, Mpm, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { TickTimes } from "../tempo/tickTimes"
 
@@ -144,7 +144,7 @@ const removeRubatoFromDate = (newDate: number, rubato: RubatoFrame) => {
  */
 export const removeRubatoDistortion = (
     msm: MSM,
-    mpm: MPM,
+    mpm: Mpm,
     scope: Scope,
     times: TickTimes
 ) => {
@@ -157,7 +157,7 @@ export const removeRubatoDistortion = (
         const time = times.notes.get(note['xml:id'])
         if (!time?.tickDuration) continue
 
-        const onsetRubato = mpm.instructionsEffectiveAtDate(note.date, 'rubato', scope)[0];
+        const onsetRubato = instructionsEffectiveAtDate(mpm, note.date, 'rubato', scope)[0];
         if (!onsetRubato) continue
 
         const onsetInTicks = onsetRubato
@@ -176,7 +176,7 @@ export const removeRubatoDistortion = (
         // position handed to the frame lookup was neither. See issue #40.
         const offset = note.date + note.duration
 
-        const rubatos = mpm.instructionsEffectiveAtDate(offset, 'rubato', scope)
+        const rubatos = instructionsEffectiveAtDate(mpm, offset, 'rubato', scope)
         const effectiveRubato = rubatos[0]
         if (!effectiveRubato) continue
 

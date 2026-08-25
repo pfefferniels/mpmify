@@ -1,4 +1,4 @@
-import { MPM } from "../../mpm";
+import { getDefinitions, Mpm, scopesOf } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { fix } from "../../utils/utils";
@@ -18,10 +18,10 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
-        const parts = mpm.scopes()
+    protected transform(msm: MSM, mpm: Mpm) {
+        const parts = scopesOf(mpm)
         for (const part of parts) {
-            const defs = mpm.getDefinitions('ornamentDef', part)
+            const defs = getDefinitions(mpm, 'ornamentDef', part)
             for (const def of defs) {
                 const spread = def.getTemporalSpread()
                 if (!spread) continue

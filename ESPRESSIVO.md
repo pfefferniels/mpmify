@@ -38,6 +38,29 @@ bookkeeping.
 
 **If a change loses this, it has failed, however clean the result looks.**
 
+### What a work file is
+
+A reconstruction is saved as two arrays and nothing else (`src/Work.ts`):
+
+```jsonc
+{
+  "name": "…", "mei": "…", "mpm": "…",
+  "provenance": [ { "id": "…", "name": "InsertRubato", "options": { … } } ],
+  "segments":   [ { "id": "…", "note": "Hinspielen auf 1",
+                    "calls": ["…"], "elements": ["rubato_1440", "tempo_1440"] } ]
+}
+```
+
+`provenance` is the reconstructible half — `importWork` builds the chain back out of it, and
+running that chain over the same MEI produces the same MPM. `segments` is the record of a run:
+which calls belong together, why, and the `xml:id`s of the MPM elements they produced.
+
+It used to be a JSON-LD graph in CIDOC-CRM and CRMinf, in which every group of calls was an
+`I1_Argumentation` that `J2_concluded_that` an `I2_Belief` with a motivation and a `J5_holds_to_be`
+certainty. Nothing read the certainty and nothing read the actor; the ontology bought a vocabulary
+for claims mpmify does not make. What it does make is a fit, and a record of which call produced
+which element.
+
 ---
 
 ## 1. Where the line is
@@ -63,35 +86,39 @@ runtime. Definitions are espressivo's classes, not records.
 cannot tell `meanTempoAt="0.5"` from an absent `@meanTempoAt`, resolves an unresolvable `@bpm`
 to a hardcoded 100.0, and has no inverse.
 
-### A transformer writes through espressivo, not through `MPM`
+### A transformer is handed espressivo's `Mpm`
 
 ```ts
-const map = mpm.requireMap('tempo', scope)      // espressivo's TempoMap
-map.addTempo({ id, date, bpm, beatLength })
-map.updateTempoAt(index, { bpm: 90 })
+protected transform(msm: MSM, mpm: Mpm) {
+    const map = requireMap(mpm, 'tempo', scope)   // espressivo's TempoMap
+    map.addTempo({ id, date, bpm, beatLength })
+    map.updateTempoAt(index, { bpm: 90 })
+}
 ```
 
-`MPM` has no `insertInstruction`. It had one, with a table dispatching it to the eight `add<X>`
-methods, and that table was the whole of the facade: it existed because `AbstractTransformer`
-built its `created` list by intercepting every write, so every write had to funnel. That list is
+There is no mpmify document class. There was one — `MPM`, wrapping espressivo's `Mpm` — and
+underneath it a generic `insertInstruction` with a table dispatching to the eight `add<X>`
+methods. That table was the whole of the facade: it existed because `AbstractTransformer` built
+its `created` list by intercepting every write, so every write had to funnel. `created` is
 **derived** now — `run` fingerprints every instruction before and after `transform` and diffs —
-so the funnel is gone and so is the table's write half.
+and with nothing to funnel, neither the table nor the class had anything left to do.
 
-Deriving is also more accurate, and it changed what `@corresp` means: a transformer that
-*modifies* an instruction is now attributed to it, where interception saw insertions only. It is
-"answerable for", not "inserted".
+Deriving is also more accurate: a transformer that *modifies* an instruction is attributed to it,
+where interception saw insertions only. `created` means "answerable for".
 
-### What is left in `MPM`, and why each is not a facade
+### What mpmify adds, and why each is a function rather than a wrapper
+
+Everything below is a free function over `Mpm`, in `src/mpm/`. None of them wraps a write.
 
 | what | why espressivo cannot answer it |
 |---|---|
-| `requireMap` / `mapOf` / `scopes` | a {@link Scope} is mpmify's and MSM's way of naming a part. Turning one into a `<global>` or numbered `<part>`, then its `<dated>`, then the map, creating each on the way, is four steps no transformer should repeat. |
-| `getInstructions` | espressivo reads by index and by type; "every `<tempo>` in scope S" is the question mpmify asks. The `READ` table in `MPM.ts` is the only thing left that knows one instruction type from another, and it has no write half. |
-| `audit` / `fingerprints` | what a transformer changed, what it left unnamed, what it wrote as `NaN` — all by looking at the document afterwards. |
-| `insertStyle` / `ensureDefaultStyle` | mpmify's one-`<styleDef>`-per-collection convention, and the `<style date="0">` switch without which every `@name.ref` in a map is unresolvable. |
-| the definition methods | espressivo has no `Scope`; these resolve one to a `<header>` and its `<styleDef>`. |
-| `setMetadata` | `<appInfo>` is not MPM. See §2. |
-| `without` | rendering a probe with one dimension held out, which is what the residual is. |
+| `requireMap` / `mapOf` / `scopesOf` (`document.ts`) | a `Scope` is mpmify's and MSM's way of naming a part. Turning one into a `<global>` or numbered `<part>`, then its `<dated>`, then the map, creating each on the way, is four steps no transformer should repeat. What comes back is espressivo's own `TempoMap`, `DynamicsMap`, … with its whole surface. |
+| `getInstructions` (`instructions.ts`) | espressivo reads by index and by type; "every `<tempo>` in scope S" is the question mpmify asks. The `READ` table there is the only thing in the whole module that knows one instruction type from another, and it has no write half. |
+| `auditInstructions` / `fingerprintInstructions` | what a transformer changed, what it left unnamed, what it wrote as `NaN` — all by looking at the document afterwards. |
+| `insertStyle` / `ensureDefaultStyle` (`styles.ts`) | mpmify's one-`<styleDef>`-per-collection convention, and the `<style date="0">` switch without which every `@name.ref` in a map is unresolvable. |
+| the definition functions | espressivo has no `Scope`; these resolve one to a `<header>` and its `<styleDef>`. |
+| `withoutMaps` | rendering a probe with one dimension held out, which is what the residual is. |
+| `unwrap` | espressivo's `mpm/` layer answers `Result`; the def factories are total over what mpmify hands them, so a failure is a caller bug and not a case to branch on. |
 
 ### `fillInAt`, the one contract the generic insert was hiding
 
@@ -105,29 +132,36 @@ Exactly two places need it, and both are **two transformers describing one eleme
   curve.
 
 The caller names the three espressivo calls it wants, because it knows which map it is holding.
-There is no table behind it. Under the old `insertInstruction` this was implicit and applied to
-*every* insert, which made a contract between named transformers look like a property of the
-format — and it broke silently the moment writes went direct, in both places, caught by the
-structural digest rather than by any test.
+There is no table behind it, and it is a call at the two sites that mean it rather than a
+property of every insert — which is what a general merge-on-date made it look like. Both places
+broke silently the moment writes went direct, and the structural digest caught them, not a test.
 
-## 2. The three things mpmify writes that MPM does not define
+## 2. The one thing mpmify writes that MPM does not define
 
-Each has a module of its own that says so, rather than hiding among the real attributes in a
-schema table. **Do not move any of them upstream.** espressivo writes standard MPM and nothing
-else, and that is what makes it safe to hand it the whole document.
+It has a module of its own that says so, rather than hiding among the real attributes in a schema
+table. **Do not move it upstream.** espressivo writes standard MPM and nothing else, and that is
+what makes it safe to hand it the whole document.
 
 | what | where | why it is not MPM |
 |---|---|---|
-| `@corresp` | `src/mpm/corresp.ts` | the argumentation link. Appears nowhere in the ODD. |
 | the ornament draft | `src/mpm/ornamentDraft.ts` | seven `ornamentDef` fields parked on an `<ornament>` between the transformers that fit them and the one that moves them into a real def. `<ornament>` is a `memberOf` `att.id`, `att.note.order`, `att.reference.name`, `att.scale`, `att.time.symbolic.date` — and none of the seven. |
-| `<appInfo>` | `src/mpm/MPM.ts` | `<metadata>` is `author* comment* relatedResources?` (`axelberndt/MPM`, `src/specs/metadata.xml`). mpmify writes it anyway, because the transformation record is what a work file is for. |
 
-The draft stays *on the element* deliberately: `InsertDynamicsGradient` and
-`InsertTemporalSpread` each write half of one `<ornament>` at the same date, and
-`insertInstruction`'s merge onto one element is the only thing they share.
+The draft stays *on the element* deliberately: `InsertDynamicsGradient` and `InsertTemporalSpread`
+each write half of one `<ornament>` at the same date, and the element is the only thing they share.
+`StylizeOrnamentation` clears it, so it never reaches a saved document. It survives every insert,
+patch and read on the way, because espressivo only ever touches an attribute one of its options
+types names.
 
-All three survive every insert, patch and read, because espressivo only ever touches an
-attribute one of its options types names.
+There used to be two more, and both are gone:
+
+- **`@corresp`**, the link from an element to the call that wrote it. It said the same thing as
+  the work file's `segments[].elements`, in a place the ODD has no attribute for. The work file
+  says it now.
+- **`<appInfo>`** and its `<transformation>` children. `<metadata>` is `author* comment*
+  relatedResources?` (`axelberndt/MPM`, `src/specs/metadata.xml`) and nothing else; mpmify wrote
+  the element anyway, to record which transformation produced the document. That record is the
+  work file's `provenance`, which is where it belongs — a work file, not the MPM. Metadata now
+  goes through espressivo's own `Mpm.addMetadata`.
 
 ---
 
@@ -139,10 +173,10 @@ attribute one of its options types names.
 - **The fitting algorithms.** They are the domain, and they are tested against fixtures.
 - **`shiftToFirstOnset` semantics** — the roll has ~28 s of lead-in before the first note and
   several steps assume it has been removed.
-- **`MPMRecording`'s refusal of an id-less instruction.** An instruction with no `@xml:id` gets
-  no `@corresp`, cannot be named in a work file, and has its span silently dropped by
-  `deriveSegments`. That happened, and cost nine `<tempo>` elements; nothing failed except a
-  span count in one bake fixture.
+- **`AbstractTransformer.run`'s refusal of an id-less instruction.** An instruction with no
+  `@xml:id` cannot be named in a work file's `segments[].elements`, and has its span silently
+  dropped by `deriveSegments`. That happened, and cost nine `<tempo>` elements; nothing failed
+  except a span count in one bake fixture.
 
 ---
 
@@ -161,10 +195,10 @@ attribute one of its options types names.
    against Java meico. Diff structurally, not textually.
 4. **The error model is Java's.** The `mpm/` layer logs to console and returns `null` rather
    than throwing; an unresolvable `bpm="Allegro"` prints an error and silently resolves to
-   100.0. `src/mpm/index.ts`'s `definitionOf` is mpmify's one place for turning a `Result` into
+   100.0. `src/mpm/document.ts`'s `unwrap` is mpmify's one place for turning a `Result` into
    a value or a throw.
-5. **Comments, processing instructions and CDATA are dropped at parse.** `appInfo`'s `cdata`
-   therefore becomes ordinary text content on the way out.
+5. **Comments, processing instructions and CDATA are dropped at parse.** Nothing mpmify writes
+   depends on them surviving, but a hand-edited document loses them.
 6. **`resolveTempo` and `resolveRubato` take a style class**; `resolveDynamics` and
    `resolveMovement` are pure over plain records. If you need the first two over plain data,
    that is a ~40-line additive overload upstream in espressivo (accept a
@@ -187,7 +221,7 @@ attribute one of its options types names.
   is many-to-one: the chain is entitled to explain the same performance differently than the
   truth did, but not to render differently.
 - `scripts/mpm-digest.test.ts` records what the chain writes, structurally: one line per element
-  of every round-trip case, attributes sorted, `corresp` uuids canonicalised. Run with
+  of every round-trip case, attributes sorted, minted uuids canonicalised. Run with
   `MIGRATION_DIGEST=1`. It is a recorder, not an assertion — the point is to diff it across a
   change that is meant to be behaviour-preserving.
 - The chain is **deterministic**. `test/determinism.test.ts` folds it twice and compares the

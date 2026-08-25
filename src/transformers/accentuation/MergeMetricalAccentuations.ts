@@ -1,4 +1,13 @@
-import { AccentuationPatternDef, definitionOf, MPM } from "../../mpm";
+import {
+    AccentuationPatternDef,
+    getDefinitions,
+    getInstructions,
+    insertDefinition,
+    mapOf,
+    Mpm,
+    removeDefinition,
+    unwrap,
+} from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { InsertMetricalAccentuation } from "./InsertMetricalAccentuation";
@@ -28,8 +37,8 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         })
     }
 
-    protected transform(_: MSM, mpm: MPM) {
-        const allDefs = mpm.getDefinitions('accentuationPatternDef', this.options.scope)
+    protected transform(_: MSM, mpm: Mpm) {
+        const allDefs = getDefinitions(mpm, 'accentuationPatternDef', this.options.scope)
         if (allDefs.length <= 1) return
 
         const toMerge = allDefs.filter(a => this.options.names.includes(a.getName()))
@@ -40,15 +49,15 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         // Remove first, then insert. The merged pattern is a fresh definition rather than one of
         // the originals mutated in place, so the two steps do not interfere: removing the
         // originals cannot take the merged one with it.
-        toMerge.forEach(def => mpm.removeDefinition('accentuationPatternDef', def))
-        mpm.insertDefinition('accentuationPatternDef', mergedPattern, this.options.scope)
+        toMerge.forEach(def => removeDefinition(mpm, 'accentuationPatternDef', def))
+        insertDefinition(mpm, 'accentuationPatternDef', mergedPattern, this.options.scope)
 
         // Repoint the instructions at the merged def. A scope with no `<metricalAccentuationMap>`
         // has no instructions to repoint, and asking for its map would only create an empty one.
-        const map = mpm.mapOf('accentuationPattern', this.options.scope)
+        const map = mapOf(mpm, 'accentuationPattern', this.options.scope)
         if (!map) return
 
-        for (const instruction of mpm.getInstructions('accentuationPattern', this.options.scope)) {
+        for (const instruction of getInstructions(mpm, 'accentuationPattern', this.options.scope)) {
             if (!this.options.names.includes(instruction.accentuationPatternDefName)) continue
             map.updateAccentuationPatternAt(map.getElementIndexOf(instruction.element), {
                 accentuationPatternDefName: this.options.into
@@ -96,7 +105,7 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
             n++
         }
 
-        const mergedDef = definitionOf(AccentuationPatternDef.fromNameLength(into, prototype.getLength()))
+        const mergedDef = unwrap(AccentuationPatternDef.fromNameLength(into, prototype.getLength()))
         for (const child of children) {
             mergedDef.addAccentuation(
                 child.beat,

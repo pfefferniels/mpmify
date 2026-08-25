@@ -25,13 +25,13 @@ export interface FillIn<O> {
  *   its window, and the next segment's fit lands on that same date. One element carries the
  *   closing volume and the next curve; two make the closer shadow the curve.
  *
- * It used to be the behaviour of a general `MPM.insertInstruction`, which merged *any*
- * instruction at a matching date. That made a contract between named transformers look like a
- * property of the format, and left every other caller wondering whether its insert would
- * silently land inside an existing element. Here it is a call, at the two sites that mean it.
+ * A call at those two sites and nowhere else, deliberately. Merging on a matching date inside a
+ * general insert would make a contract between two named transformers look like a property of
+ * the format, and leave every other caller wondering whether its insert had silently landed
+ * inside an existing element.
  *
  * A field the existing instruction already has a value for is left alone: the earlier
- * transformer's measurement wins, which is what the old `overwrite = false` default meant.
+ * transformer's measurement wins.
  */
 export const fillInAt = <O extends { date: number; noteid?: string }>(
     map: GenericMap,

@@ -32,7 +32,7 @@ const meiPath = opt('mei', 'public/transcription.mei')
 const infoPath = opt('info', 'data/info.json')
 const write = flag('write')
 
-// espressivo, asMSM and mergeArgumentations all expect the browser's DOM.
+// espressivo, asMSM and mergeSegments all expect the browser's DOM.
 const { window } = new JSDOM()
 globalThis.DOMParser = window.DOMParser
 globalThis.XMLSerializer = window.XMLSerializer
@@ -47,7 +47,7 @@ const { segments } = reconstruction
 
 const spanCount = segments.reduce((n, s) => n + s.spans.length, 0)
 const elementCount = segments.reduce((n, s) => n + s.spans.reduce((m, p) => m + p.elements.length, 0), 0)
-console.log(`${stats.transformers} transformers, ${stats.argumentations} argumentations`)
+console.log(`${stats.transformers} transformers in ${stats.segments} groups, ${stats.ungrouped} in none`)
 console.log(`-> ${segments.length} segments, ${spanCount} spans, ${elementCount} element references`)
 console.log(`   dropped ${stats.droppedSpans} spans that produced nothing, ${stats.droppedElements} stale element ids`)
 

@@ -37,7 +37,7 @@
  * an overlap could take its onset from one segment and its duration from the next. The windows
  * are a partition now, and {@link segmentAtMs} is where that is stated — see its note.
  */
-import { MPM, Scope } from "../../mpm"
+import { getInstructions, Mpm, Scope } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { millisecondsAt, resolveSpan, TempoWithEndDate } from "./tempoCalculations"
 import type { Tempo as ResolvedTempo } from 'espressivo'
@@ -89,8 +89,8 @@ export interface PlacedTempo {
  * Returns an empty array when the scope has no `<tempo>` at all, which is what an MPM with no
  * tempoMap yet looks like — every caller reads that as "no tick position is derivable".
  */
-export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => {
-    const tempos = mpm.getInstructions('tempo', scope)
+export const placeTempos = (msm: MSM, mpm: Mpm, scope: Scope): PlacedTempo[] => {
+    const tempos = getInstructions(mpm, 'tempo', scope)
 
     // The anchoring rule, in one place. `notesInPart(scope)` and not `allNotes`: the tempo being
     // walked governs this scope, so the note that dates its boundary must be one it governs.

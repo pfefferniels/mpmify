@@ -2,7 +2,7 @@
 
 import { describe, test, expect } from "vitest"
 import { MSM } from "../src/msm"
-import { MPM } from "../src/mpm"
+import { createMpm, exportMPM, getInstructions } from "../src/mpm"
 import { ApproximateLogarithmicTempo } from "../src/transformers/tempo/ApproximateLogarithmicTempo"
 import { InsertDynamicsInstructions } from "../src/transformers/dynamics/InsertDynamicsInstructions"
 import { Transformer } from "../src/transformers/Transformer"
@@ -43,28 +43,29 @@ const buildMsm = () => {
 }
 
 /**
- * Ids are pinned because the real chain's are: they live in the saved work file and are what
- * `corresp` points at. A fresh `v4()` per run would differ for reasons that have nothing to do
- * with the fitting this test is about.
+ * The two fitters, over one span each.
+ *
+ * A call's own `v4()` id stays as minted: it names the call in the work file and never reaches
+ * the MPM, so it cannot make two folds differ. What both fitters do mint per run is a working
+ * `tempo_<uuid>` / `dynamics_<uuid>`, and `generateId` replaces every one of those with a name
+ * derived from the date before it is written — which is why the serialized comparison below can
+ * be exact rather than up to a renaming.
  */
-const chain = (): Transformer[] => {
-    const tempo = new ApproximateLogarithmicTempo({
+const chain = (): Transformer[] => [
+    new ApproximateLogarithmicTempo({
         scope: 'global', from: 0, to: 16 * BEAT, beatLength: 0.25, silentOnsets: [],
-    })
-    tempo.id = 'call-tempo'
-    const dynamics = new InsertDynamicsInstructions({
+    }),
+    new InsertDynamicsInstructions({
         scope: 'global', from: 0, to: 16 * BEAT, phantomVelocities: new Map(),
-    })
-    dynamics.id = 'call-dynamics'
-    return [tempo, dynamics]
-}
+    }),
+]
 
 /** What the worker does: fresh MPM, cloned MSM, run every transformer, serialize. */
 const fold = (transformers: Transformer[]) => {
     const msm = buildMsm().deepClone()
-    const mpm = new MPM()
+    const mpm = createMpm()
     for (const transformer of transformers) transformer.run(msm, mpm)
-    return mpm.toXML()
+    return exportMPM(mpm)
 }
 
 describe('the pipeline fold is a function of its inputs', () => {
@@ -75,9 +76,9 @@ describe('the pipeline fold is a function of its inputs', () => {
     test('the fitted tempo does not drift across runs', () => {
         const bpms = () => {
             const msm = buildMsm().deepClone()
-            const mpm = new MPM()
+            const mpm = createMpm()
             chain()[0].run(msm, mpm)
-            return mpm.getInstructions('tempo', 'global')
+            return getInstructions(mpm, 'tempo', 'global')
                 .map(t => [t.bpm, t.transitionTo, t.meanTempoAt])
         }
         const first = bpms()
@@ -89,9 +90,9 @@ describe('the pipeline fold is a function of its inputs', () => {
     test('the fitted dynamics curve does not drift across runs', () => {
         const curves = () => {
             const msm = buildMsm().deepClone()
-            const mpm = new MPM()
+            const mpm = createMpm()
             chain()[1].run(msm, mpm)
-            return mpm.getInstructions('dynamics', 'global')
+            return getInstructions(mpm, 'dynamics', 'global')
                 .map(d => [d.volume, d.transitionTo, d.curvature, d.protraction])
         }
         const first = curves()

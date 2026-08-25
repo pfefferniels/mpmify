@@ -37,7 +37,7 @@
  *   and is held byte-equivalent to meico on it; reassembling that here would be new and
  *   unproven code that has to stay in step with a renderer it does not own.
  */
-import { InstructionType, MPM } from "../mpm"
+import { exportMPM, InstructionType, Mpm, withoutMaps } from "../mpm"
 import { MSM, MsmNote, MsmPedal } from "../msm"
 import { computeTickTimes } from "../transformers/tempo/tickTimes"
 import { performMsmToData } from "espressivo"
@@ -98,10 +98,10 @@ const RESIDUAL_SEED = 0x6D706D
 
 export const deriveResidual = (
     msm: MSM,
-    mpm: MPM,
+    mpm: Mpm,
     options: DeriveResidualOptions = {}
 ): Residual => {
-    const probe = options.without?.length ? mpm.without(options.without) : mpm
+    const probe = options.without?.length ? withoutMaps(mpm, options.without) : mpm
 
     const ticks = computeTickTimes(msm, probe)
     const rendered = renderedVelocities(msm, probe)
@@ -137,12 +137,12 @@ export const deriveResidual = (
 }
 
 /** What the probed MPM renders each note at, by `xml:id`. */
-const renderedVelocities = (msm: MSM, mpm: MPM): Map<string, number> | undefined => {
+const renderedVelocities = (msm: MSM, mpm: Mpm): Map<string, number> | undefined => {
     const score = msm.serializeScore()
     if (!score) return undefined
 
     const data = performMsmToData(
-        { msm: score, mpm: mpm.toXML() },
+        { msm: score, mpm: exportMPM(mpm) },
         // No ornament expansion: a v3 ornament generates notes the score never had, and a
         // generated note has no recorded counterpart to be a residual against. Held out, every
         // performed note answers to an `xml:id` the score also knows.

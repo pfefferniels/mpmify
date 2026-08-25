@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { InstructionOptions, MPM } from "../../src/mpm"
+import { InstructionOptions, Mpm, createMpm, getInstructions, requireMap } from "../../src/mpm"
 import { CombineAdjacentRubatos } from "../../src/transformers/rubato/CombineAdjacentRubatos"
 
 const note = (date: number): MsmNote => ({
@@ -24,14 +24,14 @@ const rubato = (date: number, intensity: number): InstructionOptions<'rubato'> =
 })
 
 /** Put a run of frames into the document, through the map `InsertRubato` writes them into. */
-const given = (mpm: MPM, rubatos: InstructionOptions<'rubato'>[]) => {
-    const map = mpm.requireMap('rubato', 'global')
+const given = (mpm: Mpm, rubatos: InstructionOptions<'rubato'>[]) => {
+    const map = requireMap(mpm, 'rubato', 'global')
     for (const rubato of rubatos) map.addRubato(rubato)
 }
 
 /** Call the protected `transform` method for testing */
-const run = (transformer: CombineAdjacentRubatos, msm: MSM, mpm: MPM) => {
-    type Transformable = { transform(msm: MSM, mpm: MPM): void }
+const run = (transformer: CombineAdjacentRubatos, msm: MSM, mpm: Mpm) => {
+    type Transformable = { transform(msm: MSM, mpm: Mpm): void }
     ;(transformer as unknown as Transformable).transform(msm, mpm)
 }
 
@@ -49,7 +49,7 @@ test('it terminates when the last rubato has no frame left before the final note
         [0, 720, 1440, 2160, 2880].map(note),
         { numerator: 4, denominator: 4 }
     )
-    const mpm = new MPM()
+    const mpm = createMpm()
     given(mpm, [
         rubato(0, 0.5),
         rubato(720, 2.0),   // opposite side of 1: not mergeable with its predecessor
@@ -58,7 +58,7 @@ test('it terminates when the last rubato has no frame left before the final note
 
     run(transformer(), msm, mpm)
 
-    expect(mpm.getInstructions('rubato', 'global').map(r => r.date)).toEqual([0, 720, 2160])
+    expect(getInstructions(mpm, 'rubato', 'global').map(r => r.date)).toEqual([0, 720, 2160])
 })
 
 test('it folds a run of similar rubatos into one looping instruction', () => {
@@ -66,7 +66,7 @@ test('it folds a run of similar rubatos into one looping instruction', () => {
         [0, 720, 1440, 2160, 2880, 3600].map(note),
         { numerator: 4, denominator: 4 }
     )
-    const mpm = new MPM()
+    const mpm = createMpm()
     given(mpm, [
         rubato(0, 1.4),
         rubato(720, 1.45),
@@ -76,7 +76,7 @@ test('it folds a run of similar rubatos into one looping instruction', () => {
 
     run(transformer(), msm, mpm)
 
-    const rubatos = mpm.getInstructions('rubato', 'global')
+    const rubatos = getInstructions(mpm, 'rubato', 'global')
     expect(rubatos.map(r => r.date)).toEqual([0, 2160])
     expect(rubatos[0].loop).toBe(true)
     expect(rubatos[0].intensity).toBeCloseTo((1.4 + 1.45 + 1.5) / 3, 10)

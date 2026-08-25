@@ -1,4 +1,4 @@
-import { MPM } from "../../mpm";
+import { ensureDefaultStyle, getInstructions, insertDefinition, Mpm } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { TranslatePhysicalTimeToTicks } from "../tempo";
@@ -22,10 +22,10 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         })
     }
 
-    protected transform(msm: MSM, mpm: MPM) {
+    protected transform(msm: MSM, mpm: Mpm) {
         // collect notes that have no articulation
         const notes: MsmNote[] = [...msm.allNotes]
-        for (const articulation of mpm.getInstructions('articulation', this.options.scope)) {
+        for (const articulation of getInstructions(mpm, 'articulation', this.options.scope)) {
             if (articulation.noteid) {
                 // One reference, the way the renderer reads it. This walked a space-separated
                 // list for as long as `InsertArticulation` wrote one — see issue #53.
@@ -76,8 +76,8 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         const mean = relativeDurations.reduce((acc, curr) => acc + curr, 0) / relativeDurations.length
 
         const def = makeArticulationDef('default articulation', { relativeDuration: mean })
-        mpm.insertDefinition('articulationDef', def, this.options.scope)
+        insertDefinition(mpm, 'articulationDef', def, this.options.scope)
 
-        mpm.ensureDefaultStyle('articulation', this.options.scope, { defaultArticulation: def.getName() })
+        ensureDefaultStyle(mpm, 'articulation', this.options.scope, { defaultArticulation: def.getName() })
     }
 }
