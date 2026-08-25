@@ -6,8 +6,17 @@ export interface IPoint {
 
 interface DBScanOptions {
     /**
-     * The maximum distance between two points for them to be considered as being in the same neighborhood.
-     * @default 1
+     * The neighbourhood radius, given per dimension: two points are neighbours when they are
+     * within `epsilons[d]` of each other in *every* dimension `d`. This is a per-axis box, not
+     * a Euclidean ball — which is what the callers want, since they measure ticks against
+     * velocity units against dimensionless gradients and there is no meaningful way to add
+     * those in quadrature.
+     *
+     * Must have one entry per dimension of `points`; a shorter array throws. It used to default
+     * to `[1, 1]` regardless of the data, and a missing entry made every comparison `<= undefined`
+     * — i.e. `false` — so a three-dimensional call quietly labelled every point noise (issue #37).
+     *
+     * @default 1 in every dimension
      */
     epsilons?: number[];
 
@@ -16,13 +25,6 @@ interface DBScanOptions {
      * @default 2
      */
     minPoints?: number;
-
-    /**
-     * Distance calculation method of two points, default is euclidean distance.
-     * You may be interested to use one of the available distances from https://www.npmjs.com/package/ml-distance
-     * @default  euclidean
-     */
-    distance?: (p: number[], q: number[]) => number;
 }
 
 /**
@@ -35,7 +37,12 @@ export function dbscan(points: number[][], options: DBScanOptions = {}) {
         throw Error(`points must be of type array, ${typeof points} given`);
     }
     
-    const { epsilons = [1, 1], minPoints = 2 } = options;
+    const dimensions = points.reduce((widest, point) => Math.max(widest, point.length), 0);
+    const { epsilons = new Array<number>(dimensions).fill(1), minPoints = 2 } = options;
+    if (epsilons.length < dimensions) {
+        throw Error(`epsilons covers ${epsilons.length} dimension(s), but the points have ${dimensions}`);
+    }
+
     const data: IPoint[] = [];
     let clusterId = 0;
 
