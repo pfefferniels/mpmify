@@ -323,9 +323,8 @@ export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) =>
     millisecondsAt(date, resolveSpan(tempo))
 
 /**
- * The tick span a millisecond span covers at a constant tempo — the inverse of the constant-tempo
- * arm of {@link computeMillisecondsAt} over the same stretch, sharing its constants so the two
- * cannot drift apart.
+ * The tick span a millisecond span covers at a constant tempo — the exact inverse of
+ * {@link msForConstantTempo}, sharing its constants so the two cannot drift apart.
  *
  * This is the one piece of arithmetic here that is genuinely mpmify's: espressivo converts ticks
  * to milliseconds and never the other way, because a renderer never needs to.
@@ -370,13 +369,13 @@ const MAX_INVERSE_STEPS = 100
  *   With a non-integer exponent that is `NaN`, and `Math.abs(NaN - target) > 1` is `false`, so
  *   the loop exited *reporting convergence* on its first step. With an integer one it was worse:
  *   the sign of Simpson's `resultConst` flips below `startDate`, so the elapsed time came back
- *   positive, the step kept pushing the same way, and a target of −200 ms landed 20 000 ticks
+ *   positive, the step kept pushing the same way, and a target of −200 ms landed 24 000 ticks
  *   from the answer. Both are fixed at the source — {@link millisecondsAt} is total now — and
  *   both ends of it invert in closed form, so the walk never has to leave the span at all.
  *
  * - **The step had the wrong units.** `guess += 0.1 * (targetMs - guessedMs)` adds milliseconds
  *   to a tick count. The constant 0.1 converges for ordinary tempi and diverges below about
- *   4 bpm per beat unit — at 2 bpm a 1 s target returned a tick 55 000 out. The step is now the
+ *   4 bpm per beat unit — at 2 bpm a 1 s target returned a tick 57 000 out. The step is now the
  *   Newton one, which is {@link ticksForConstantTempo} of the millisecond shortfall at the tempo
  *   holding where the guess stands: dimensionally right by construction, exact wherever the span
  *   is constant, and quadratic where it is not.
@@ -407,8 +406,8 @@ export const dateAtMilliseconds = (targetMilliseconds: number, tempo: ResolvedTe
         return startDate + ticksForConstantTempo(targetMilliseconds, tempo)
     }
 
-    // Outside the span {@link millisecondsAt} continues at the boundary tempo, so the inverse is
-    // closed-form there too — and exactly the extrapolation the ornament frames rely on.
+    // Outside the span `millisecondsAt` continues at the boundary tempo, so the inverse is
+    // closed-form there too — and it is exactly the extrapolation the ornament frames rely on.
     if (targetMilliseconds <= 0) {
         return startDate + ticksForConstantTempo(targetMilliseconds, {
             bpm: tempoAtClamped(tempo, startDate), beatLength: tempo.beatLength,

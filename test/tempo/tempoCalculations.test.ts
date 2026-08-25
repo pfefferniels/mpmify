@@ -68,7 +68,7 @@ const TOLERANCE_MS = 1e-5
 describe('dateAtMilliseconds inverts millisecondsAt', () => {
     /**
      * The property the whole module rests on, and the one nothing asserted while
-     * `approximateDate` was getting it wrong by 55 000 ticks (issue #26).
+     * `approximateDate` was getting it wrong by 57 000 ticks (issue #26).
      *
      * Stated as a round trip rather than against expected numbers on purpose: a table of expected
      * ticks is a table someone computed with the same arithmetic, so it agrees with a wrong
