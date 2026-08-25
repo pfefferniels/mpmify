@@ -92,6 +92,15 @@ the point of use. There were exactly ten `* 1000` in `src/` and all ten were tha
 back, and `serializeScore()` states only the score half — which is what a residual is measured
 against, since a document carrying both is ambiguous about which timing it means.
 
+**The pedals are the exception, and they stay out of the document.** MSM's `<pedal>` is
+`date`/`state`/`date.end` in ticks, and a recorded pedal has no symbolic date — which is exactly
+why `getRange` has to derive one from the residual. So there is nothing valid to write. What
+mpmify used to write was read by nobody twice over: `GenericMap.indexElements` skips a map child
+with no `@date`, and even an indexed `<pedal>` reaches no renderer, since pedalling sounds through
+MPM's `<movement>` instructions. Rendering with and without the map gives the same performance,
+byte for byte. The pedals live on the `Alignment`, which is where `InsertPedal`, `deriveResidual`
+and `tickTimes` read them.
+
 Concretely, espressivo answers four questions about every instruction, and mpmify asks all four
 rather than modelling any of them:
 

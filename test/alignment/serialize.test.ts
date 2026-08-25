@@ -82,9 +82,14 @@ describe('Alignment.serialize performance data', () => {
 })
 
 describe('Alignment.serialize pedals', () => {
-    // espressivo looks for the pedals in the global `<dated>`; mpmify used to write the
-    // `<pedalMap>` one level up, so the renderer never saw a single pedal.
-    test('writes the pedalMap inside <dated>, where the renderer looks for it', () => {
+    /**
+     * It does not, and cannot: MSM's `<pedal>` is `date`/`state`/`date.end` in ticks, and an
+     * aligned pedal has no symbolic date — that is why `getRange` derives one from the residual.
+     * What mpmify used to emit had no `@date`, so espressivo's `GenericMap.indexElements` skipped
+     * every one of them, and a `<pedal>` reaches no renderer in any case; pedalling sounds
+     * through MPM's `<movement>` instructions. The pedals live on the alignment instead.
+     */
+    test('leaves the pedals out, because MSM has no way to say what they are', () => {
         const msm = new Alignment([note('n1', 1, 0)])
         msm.pedals = [{
             'xml:id': 'p1',
@@ -94,9 +99,9 @@ describe('Alignment.serialize pedals', () => {
         }]
 
         const xml = msm.serialize(false)!
-        const dated = xml.slice(xml.indexOf('<dated>'), xml.indexOf('</dated>'))
 
-        expect(dated).toContain('<pedalMap>')
-        expect(dated).toContain("xml:id='p1'")
+        expect(xml).not.toContain('pedalMap')
+        expect(xml).not.toContain("'p1'")
+        expect(msm.pedals).toHaveLength(1)
     })
 })

@@ -223,19 +223,16 @@ export class Alignment {
                                 'date.end': this.allNotes[this.allNotes.length - 1].date
                             }
                         }
-                    },
-                    // Inside `<dated>`, not beside it. espressivo reads the pedals from the
-                    // global `<dated>` (`Performance.addMsmMapToList('pedalMap', globalDated)`)
-                    // and its own `Msm.createMsm` nests it there, so a `<pedalMap>` one level up
-                    // was simply never found — every serialized pedal was invisible to the
-                    // renderer, silently.
-                    'pedalMap': {
-                        'pedal': this.pedals.map(pedal => {
-                            return {
-                                '@': pedal
-                            }
-                        })
                     }
+                    // No `<pedalMap>`. MSM's `<pedal>` is `date`/`state`/`date.end` in ticks, and
+                    // an aligned pedal has no symbolic date at all — that is the whole reason
+                    // `getRange` has to derive one from the residual. So there is nothing valid
+                    // to write, and what mpmify used to write was read by nobody: espressivo's
+                    // `GenericMap.indexElements` skips a map child with no `@date`, and even an
+                    // indexed `<pedal>` reaches no renderer, since pedalling sounds through MPM's
+                    // `<movement>` instructions. Rendering with and without the map gives the
+                    // same performance, byte for byte. The pedals live on the alignment, which
+                    // is where `InsertPedal`, `deriveResidual` and `tickTimes` read them.
                 }
             },
             // One `<part>` per part the notes actually use, ascending. This was
