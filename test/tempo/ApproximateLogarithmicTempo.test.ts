@@ -4,6 +4,7 @@ import { describe, test, expect } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Tempo } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
+import { performMsmToData } from "espressivo"
 
 /** Call the protected `transform` method for testing */
 function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: MPM) {
@@ -88,7 +89,23 @@ function fitAndGetTempos(
         silentOnsets
     });
     callTransform(transformer, msm, mpm);
-    return mpm.getInstructions<Tempo>('tempo', 'global');
+    return mpm.getInstructions<Tempo>('tempo', 'global')
+        .sort((a, b) => a.date - b.date);
+}
+
+/**
+ * The last fitted segment carries a `transition.to` that nothing else closes, and an open
+ * `transition.to` renders as a constant — the renderer drops the transition altogether. So the
+ * fit writes one more instruction at the end of its span, holding the tempo the curve arrives
+ * at. See issue #24.
+ */
+function expectClosedAt(tempos: Tempo[], date: number) {
+    const closing = tempos[tempos.length - 1];
+    const fitted = tempos[tempos.length - 2];
+    expect(closing.date).toBe(date);
+    expect(closing.bpm).toBeCloseTo(fitted['transition.to']!, 6);
+    expect(closing['transition.to']).toBeUndefined();
+    expect(closing.beatLength).toBe(fitted.beatLength);
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -112,7 +129,8 @@ describe('ApproximateLogarithmicTempo', () => {
         );
         const tempos = fitAndGetTempos(onsets, 0, totalTicks, 0.25);
 
-        expect(tempos).toHaveLength(1);
+        expect(tempos).toHaveLength(2);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(77);
         expect(tempos[0].bpm).toBeLessThan(83);
         expect(tempos[0]['transition.to']).toBeGreaterThan(117);
@@ -130,7 +148,8 @@ describe('ApproximateLogarithmicTempo', () => {
         );
         const tempos = fitAndGetTempos(onsets, 0, totalTicks, 0.25);
 
-        expect(tempos).toHaveLength(1);
+        expect(tempos).toHaveLength(2);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(117);
         expect(tempos[0].bpm).toBeLessThan(123);
         expect(tempos[0]['transition.to']).toBeGreaterThan(77);
@@ -151,7 +170,8 @@ describe('ApproximateLogarithmicTempo', () => {
         );
         const tempos = fitAndGetTempos(onsets, 0, totalTicks, 0.25);
 
-        expect(tempos).toHaveLength(1);
+        expect(tempos).toHaveLength(2);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(75);
         expect(tempos[0].bpm).toBeLessThan(95);
         expect(tempos[0]['transition.to']).toBeGreaterThan(105);
@@ -193,7 +213,8 @@ describe('ApproximateLogarithmicTempo', () => {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
-        expect(tempos).toHaveLength(2);
+        expect(tempos).toHaveLength(3);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(76);
         expect(tempos[0].bpm).toBeLessThan(84);
         expect(tempos[0]['transition.to']).toBeGreaterThan(116);
@@ -214,7 +235,8 @@ describe('ApproximateLogarithmicTempo', () => {
         );
         const tempos = fitAndGetTempos(onsets, 0, totalTicks, 0.25);
 
-        expect(tempos).toHaveLength(1);
+        expect(tempos).toHaveLength(2);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(57);
         expect(tempos[0].bpm).toBeLessThan(63);
         expect(tempos[0]['transition.to']).toBeGreaterThan(117);
@@ -242,7 +264,8 @@ describe('ApproximateLogarithmicTempo', () => {
         );
         const tempos = fitAndGetTempos(onsets, 0, totalTicks, 0.25);
 
-        expect(tempos).toHaveLength(1);
+        expect(tempos).toHaveLength(2);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].bpm).toBeGreaterThan(78);
         expect(tempos[0].bpm).toBeLessThan(82);
         expect(tempos[0]['transition.to']).toBeGreaterThan(118);
@@ -281,7 +304,8 @@ describe('ApproximateLogarithmicTempo', () => {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
-        expect(tempos).toHaveLength(2);
+        expect(tempos).toHaveLength(3);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0].meanTempoAt).toBeDefined();
         expect(tempos[1].meanTempoAt).toBeDefined();
         expect(tempos[0].meanTempoAt!).toBeLessThan(0.5);
@@ -324,7 +348,8 @@ describe('ApproximateLogarithmicTempo', () => {
         const tempos = mpm.getInstructions<Tempo>('tempo', 'global')
             .sort((a, b) => a.date - b.date);
 
-        expect(tempos).toHaveLength(2);
+        expect(tempos).toHaveLength(3);
+        expectClosedAt(tempos, totalTicks);
         expect(tempos[0]['transition.to']).toBeGreaterThan(tempos[0].bpm);
         expect(tempos[1]['transition.to']).toBeLessThan(tempos[1].bpm);
     });
@@ -502,11 +527,36 @@ describe('ApproximateLogarithmicTempo', () => {
         // the onset sequence, causing computeTempoPoints to skip the interval
         // before the silentOnset. The surviving data has a steep downward trend
         // that the regression extrapolates to negative BPM at the segment end.
-        expect(tempos).toHaveLength(1);
+        expect(tempos).toHaveLength(2);
         const hasNegative = tempos.some(t =>
             t.bpm < 0 || (t['transition.to'] !== undefined && t['transition.to'] < 0)
         );
         expect(hasNegative).toBe(true);
+    });
+
+    test('the fitted curve is what espressivo renders', () => {
+        const totalTicks = 8 * BEAT;
+        const onsets = generateOnsets((d) => 60 + 60 * (d / totalTicks), 8);
+
+        const msm = buildMsm(onsets);
+        const mpm = new MPM();
+        callTransform(new ApproximateLogarithmicTempo({
+            scope: 'global', from: 0, to: totalTicks, beatLength: 0.25, silentOnsets: []
+        }), msm, mpm);
+
+        // The render is the point of the closing instruction: left open, the transition is
+        // dropped and the whole span comes out at a flat 60 bpm. See issue #24.
+        const data = performMsmToData({ msm: msm.serialize(false), mpm: mpm.toXML() });
+        const dates = data.parts.flatMap(part => part.notes).map(note => note.milliseconds.date);
+        const iois = dates.slice(1).map((date, i) => date - dates[i]);
+
+        expect(iois).toHaveLength(8);
+        for (let i = 1; i < iois.length; i++) {
+            expect(iois[i]).toBeLessThan(iois[i - 1]);
+        }
+        // 60 bpm for the first beat, 120 for the last: the span roughly halves.
+        expect(iois[0]).toBeGreaterThan(900);
+        expect(iois[iois.length - 1]).toBeLessThan(550);
     });
 
     test('continue chain stops at different beatLength', () => {

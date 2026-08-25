@@ -39,11 +39,43 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // `endDate` is the window the curve was fitted over — a working field, not an MPM
         // attribute. It used to be written into the document; a reader gets the span from the
         // next <dynamics> instead. See old-bugs.md.
-        const { endDate: _fittingWindow, ...instruction } = fitted
+        const { endDate: fittingWindow, ...instruction } = fitted
         instruction["xml:id"] = generateId('dynamics', instruction.date, mpm)
 
-        mpm.insertInstruction(instruction, this.options?.scope)
+        // The view the document ended up with, not the record handed in: an instruction already
+        // at that date is merged into rather than replaced, so this is what the curve to be
+        // closed actually says.
+        const inserted = mpm.insertInstruction(instruction, this.options?.scope)
+        this.closeTransition(mpm, inserted, fittingWindow)
         this.setRelativeVolume(msm, mpm)
+    }
+
+    /**
+     * Write the instruction that ends the fitted transition.
+     *
+     * A `transition.to` with no successor is not a curve stretched to the end of the piece —
+     * the renderer drops the transition and holds `volume`, so a fit that nothing happens to
+     * follow describes nothing at all. Closing the span at the last point the curve was fitted
+     * over is what makes the transition render, and it makes the rendered span the fitted one:
+     * `setRelativeVolume` below then measures the residual against the curve that was actually
+     * fitted, which is the span mismatch old-bugs.md §1 left open.
+     *
+     * An instruction already at that date already closes the span — in a chain each segment is
+     * closed by the next — and is left alone.
+     */
+    private closeTransition(mpm: MPM, instruction: Dynamics, endDate: number) {
+        const target = instruction["transition.to"]
+        if (target === undefined || endDate <= instruction.date) return
+
+        const existing = mpm.getInstructions<Dynamics>('dynamics', this.options.scope)
+        if (existing.some(dynamics => dynamics.date === endDate)) return
+
+        mpm.insertInstruction({
+            type: 'dynamics',
+            'xml:id': generateId('dynamics', endDate, mpm),
+            date: endDate,
+            volume: target
+        }, this.options.scope)
     }
 
     private asPoints(msm: MSM, part: Scope): DynamicsPoints[] {

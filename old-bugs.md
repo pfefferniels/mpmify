@@ -44,6 +44,11 @@ msm.end)` — which is what a renderer does. Where the two differ, the residual
 curve that was never fitted. Storing `endDate` was how the mismatch was being papered over.
 Fixing it properly means changing the fitting, which §5 of the port brief puts off limits.
 
+**Closed on 2026-08-25** by issue #24, from the other side. The fit now writes the instruction
+that *ends* its span — which it had to, because an open `transition.to` renders as a constant —
+and that closing instruction is what `setRelativeVolume` reads the span off. Fit and render
+agree because the document says where the curve stops, not because the fitting changed.
+
 ### 2. A merged instruction lost its attribution
 
 `MPMRecording` wrapped `insertInstruction` and recorded `args[0]["xml:id"]` — the id of the

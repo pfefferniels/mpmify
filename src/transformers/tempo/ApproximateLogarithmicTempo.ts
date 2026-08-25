@@ -165,6 +165,38 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
                 mpm.removeInstruction(restored);
             }
         }
+
+        // Close the chain.  Must come last: the cleanup above looks for an instruction at
+        // exactly this date and would take the closing one for a stale restoration.
+        this.closeTransition(mpm, tempos[tempos.length - 1]);
+    }
+
+    /**
+     * Write the instruction that ends the fitted transition.
+     *
+     * A `transition.to` with no successor is not a curve stretched to the end of the piece —
+     * the renderer drops the transition and holds `bpm`, so a fit that nothing happens to
+     * follow renders at a flat tempo.  Within a chain each segment is closed by the next; the
+     * last one has nothing after it and is closed here.
+     *
+     * An instruction already at that date already closes the span — the continuation
+     * `removeAffectedTempoInstructions` restored, or one that was there all along — and is
+     * left alone.
+     */
+    private closeTransition(mpm: MPM, last: TempoWithEndDate) {
+        const target = last['transition.to'];
+        if (target === undefined || last.endDate <= last.date) return;
+
+        const existing = mpm.getInstructions<Tempo>('tempo', this.options.scope);
+        if (existing.some(tempo => tempo.date === last.endDate)) return;
+
+        mpm.insertInstruction({
+            type: 'tempo',
+            'xml:id': generateId('tempo', last.endDate, mpm),
+            date: last.endDate,
+            bpm: target,
+            beatLength: last.beatLength
+        }, this.options.scope);
     }
 
     removeAffectedTempoInstructions(mpm: MPM, scope: Scope, segments: TempoSegment[]) {
