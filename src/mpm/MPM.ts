@@ -21,6 +21,7 @@ import {
     ArticulationDef as EspArticulationDef,
     Attribute,
     Dated,
+    Document,
     Element,
     Global,
     Mpm,
@@ -48,7 +49,7 @@ import {
     AccentuationPatternDef,
     RelatedResource,
 } from './types'
-import { elementFrom, elementOf, onDateChange, viewOf } from './view'
+import { elementFrom, elementOf, viewOf } from './view'
 
 /** espressivo answers `Result<T, E>` in places; this is the "or give up" reading of one. */
 const unwrap = <T>(result: T | { ok: boolean; value?: T }, what: string): T => {
@@ -107,6 +108,41 @@ export class MPM {
 
     setPerformanceName(performanceName: string) {
         this.performance.setName(performanceName)
+    }
+
+    /**
+     * A copy of this document with the maps of these instruction types taken out.
+     *
+     * The point is to ask what the rest of the MPM explains. Rendering `without(['articulation'])`
+     * and comparing against the recording gives the deviation articulation still has to account
+     * for — the same quantity the transformers used to accumulate by subtracting their own share
+     * from the MSM, obtained by construction instead of by bookkeeping.
+     *
+     * The document is deep-copied, so this never disturbs the one being fitted. It is a probe:
+     * render it and throw it away.
+     */
+    without(types: readonly InstructionType[]): MPM {
+        const root = this.document.getRootElement()
+        if (!root) return new MPM()
+
+        const copy = root.copy()
+        const dropped = new Set<string>(types.map(type => mapNames[type]))
+
+        for (const performance of copy.getChildElements('performance', MPM_NAMESPACE).toArray()) {
+            const environments = [
+                ...performance.getChildElements('global', MPM_NAMESPACE).toArray(),
+                ...performance.getChildElements('part', MPM_NAMESPACE).toArray(),
+            ]
+            for (const environment of environments) {
+                for (const dated of environment.getChildElements('dated', MPM_NAMESPACE).toArray()) {
+                    for (const map of dated.getChildElements().toArray()) {
+                        if (dropped.has(map.getLocalName())) dated.removeChild(map)
+                    }
+                }
+            }
+        }
+
+        return new MPM(new Mpm(new Document(copy)))
     }
 
     // ── scopes and environments ───────────────────────────────────
@@ -258,7 +294,6 @@ export class MPM {
             MPM_NAMESPACE
         )
         map.addElement(element)
-        onDateChange(element, () => map.sort())
         return viewOf<T>(element)
     }
 

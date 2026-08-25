@@ -17,6 +17,11 @@
  *   same object and `includes`/`indexOf` behave as they did when the records were the model.
  * - **An absent attribute reads as `undefined`,** and assigning `undefined` removes it — the
  *   same thing an optional record property meant before.
+ * - **Do not assign `date`.** espressivo's `GenericMap` keeps a `(date, element)` index built
+ *   when the element was added, and writing the attribute through a view updates the XML
+ *   without touching that key — every later lookup then answers from a stale date. Nothing in
+ *   mpmify does this today. If you need to move an instruction, write the attribute and call
+ *   `map.sort()`, which is the only thing that re-reads the keys off the elements.
  *
  * A key the schema does not name is neither read nor written. That is what keeps transformers'
  * working fields (`endDate` on a fitted `<dynamics>`) out of the document.
@@ -29,21 +34,12 @@ const XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace'
 /** Reaches the element behind a view. Not a string key, so it cannot collide with an attribute. */
 const XML = Symbol('mpmify.element')
 
-/** Called after a view's `@date` changed, so the owning map can re-sort. */
-type DateListener = (element: Element) => void
-
 const views = new WeakMap<Element, object>()
-const dateListeners = new WeakMap<Element, DateListener>()
 
 /** The element a view stands for, or `null` for anything that is not a view. */
 export const elementOf = (value: unknown): Element | null => {
     if (typeof value !== 'object' || value === null) return null
     return ((value as Record<symbol, unknown>)[XML] as Element | undefined) ?? null
-}
-
-/** Register a callback to run when this element's `@date` is reassigned through a view. */
-export const onDateChange = (element: Element, listener: DateListener) => {
-    dateListeners.set(element, listener)
 }
 
 // ── value spelling ────────────────────────────────────────────────
@@ -73,6 +69,19 @@ const writeValue = (value: unknown, kind: AttrKind): string => {
 }
 
 const setAttribute = (element: Element, name: string, text: string) => {
+    // Write through the Attribute that is already there, if there is one. espressivo's
+    // `addAttribute` is documented as remove-then-append, so re-setting an existing attribute
+    // moves it to the END of the serialized order — an edited document would then differ from
+    // the one it came from by attribute order alone, on every attribute any transformer touched.
+    //
+    // `getAttribute` matches on the qualified name as well as the local one, so the bare
+    // `'xml:id'` finds the namespaced attribute — the same lookup `removeAttribute` below does.
+    const existing = element.getAttribute(name)
+    if (existing) {
+        existing.setValue(text)
+        return
+    }
+
     element.addAttribute(
         name === 'xml:id'
             ? new Attribute('xml:id', XML_NAMESPACE, text)
@@ -146,7 +155,6 @@ const writeProperty = (element: Element, schema: ElementSchema, key: string, val
     if (kind !== undefined) {
         if (value === undefined || value === null) removeAttribute(element, key)
         else setAttribute(element, key, writeValue(value, kind))
-        if (key === 'date') dateListeners.get(element)?.(element)
         return
     }
 

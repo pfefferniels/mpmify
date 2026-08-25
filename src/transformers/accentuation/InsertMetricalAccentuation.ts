@@ -245,17 +245,20 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
     }
 
     private accentuationAt(beat: number, def: AccentuationPatternDef): number {
-        if (def.children.length === 0) {
+        // Read once. Every `def.children` access re-reads the child elements and hands back a
+        // *new* array (see `mpm/view.ts`), so sorting the property sorted a throwaway and each
+        // read below got the document order back. Nothing downstream saw a sorted pattern.
+        const children = [...def.children].sort((a, b) => a.beat - b.beat)
+
+        if (children.length === 0) {
             return 0
         }
 
-        def.children.sort((a, b) => a.beat - b.beat)
-
-        if (beat < def.children[0].beat) {
+        if (beat < children[0].beat) {
             return 0
         }
         if (beat >= def.length + 1) {
-            const last = def.children[def.children.length - 1]
+            const last = children[children.length - 1]
             const result = last["transition.to"] || last.value;
             return result;
         }
@@ -264,17 +267,17 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         let segmentEnd: number = def.length + 1;
 
         // Traverse the accentuations in reverse order
-        for (let i = def.children.length - 1; i >= 0; --i) {
-            const accent = def.children[i];
+        for (let i = children.length - 1; i >= 0; --i) {
+            const accent = children[i];
             if (beat === accent.beat) {
                 return accent.value;
             }
 
             if (beat > accent.beat) {
                 selectedAccent = accent;
-                if (i < def.children.length - 1) {
+                if (i < children.length - 1) {
                     // There is a subsequent accentuation; set its beat as the segment end
-                    segmentEnd = def.children[i + 1].beat;
+                    segmentEnd = children[i + 1].beat;
                 }
                 break;
             }
