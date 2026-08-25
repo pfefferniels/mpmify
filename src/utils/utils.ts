@@ -1,5 +1,3 @@
-export type DefinedProperty<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
-
 export const isDefined = (onset?: number) => {
     return onset !== undefined && !isNaN(onset)
 }
