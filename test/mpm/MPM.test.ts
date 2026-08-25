@@ -118,6 +118,22 @@ describe("merging at a date", () => {
         expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe(60)
     })
 
+    test("a value already there wins even when it is 0", () => {
+        // "Already has a value" and "already has a truthy value" are different rules, and only
+        // the first is the one this mechanism needs. `transition.to: 0` is not an exotic value
+        // in an <ornament>: it is the target of InsertDynamicsGradient's own default crescendo,
+        // `{ from: -1, to: 0 }`, so under the truthy rule the second describer silently replaced
+        // it (issue #46).
+        const mpm = new MPM()
+        mpm.insertInstruction(ornament({ 'transition.from': -1, 'transition.to': 0 }), 'global')
+        mpm.insertInstruction(ornament({ 'transition.from': 0.5, 'transition.to': 0.9 }), 'global')
+
+        const ornaments = mpm.getInstructions('ornament', 'global')
+        expect(ornaments).toHaveLength(1)
+        expect(ornaments[0]['transition.to']).toBe(0)
+        expect(ornaments[0]['transition.from']).toBe(-1)
+    })
+
     test("with overwrite, the incoming value wins", () => {
         const mpm = new MPM()
         mpm.insertInstruction(tempo(0, 60), 'global')
