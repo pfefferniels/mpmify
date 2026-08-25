@@ -36,15 +36,36 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         })
     }
 
+    /**
+     * The residual velocity at each beat of one cell, numbered the way the renderer numbers
+     * beats.
+     *
+     * `denominator * beat + 1` is the same grid espressivo's `MetricalAccentuationMap` reads the
+     * pattern back on: it computes `1 + (date − tsDate) % measureTicks / ticksPerBeat` with
+     * `ticksPerBeat = 4 * ppq / denominator`, so one beat is one denominator-note in both
+     * directions. (Issue #42 reported the two halves disagreeing. The half that read them back
+     * in quarters, `removeAccentuationDistortion`, no longer exists — the residual is derived by
+     * rendering the document through espressivo now, so the reader *is* the renderer and there
+     * is only one grid left to agree with.)
+     *
+     * The loop counts beats as integers and converts each to ticks once, rather than
+     * accumulating `beat += beatLength`. A triplet basis is not representable in binary, so the
+     * accumulated position drifted — and `notesAtDate` compares dates with `===`, so a drifted
+     * date silently matched no note at all. Rounding to the tick is exact for every basis,
+     * because score dates are integers in ticks.
+     */
     private extractVelocities(
         { from: start, to: end, beatLength }: InsertMetricalAccentuationOptions,
         msm: MSM,
         residual: Residual
     ): Velocity[] {
-        const velocities = []
-        const frameLength = end - start
-        for (let beat = 0; beat <= frameLength / PULSES_PER_WHOLE; beat += beatLength) {
-            const date = start + beat * PULSES_PER_WHOLE
+        const velocities: Velocity[] = []
+        if (beatLength <= 0) return velocities
+
+        for (let index = 0; ; index++) {
+            const beat = index * beatLength
+            const date = start + Math.round(beat * PULSES_PER_WHOLE)
+            if (date > end) break
 
             const notesAtDate = msm.notesAtDate(date, this.options.scope)
                 .filter(note => residual.of(note)?.velocity !== undefined)
