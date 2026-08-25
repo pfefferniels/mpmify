@@ -180,14 +180,16 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
 
         // Insert fitted tempos. `endDate` is the segment the curve was fitted over — a working
         // field, not an MPM attribute; it used to be written into the document. See old-bugs.md.
+        //
+        // `addTempo` appends rather than merging, and here that is the same thing. The
+        // replacement ranges are `[from, to)` of the chain's own segments, so they tile
+        // [chain start, chain end) exactly; every date written below is one of those `from`s and
+        // so was just cleared. The only date the removal restores to is the chain end, which is
+        // no segment's start. That is what the `overwrite` flag this call used to pass was for.
+        const map = mpm.requireMap('tempo', this.options.scope)
         for (const fitted of tempos) {
             const { endDate: _fittingWindow, ...tempo } = fitted;
-            mpm.insertInstruction(
-                'tempo',
-                { ...tempo, id: generateId('tempo', tempo.date, mpm) },
-                this.options.scope,
-                true
-            );
+            map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
         }
 
         // When using continue, removeAffectedTempoInstructions may restore a
@@ -225,12 +227,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
         const existing = mpm.getInstructions('tempo', this.options.scope);
         if (existing.some(tempo => tempo.date === last.endDate)) return;
 
-        mpm.insertInstruction('tempo', {
+        mpm.requireMap('tempo', this.options.scope).addTempo({
             id: generateId('tempo', last.endDate, mpm),
             date: last.endDate,
             bpm: target,
             beatLength: last.beatLength
-        }, this.options.scope);
+        });
     }
 
     removeAffectedTempoInstructions(mpm: MPM, scope: Scope, segments: TempoSegment[]) {
@@ -298,13 +300,10 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
             }
         }
 
+        // The map is there: `existing` was non-empty, or this returned above.
+        const map = mpm.requireMap('tempo', scope)
         for (const tempo of restoreAtBoundaries) {
-            mpm.insertInstruction(
-                'tempo',
-                { ...tempo, id: generateId('tempo', tempo.date, mpm) },
-                scope,
-                false
-            );
+            map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
         }
     }
 }

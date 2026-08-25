@@ -231,22 +231,23 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         mpm.insertDefinition('accentuationPatternDef', accentuationPatternDef, this.options.scope)
 
         const loop = acceptedThrough > cell.end
-        mpm.insertInstruction('accentuationPattern', {
+        const map = mpm.requireMap('accentuationPattern', this.options.scope)
+        map.addAccentuationPattern({
             accentuationPatternDefName: accentuationPatternDef.getName(),
             id: generateId('accentuationPattern', cell.start, mpm),
             date: cell.start,
             scale,
             loop: loop || undefined,
-        }, this.options.scope)
+        })
 
         if (loop) {
-            mpm.insertInstruction('accentuationPattern', {
+            map.addAccentuationPattern({
                 accentuationPatternDefName: 'neutral',
                 date: acceptedThrough,
                 id: generateId('accentuationPattern', acceptedThrough, mpm),
                 scale: 0,
                 loop: undefined
-            }, this.options.scope)
+            })
         }
 
 

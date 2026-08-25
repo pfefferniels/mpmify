@@ -39,6 +39,10 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
         const rubatos = mpm.getInstructions('rubato', this.options.scope)
         if (rubatos.length <= 1) return
 
+        // The map every write below goes through. It exists — `getInstructions` just read
+        // instructions out of it.
+        const map = mpm.requireMap('rubato', this.options.scope)
+
         const lastDate = msm.lastDate()
 
         // The frame the walk is about to fold a run onto: `undefined` once it has run past the
@@ -47,8 +51,8 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
         // of `date` below depend, through the walk, on its own initializer.
         let next: Instruction<'rubato'> | undefined = rubatos[0]
         while (next) {
-            // Reassigned rather than fixed, because folding a frame into `ref` is now
-            // `updateInstruction`, which hands back a fresh snapshot and leaves this one stale.
+            // Reassigned rather than fixed, because folding a frame into `ref` writes through
+            // the map and leaves this snapshot stale.
             let ref: Instruction<'rubato'> = next
 
             // The frame the walk steps by. `@frameLength` is optional on the instruction — a
@@ -84,12 +88,25 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
                     && Math.abs((current.earlyEnd || 1) - (ref.earlyEnd || 1)) < this.options.compressionTolerance
                 ) {
                     const count = (date - ref.date) / frameLength
-                    ref = mpm.updateInstruction(ref, {
+
+                    // Found again on every pass rather than carried across them: the removal
+                    // below shifts every entry after `current`, so an index cached from one
+                    // iteration names a different element in the next. The element itself is the
+                    // identity that survives.
+                    const index = map.getElementIndexOf(ref.element)
+                    map.updateRubatoAt(index, {
                         loop: true,
                         intensity: (refIntensity * count + currentIntensity) / (count + 1),
                         lateStart: ((ref.lateStart || 0) * count + (current.lateStart || 0)) / (count + 1),
                         earlyEnd: ((ref.earlyEnd || 1) * count + (current.earlyEnd || 1)) / (count + 1),
                     })
+
+                    // Re-read rather than patched onto the snapshot in hand: the next pass folds
+                    // the following frame into these averages, and the numbers it has to average
+                    // are the ones the document now holds.
+                    const folded = map.getRubatoOptionsOf(index)
+                    if (folded) ref = { ...folded, type: 'rubato', element: ref.element, scope: ref.scope }
+
                     mpm.removeInstruction(current)
                     rubatos.splice(rubatos.indexOf(current), 1)
                 } else {
@@ -103,14 +120,30 @@ export class CombineAdjacentRubatos extends AbstractTransformer<CombineAdjacentR
                 break
             }
 
-            if (ref.loop) {
-                // in order to stop the loop, we once need to insert a
-                // new, "neutral" rubato
-                mpm.insertInstruction('rubato', {
+            // In order to stop the loop we need an instruction at the date it stopped — but only
+            // where there is not one already. The walk stops for two reasons, and one of them is
+            // that it found a frame it could not merge: that frame *is* what stops the loop, and
+            // a neutral rubato beside it would be a second `<rubato>` at one date.
+            //
+            // This used to fall out of `MPM.insertInstruction`, which merged into an instruction
+            // at the same `@date` rather than duplicating it. The merge was a no-op here — a
+            // frame already standing at that date carries `@date`, `@frameLength` and an
+            // `xml:id`, which is every field the closer names, and the merge left a field the
+            // existing instruction already had alone. espressivo's `addRubato` appends, so what
+            // was implicit in the writer has to be said here.
+            // Asked of the MAP and not of `rubatos`: that array is the snapshot this pass
+            // started from, and a closer written by an earlier pass of the outer loop is in the
+            // document without being in it. Checking the stale copy wrote a second `<rubato>` at
+            // one date.
+            const alreadyStopped = map.getAllElements()
+                .some(({ key, value }) => key === stoppedAt && value.getLocalName() === 'rubato')
+
+            if (ref.loop && !alreadyStopped) {
+                map.addRubato({
                     date: stoppedAt,
                     frameLength,
                     id: generateId('rubato', stoppedAt, mpm),
-                }, this.options.scope)
+                })
             }
 
             next = rubatos.find(r => r.date > stoppedAt)

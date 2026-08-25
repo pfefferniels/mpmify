@@ -1,25 +1,38 @@
 /**
  * mpmify's handle on an MPM document.
  *
- * The document is espressivo's — `Mpm → Performance → Global | Part → Header | Dated` — and so,
- * now, is everything written into it. This class resolves a {@link Scope} to an environment,
- * creates maps and style collections on demand, and routes each instruction type to the
- * espressivo map that owns it. It holds no model of MPM itself: the attribute an instruction
- * has, how it is spelled, and where it goes in the element are all questions espressivo answers.
+ * The document is espressivo's — `Mpm → Performance → Global | Part → Header | Dated` — and so
+ * is everything written into it. What is left here is what espressivo cannot answer, and it is
+ * four things:
  *
- * That is the difference from the version this replaces. That one carried a record type per
- * instruction and a table of attribute spellings (`types.ts` + `schema.ts`, 487 lines), and made
- * the records live by proxying every property access onto the element. All three are gone:
- * espressivo's `Add<X>Options` is the record, its `get<X>OptionsOf` is the read, and its
- * `update<X>At` is the write.
+ * 1. **A {@link Scope} is not an espressivo idea.** It is how mpmify and MSM name a part —
+ *    `'global'` or an index — and turning one into a `<global>` or a numbered `<part>`, then
+ *    into its `<dated>`, then into the map, creating each on the way, is the four steps
+ *    {@link requireMap} takes so that no transformer repeats them.
+ * 2. **espressivo reads by index and by type.** `getTempoOptionsOf(3)` is the shape it offers;
+ *    "every `<tempo>` in scope S" is the question mpmify asks. {@link getInstructions} is that
+ *    adapter, and the `READ` table above is the only thing left in this file that knows one
+ *    instruction type from another.
+ * 3. **The two sweeps.** {@link audit} answers what a transformer changed, what it left
+ *    unnamed, and what it wrote as `NaN` — all by looking at the document afterwards rather
+ *    than by intercepting anything.
+ * 4. **What MPM does not define**: `@corresp` (see `corresp.ts`), the ornament draft (see
+ *    `ornamentDraft.ts`) and `<appInfo>` — plus mpmify's one-`<styleDef>`-per-collection
+ *    convention, which is what {@link ensureDefaultStyle} is.
  *
- * Reads are therefore **snapshots**. `getInstructions` hands back what the document says at the
- * moment it is asked; changing it is {@link updateInstruction}, which says so at the call site.
+ * **Writing does not go through this class.** `requireMap(type, scope)` hands back espressivo's
+ * own `TempoMap` / `DynamicsMap` / …, and a transformer calls `addTempo`, `updateTempoAt`,
+ * `removeElement` on it directly. There used to be a generic `insertInstruction` here, with a
+ * table dispatching it to the eight `add<X>` methods; it existed only because
+ * `AbstractTransformer` collected its `created` list by intercepting every write. That list is
+ * derived now, so the funnel is gone and so is the table's write half.
  *
- * Two attributes mpmify writes are not MPM and are not routed through espressivo: `@corresp`
- * (see `corresp.ts`) and the ornament draft fields (see `ornamentDraft.ts`). Both survive
- * everything here, because espressivo only ever touches an attribute one of its options types
- * names.
+ * Reads are **snapshots**. `getInstructions` hands back what the document says at the moment it
+ * is asked; an earlier version proxied every property onto the element, which made
+ * `tempo.bpm = 72` edit the document and a value that looks like data silently not be.
+ *
+ * The non-MPM attributes survive everything here, because espressivo only ever touches an
+ * attribute one of its options types names.
  */
 import {
     Attribute,
@@ -65,6 +78,9 @@ const unwrap = <T>(result: T | { ok: boolean; value?: T }, what: string): T => {
     return result as T
 }
 
+/** `NaN`, `Infinity` and `-Infinity` as an attribute would be spelled. See {@link MPM.audit}. */
+const NON_FINITE = /([\w.:]+)="(-?Infinity|NaN)"/g
+
 /** The `<performance>` mpmify writes into. mpm-ts wrote exactly one, unnamed. */
 const PERFORMANCE_NAME = 'unknown'
 
@@ -72,81 +88,46 @@ const PERFORMANCE_NAME = 'unknown'
 type MapFor<K extends InstructionType> = MapOfKind[(typeof mapNames)[K]]
 
 /**
- * How one instruction type is read and written — three calls per row, all espressivo's.
+ * How one instruction type is read back out of its map.
+ *
+ * espressivo's readers are per-type and index-based — `getTempoOptionsOf(3)` — and mpmify's
+ * question is "every instruction of type T in scope S". This table is the adapter between the
+ * two, and it is the ONLY thing left here that knows one instruction type from another. Writing
+ * needs no such table: a transformer that is inserting a `<tempo>` holds a `TempoMap` and calls
+ * `addTempo` on it.
  *
  * A total mapped type over {@link InstructionType}, so a ninth type added to `OptionsOfType`
- * fails to compile here rather than falling through a `switch` at runtime. It is also the whole
- * of what mpmify knows about the difference between instruction types: everything else in this
- * class is written once, against a row.
+ * fails to compile here rather than falling through a `switch` at runtime.
  */
-interface MapOps<K extends InstructionType> {
-    readonly add: (map: MapFor<K>, options: InstructionOptions<K>) => number
-    readonly read: (map: MapFor<K>, index: number) => InstructionOptions<K> | null
-    readonly update: (map: MapFor<K>, index: number, patch: Partial<InstructionOptions<K>>) => boolean
-}
-
-const MAP_OPS: { readonly [K in InstructionType]: MapOps<K> } = {
-    tempo: {
-        add: (map, options) => map.addTempo(options),
-        read: (map, index) => map.getTempoOptionsOf(index),
-        update: (map, index, patch) => map.updateTempoAt(index, patch),
-    },
-    dynamics: {
-        add: (map, options) => map.addDynamics(options),
-        read: (map, index) => map.getDynamicsOptionsOf(index),
-        update: (map, index, patch) => map.updateDynamicsAt(index, patch),
-    },
-    movement: {
-        add: (map, options) => map.addMovement(options),
-        read: (map, index) => map.getMovementOptionsOf(index),
-        update: (map, index, patch) => map.updateMovementAt(index, patch),
-    },
-    articulation: {
-        add: (map, options) => map.addArticulation(options),
-        read: (map, index) => map.getArticulationOptionsOf(index),
-        update: (map, index, patch) => map.updateArticulationAt(index, patch),
-    },
-    rubato: {
-        add: (map, options) => map.addRubato(options),
-        read: (map, index) => map.getRubatoOptionsOf(index),
-        update: (map, index, patch) => map.updateRubatoAt(index, patch),
-    },
-    ornament: {
-        add: (map, options) => map.addOrnamentV3(options),
-        read: (map, index) => map.getOrnamentOptionsOf(index),
-        update: (map, index, patch) => map.updateOrnamentAt(index, patch),
-    },
-    accentuationPattern: {
-        add: (map, options) => map.addAccentuationPattern(options),
-        read: (map, index) => map.getAccentuationPatternOptionsOf(index),
-        update: (map, index, patch) => map.updateAccentuationPatternAt(index, patch),
-    },
-    asynchrony: {
-        add: (map, options) => map.addAsynchrony(options),
-        read: (map, index) => map.getAsynchronyOptionsOf(index),
-        update: (map, index, patch) => map.updateAsynchronyAt(index, patch),
-    },
+const READ: { readonly [K in InstructionType]: (map: MapFor<K>, index: number) => InstructionOptions<K> | null } = {
+    tempo: (map, index) => map.getTempoOptionsOf(index),
+    dynamics: (map, index) => map.getDynamicsOptionsOf(index),
+    movement: (map, index) => map.getMovementOptionsOf(index),
+    articulation: (map, index) => map.getArticulationOptionsOf(index),
+    rubato: (map, index) => map.getRubatoOptionsOf(index),
+    ornament: (map, index) => map.getOrnamentOptionsOf(index),
+    accentuationPattern: (map, index) => map.getAccentuationPatternOptionsOf(index),
+    asynchrony: (map, index) => map.getAsynchronyOptionsOf(index),
 }
 
 /**
- * Refuse a non-finite number before it becomes an attribute.
+ * What one walk of the document says about it: what every instruction currently is, and the two
+ * things that are always bugs.
  *
- * `String(NaN)` is `'NaN'`, and `'NaN'` is a perfectly well-formed attribute value: the document
- * stays schema-valid and says something no renderer can act on, several steps after the fit that
- * produced it. espressivo will not refuse it — RULE E1 freezes its interior at logs-and-returns,
- * and throwing there would be a divergence — so the guard belongs on this side of the boundary,
- * which is also where the number was computed.
+ * `unnamed` — an instruction with no `@xml:id` gets no `@corresp`, cannot be named in a work
+ * file, and has its span silently dropped by `deriveSegments`. That happened, and cost nine
+ * `<tempo>` elements.
+ *
+ * `nonFinite` — `String(NaN)` is `'NaN'`, and `'NaN'` is a perfectly well-formed attribute
+ * value: the document stays schema-valid and says something no renderer can act on, several
+ * steps after the fit that produced it. espressivo will not refuse it (its RULE E1 freezes the
+ * interior at logs-and-returns), so the guard is mpmify's. A sweep rather than a check on the
+ * way in, which is what lets writes go straight through an espressivo map.
  */
-const checkFinite = (type: string, options: Readonly<Record<string, unknown>>): void => {
-    for (const [key, value] of Object.entries(options)) {
-        if (typeof value === 'number' && !Number.isFinite(value)) {
-            throw new Error(
-                `Refusing to write <${type} @${key}>="${String(value)}": an MPM attribute must be `
-                + 'a finite number. Whatever computed it produced NaN or an infinity — look '
-                + 'there, not here.'
-            )
-        }
-    }
+export interface InstructionAudit {
+    readonly fingerprints: Map<string, string>
+    readonly unnamed: string[]
+    readonly nonFinite: string[]
 }
 
 export class MPM {
@@ -218,6 +199,59 @@ export class MPM {
         return copy
     }
 
+    /**
+     * Every instruction in the document, by `xml:id`, as the text of its element.
+     *
+     * What `AbstractTransformer.run` diffs to find out what a transformer did. Comparing the
+     * serialized element rather than a set of ids catches an instruction that was *changed* as
+     * well as one that was added, which the interception it replaces could not: that recorded
+     * what went through a generic `insertInstruction` and nothing else, so a transformer which
+     * only edited an instruction went unattributed for it.
+     *
+     * An instruction with no `@xml:id` cannot appear here. {@link audit} is what notices.
+     */
+    fingerprints(): Map<string, string> {
+        const result = new Map<string, string>()
+        for (const instruction of this.getInstructions()) {
+            if (instruction.id !== undefined) result.set(instruction.id, instruction.element.toXML())
+        }
+        return result
+    }
+
+    /**
+     * One pass over every instruction, answering the three questions `AbstractTransformer.run`
+     * asks after a transformer has run.
+     *
+     * One pass and not three, because each of them is a full walk of the document and `run` is
+     * called once per transformer in the chain.
+     */
+    audit(): InstructionAudit {
+        const fingerprints = new Map<string, string>()
+        const unnamed: string[] = []
+        const nonFinite: string[] = []
+
+        for (const instruction of this.getInstructions()) {
+            const xml = instruction.element.toXML()
+
+            if (instruction.id === undefined) {
+                unnamed.push(`<${instruction.type}> at ${String(instruction.date)}`)
+            } else {
+                fingerprints.set(instruction.id, xml)
+            }
+
+            // Read off the serialized text, not off the parsed options, and not for free: the
+            // attributes that most need this are the ones a fitter computes, and two of those —
+            // `@bpm` and `@volume` — may hold a style-relative NAME as well as a number, so
+            // espressivo reads `bpm="NaN"` back as the string `'NaN'` and a test on the parsed
+            // value sees a perfectly ordinary string. The text says what the document says.
+            for (const [, name, value] of xml.matchAll(NON_FINITE)) {
+                nonFinite.push(`<${instruction.type} @${name}>="${value}"`)
+            }
+        }
+
+        return { fingerprints, unnamed, nonFinite }
+    }
+
     // ── scopes and environments ───────────────────────────────────
 
     /**
@@ -257,7 +291,25 @@ export class MPM {
         return create ? environment.requireDated() : environment.getDated()
     }
 
-    /** The espressivo map an instruction type lives in, typed as the class that owns it. */
+    /**
+     * The espressivo map an instruction type lives in, in this scope, or null if there is none.
+     *
+     * **This is the method to reach for.** It is what mpmify adds that espressivo cannot: a
+     * `Scope` is mpmify's and MSM's way of naming a part, and turning one into a `<global>` or a
+     * numbered `<part>`, then into its `<dated>`, then into the map — creating each on the way
+     * if asked — is four steps no transformer should repeat. What comes back is espressivo's own
+     * `TempoMap`, `DynamicsMap` and so on, with its whole surface: `addTempo`,
+     * `getTempoOptionsOf`, `updateTempoAt`, `getTempoAt`, `getAllElements`, `sort`.
+     */
+    mapOf<K extends InstructionType>(type: K, scope: Scope): MapFor<K> | null {
+        return this.map(type, scope, false)
+    }
+
+    /** {@link mapOf}, creating the part, the `<dated>` and the map if they are not there yet. */
+    requireMap<K extends InstructionType>(type: K, scope: Scope): MapFor<K> {
+        return this.map(type, scope, true)!
+    }
+
     private map<K extends InstructionType>(type: K, scope: Scope, create: boolean): MapFor<K> | null {
         const dated = this.dated(scope, create)
         if (!dated) return null
@@ -300,7 +352,7 @@ export class MPM {
         index: number,
         scope: Scope,
     ): Instruction<K> | null {
-        const options = MAP_OPS[type].read(map, index)
+        const options = READ[type](map, index)
         const element = map.getElement(index)
         if (options === null || element === null) return null
         return { ...options, type, element, scope }
@@ -359,94 +411,6 @@ export class MPM {
             }
         }
         return null
-    }
-
-    /**
-     * The element already at this date that a new instruction of this type would merge into.
-     *
-     * Not `getAllElementsAt`, which answers with the NEXT entry when the date it is given holds
-     * none — that would merge a new instruction into a later one. The name test keeps a
-     * `<style>` switch sharing the date out of it as well.
-     */
-    private mergeTarget(type: InstructionType, map: MapFor<InstructionType>, date: number, noteid?: string): number {
-        for (let index = 0; index < map.size(); ++index) {
-            const entry = map.getElement(index)
-            if (!entry || entry.getLocalName() !== type) continue
-            const entryDate = entry.getAttributeValue('date')
-            if (entryDate === null || parseFloat(entryDate) !== date) continue
-            if ((entry.getAttributeValue('noteid') ?? undefined) !== noteid) continue
-            return index
-        }
-        return -1
-    }
-
-    /**
-     * Insert an instruction into the map its type calls for, at its date.
-     *
-     * An instruction already at the same `@date` and `@noteid` is *merged into* rather than
-     * duplicated — which is not an optimisation but the mechanism by which
-     * `InsertDynamicsGradient` and `InsertTemporalSpread` describe one `<ornament>` between
-     * them. Without `overwrite`, a field the existing instruction already has a truthy value
-     * for is left alone.
-     *
-     * @returns the instruction that now holds the values — the existing one when a merge
-     * happened, so a caller can hold on to the element it wrote.
-     */
-    insertInstruction<K extends InstructionType>(
-        type: K,
-        options: InstructionOptions<K>,
-        scope: Scope,
-        overwrite = false,
-    ): Instruction<K> {
-        checkFinite(type, options as unknown as Readonly<Record<string, unknown>>)
-
-        const map = this.map(type, scope, true)!
-        const ops = MAP_OPS[type]
-        const date = (options as { date: number }).date
-        const noteid = (options as { noteid?: string }).noteid
-
-        const existingIndex = this.mergeTarget(type, map, date, noteid)
-        if (existingIndex >= 0) {
-            const current = ops.read(map, existingIndex) as unknown as Readonly<Record<string, unknown>> | null
-            const patch: Record<string, unknown> = {}
-            for (const [key, value] of Object.entries(options)) {
-                if (!overwrite && current && current[key]) continue
-                patch[key] = value
-            }
-            ops.update(map, existingIndex, patch as Partial<InstructionOptions<K>>)
-            return this.at(type, map, existingIndex, scope)!
-        }
-
-        return this.at(type, map, ops.add(map, options), scope)!
-    }
-
-    insertInstructions<K extends InstructionType>(
-        type: K,
-        options: readonly InstructionOptions<K>[],
-        scope: Scope,
-        overwrite = false,
-    ): Instruction<K>[] {
-        return options.map(one => this.insertInstruction(type, one, scope, overwrite))
-    }
-
-    /**
-     * Change what an instruction says. A field the patch omits is left alone, one it carries as
-     * `undefined` has its attribute removed.
-     *
-     * @returns a fresh snapshot, since the one that was passed in is now stale.
-     */
-    updateInstruction<K extends InstructionType>(
-        instruction: Instruction<K>,
-        patch: Partial<InstructionOptions<K>>,
-    ): Instruction<K> {
-        checkFinite(instruction.type, patch as unknown as Readonly<Record<string, unknown>>)
-
-        const map = this.map(instruction.type, instruction.scope, false)
-        const index = map?.getElementIndexOf(instruction.element) ?? -1
-        if (!map || index < 0) return instruction
-
-        MAP_OPS[instruction.type].update(map, index, patch)
-        return this.at(instruction.type, map, index, instruction.scope)!
     }
 
     /** Remove the instruction this snapshot stands for, wherever in the document it is. */

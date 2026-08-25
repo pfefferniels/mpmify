@@ -43,7 +43,7 @@ const note = (id: string, date: number, pitch: number, tickDuration: number): Ms
 /** The tempo those recorded seconds are read against. */
 const atSixtyBpm = () => {
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
@@ -69,9 +69,9 @@ test('MakeDefaultArticulation excludes the notes a date-scoped <articulation> al
     ], { numerator: 4, denominator: 4 })
 
     const mpm = atSixtyBpm()
-    mpm.insertInstruction('articulation', {
+    mpm.requireMap('articulation', 'global').addArticulation({
         id: 'articulation_0', date: 0, nameRef: 'explicit',
-    }, 'global')
+    })
 
     callTransform(new MakeDefaultArticulation({ scope: 'global' }), msm, mpm)
 
@@ -92,7 +92,8 @@ test('StylizeArticulation tells the notes of a chord apart', () => {
     ], { numerator: 4, denominator: 4 })
 
     const mpm = atSixtyBpm()
-    mpm.insertInstructions('articulation', [
+    const articulationMap = mpm.requireMap('articulation', 'global')
+    for (const articulation of [
         {
             id: 'articulation_0', date: 0, noteid: '#n0', nameRef: UNRESOLVED,
             relativeDuration: 2, relativeVelocity: 1,
@@ -105,7 +106,7 @@ test('StylizeArticulation tells the notes of a chord apart', () => {
             id: 'articulation_720', date: 720, noteid: '#n2', nameRef: UNRESOLVED,
             relativeDuration: 2, relativeVelocity: 1,
         },
-    ], 'global')
+    ]) articulationMap.addArticulation(articulation)
 
     callTransform(new StylizeArticulation({ volumeTolerance: 0.01, relativeDurationTolerance: 0.2 }), msm, mpm)
 
@@ -144,10 +145,13 @@ test('a chain running both transformers leaves exactly one <style> in the articu
     ], { numerator: 4, denominator: 4 })
 
     const mpm = atSixtyBpm()
-    mpm.insertInstructions('articulation', ([0, 720, 1440, 2160]).map((date, i) => ({
-        id: `articulation_${i}`, date, noteid: `#n${i}`, nameRef: UNRESOLVED,
-        relativeDuration: 0.5, relativeVelocity: 1,
-    })), 'global')
+    const articulationMap = mpm.requireMap('articulation', 'global')
+    for (const [i, date] of [0, 720, 1440, 2160].entries()) {
+        articulationMap.addArticulation({
+            id: `articulation_${i}`, date, noteid: `#n${i}`, nameRef: UNRESOLVED,
+            relativeDuration: 0.5, relativeVelocity: 1,
+        })
+    }
 
     callTransform(new StylizeArticulation({ volumeTolerance: 0.01, relativeDurationTolerance: 0.2 }), msm, mpm)
     callTransform(new MakeDefaultArticulation(), msm, mpm)

@@ -1,6 +1,5 @@
 import { addCorresp, InstructionType, MPM, Scope } from "../mpm";
 import { MSM } from "../msm";
-import { MPMRecording } from "./MPMRecording";
 import { Residual } from "../residual";
 import { v4 } from "uuid";
 type WithId = { id: string };
@@ -94,11 +93,45 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
         this.options = options
     }
 
-    // this method should not be overridden
+    /**
+     * Run the transformer and record which MPM elements it is answerable for.
+     *
+     * `created` is **derived**, by fingerprinting every instruction before and after — the same
+     * move `src/residual/` made, and for the same reason. It used to be intercepted: `transform`
+     * was handed a subclass of `MPM` that pushed an id on every `insertInstruction`, which meant
+     * every write had to go through one generic method, which is why one existed. Transformers
+     * can now write through espressivo's own maps, and nothing has to funnel.
+     *
+     * Deriving is also more accurate. Interception saw insertions only, so a transformer that
+     * *changed* an instruction — `StylizeArticulation` naming one, `CombineAdjacentRubatos`
+     * folding two together — went unattributed for it. A diff of the elements sees both.
+     *
+     * Not to be overridden.
+     */
     public run(msm: MSM, mpm: MPM) {
-        const mpmRecording = new MPMRecording(mpm)
-        this.transform(msm, mpmRecording)
-        this.created = mpmRecording.created
+        const before = mpm.fingerprints()
+        this.transform(msm, mpm)
+
+        const { fingerprints, unnamed, nonFinite } = mpm.audit()
+
+        if (unnamed.length > 0) {
+            throw new Error(
+                `${this.name} left ${String(unnamed.length)} instruction(s) with no xml:id `
+                + `(${unnamed.slice(0, 3).join(', ')}). One without an id cannot be attributed `
+                + 'to the transformer that wrote it — pass `id` in the options.'
+            )
+        }
+        if (nonFinite.length > 0) {
+            throw new Error(
+                `${this.name} wrote ${nonFinite.slice(0, 3).join(', ')}: an MPM attribute must be `
+                + 'a finite number. Whatever computed it produced NaN or an infinity — look '
+                + 'there, not here.'
+            )
+        }
+
+        this.created = [...fingerprints]
+            .filter(([id, xml]) => before.get(id) !== xml)
+            .map(([id]) => id)
 
         this.insertMetadata(mpm)
     }

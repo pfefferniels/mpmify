@@ -1,4 +1,4 @@
-import { MPM, setOrnamentDraft } from "../../mpm"
+import { InstructionOptions, MPM, fillInAt, setOrnamentDraft } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
@@ -108,17 +108,26 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
         if (scale === 0) return
 
-        const ornament = mpm.insertInstruction('ornament', {
+        // `fillInAt`, not `addOrnamentV3`: `InsertTemporalSpread` describes the other half of
+        // this same `<ornament>`, and whichever runs second has to find the first's element.
+        const map = mpm.requireMap('ornament', this.options.scope)
+        const options: InstructionOptions<'ornament'> = {
             id: generateId('ornament', date, mpm),
             date,
             nameRef: 'neutralArpeggio',
             scale
-        }, this.options.scope)
+        }
+        const element = fillInAt(map, options, {
+            localName: 'ornament',
+            add: o => map.addOrnamentV3(o),
+            read: i => map.getOrnamentOptionsOf(i),
+            update: (i, patch) => map.updateOrnamentAt(i, patch),
+        })
 
         // The ramp's two ends belong on the `<dynamicsGradient>` of the def this ornament will
         // come to name, and MPM has no place for them on the instruction. They travel parked on
         // the element until `StylizeOrnamentation` decides which ornaments share a definition.
-        setOrnamentDraft(ornament.element, {
+        setOrnamentDraft(element, {
             transitionFrom: gradient.from,
             transitionTo: gradient.to
         })

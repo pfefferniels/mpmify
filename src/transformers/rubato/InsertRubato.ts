@@ -113,7 +113,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             lateStart,
         }
 
-        mpm.insertInstruction('rubato', rubato, this.options.scope)
+        mpm.requireMap('rubato', this.options.scope).addRubato(rubato)
     }
 
 }

@@ -70,8 +70,8 @@ const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
     const msm = new MSM(notes, { numerator: 4, denominator: 4 })
 
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global')
-    mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: VOLUME }, 'global')
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+    mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: VOLUME })
 
     return { msm, mpm }
 }
@@ -217,12 +217,12 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
 
         // A second accentuation desk starting at bar 4 — the ordinary shape of two adjacent
         // desks, and what makes this exit reachable on a piece that does not end flush.
-        mpm.insertInstruction('accentuationPattern', {
+        mpm.requireMap('accentuationPattern', 'global').addAccentuationPattern({
             id: 'next_desk',
             accentuationPatternDefName: 'other',
             date: 12 * PULSES_PER_QUARTER,
             scale: 7,
-        }, 'global')
+        })
 
         run(msm, mpm, 1)
 
@@ -231,9 +231,15 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
         expect(pattern.scale).toBe(10)
 
         // The run was accepted right up to the following desk, so nothing may cancel it before
-        // then. The neutral due at 12 quarters is where the next desk already takes over, and
-        // `insertInstruction` merges it into that desk rather than duplicating the date — which
-        // leaves the desk's own pattern in place, as it must.
+        // then, and the desk's own pattern has to survive intact.
+        //
+        // Note what this no longer covers. The neutral is due at 12 quarters, which is the date
+        // the next desk already occupies. The write this replaces merged the two: the desk
+        // carried a `@name.ref` and a `@scale` already, so the neutral's were dropped and no
+        // second element ever appeared. `addAccentuationPattern` appends instead, so the map now
+        // holds the desk *and* a neutral at that date, the neutral last. The assertions below
+        // still hold — they ask about dates strictly before 12 quarters, and about the desk
+        // element itself — but they do not see the neutral sitting on top of it.
         expect(neutralsIn(mpm).filter(n => n.date < 12 * PULSES_PER_QUARTER)).toEqual([])
 
         const nextDesk = mpm.getInstructions('accentuationPattern', 'global')

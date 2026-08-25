@@ -1,85 +1,107 @@
 // @vitest-environment jsdom
 
 import { describe, expect, test } from "vitest"
-import { InstructionOptions, MPM } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
+import { MSM } from "../../src/msm"
+import { AbstractTransformer, TransformationOptions } from "../../src/transformers/Transformer"
 
 /**
  * mpmify never authors a non-finite attribute; it still reads one.
  *
  * `String(NaN)` is `'NaN'`, and `'NaN'` is a perfectly well-formed attribute value — the
  * document stays schema-valid while saying something no renderer can act on, and the fit that
- * produced it is several steps away by the time anyone notices. `MPM.insertInstruction` and
- * `updateInstruction` refuse instead.
+ * produced it is several steps away by the time anyone notices.
  *
- * The guard is mpmify's, not espressivo's, and that is deliberate: espressivo's interior is
- * frozen at logs-and-returns (its RULE E1), so throwing there would be a divergence from the
- * library it is held equivalent to. Here it is one step from where the number was computed.
+ * The guard is a **sweep**, not a check on the way in. It used to be the latter, which meant it
+ * only saw values passed to one generic write method — so it also meant one had to exist. Now
+ * `MPM.audit()` walks the document and `AbstractTransformer.run` refuses afterwards, which
+ * costs one pass per transformer and covers every path into the document, including a write
+ * made straight through an espressivo map.
+ *
+ * It is mpmify's and not espressivo's because espressivo's interior is frozen at
+ * logs-and-returns by its own RULE E1: throwing there would be a divergence from the library it
+ * is held byte-equivalent to.
  *
  * Reading is deliberately not symmetrical: files written before the guard existed contain such
  * values, and refusing to parse them would make old work unopenable rather than diagnosable.
  */
 
-const tempo = (bpm: number): InstructionOptions<'tempo'> => ({
-    id: 'tempo_0',
-    date: 0,
-    bpm,
-    beatLength: 0.25,
-})
+/** A transformer that writes exactly what it is told, so the guard is what is under test. */
+class WritesTempo extends AbstractTransformer<TransformationOptions> {
+    readonly name = 'WritesTempo'
+    readonly requires = []
+    constructor(
+        private readonly bpm: number,
+        // Not `id` — the base class has a public one. No default: a default fires on an
+        // explicit `undefined`, which is exactly the case one of these tests is about.
+        private readonly elementId?: string,
+    ) {
+        super({})
+    }
+    protected transform(_msm: MSM, mpm: MPM) {
+        mpm.requireMap('tempo', 'global')
+            .addTempo({ id: this.elementId, date: 0, bpm: this.bpm, beatLength: 0.25 })
+    }
+}
 
-describe('a non-finite number never reaches the document', () => {
-    test('inserting NaN throws, and the message names the attribute', () => {
-        const mpm = new MPM()
+const run = (transformer: AbstractTransformer<TransformationOptions>, mpm: MPM) =>
+    transformer.run(new MSM([], { numerator: 4, denominator: 4 }), mpm)
 
-        expect(() => mpm.insertInstruction('tempo', tempo(NaN), 'global'))
+describe('a non-finite number never survives a transformer', () => {
+    test('NaN is refused, and the message names the attribute', () => {
+        expect(() => run(new WritesTempo(NaN, 't1'), new MPM()))
             .toThrow(/<tempo @bpm>="NaN"/)
     })
 
     test('an infinity is refused too', () => {
-        const mpm = new MPM()
-
-        expect(() => mpm.insertInstruction('tempo', tempo(Infinity), 'global'))
+        expect(() => run(new WritesTempo(Infinity, 't1'), new MPM()))
             .toThrow(/must be a finite number/)
-    })
-
-    test('patching NaN throws rather than corrupting the element', () => {
-        const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', tempo(60), 'global')
-
-        expect(() => mpm.updateInstruction(inserted, { bpm: NaN })).toThrow(/<tempo @bpm>/)
-        expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe(60)
     })
 
     test('finite numbers are untouched, including zero and negatives', () => {
         const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', tempo(60), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
+        map.updateTempoAt(0, { transitionTo: 0, meanTempoAt: -0.5 })
 
-        mpm.updateInstruction(inserted, { transitionTo: 0, meanTempoAt: -0.5 })
-
+        expect(mpm.audit().nonFinite).toEqual([])
         expect(mpm.toXML()).toContain('transition.to="0"')
         expect(mpm.toXML()).toContain('meanTempoAt="-0.5"')
     })
 
-    test('a NaN already in a document still reads back as NaN', () => {
-        const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', { ...tempo(60), meanTempoAt: 0.5 }, 'global')
+    test('an instruction with no xml:id is refused for the same reason', () => {
+        // Not about finiteness, but the same sweep and the same moment: one without an id gets
+        // no `@corresp`, cannot be named in a work file, and has its span silently dropped.
+        expect(() => run(new WritesTempo(60), new MPM()))
+            .toThrow(/no xml:id/)
+    })
+})
 
-        // What a file written by an earlier version looks like once parsed. Going through the
-        // element rather than the API is the only way to get one in now — which is the point.
-        inserted.element.getAttribute('meanTempoAt')?.setValue('NaN')
+describe('a non-finite number already in a document', () => {
+    test('still reads back as NaN', () => {
+        const mpm = new MPM()
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25, meanTempoAt: 0.5 })
+
+        // What a file written by an earlier version looks like once parsed.
+        map.getElement(0)?.getAttribute('meanTempoAt')?.setValue('NaN')
 
         expect(mpm.getInstructions('tempo', 'global')[0].meanTempoAt).toBeNaN()
+        expect(mpm.audit().nonFinite).toEqual(['<tempo @meanTempoAt>="NaN"'])
     })
 
     test('@bpm is number-or-name, so a NaN there comes back as the string "NaN"', () => {
         const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', tempo(60), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
 
-        // Not a curiosity: `@bpm` may name a tempo ("Allegro"), so espressivo's reader keeps
-        // anything that is not a round-tripping number as text. A NaN written here would not
-        // even survive as a number — it would come back as a tempo *named* "NaN" — which is the
-        // second reason the guard belongs on the write and not on the read.
-        inserted.element.getAttribute('bpm')?.setValue('NaN')
+        // `@bpm` may name a tempo ("Allegro"), so espressivo's reader keeps anything that is
+        // not a round-tripping number as text: read back, this NaN is a tempo *named* "NaN".
+        // That is why the sweep looks at the serialized attribute and not at the parsed value —
+        // a test on the value sees an ordinary string and passes.
+        map.getElement(0)?.getAttribute('bpm')?.setValue('NaN')
 
         expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe('NaN')
+        expect(mpm.audit().nonFinite).toEqual(['<tempo @bpm>="NaN"'])
     })
 })

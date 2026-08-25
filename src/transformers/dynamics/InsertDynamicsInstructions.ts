@@ -1,5 +1,5 @@
 import type { AddDynamicsOptions } from "espressivo"
-import { Instruction, MPM, Scope } from "../../mpm"
+import { InstructionOptions, MPM, Scope, fillInAt } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { approximateDynamics, DynamicsPoints } from "./Approximation"
@@ -50,13 +50,21 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // writes what its options type names instead. Taking it off here is load-bearing, not
         // belt-and-braces.
         const { endDate: fittingWindow, ...fit } = fitted
-        const instruction = { ...fit, id: generateId('dynamics', fit.date, mpm) }
+        const instruction: InstructionOptions<'dynamics'> =
+            { ...fit, id: generateId('dynamics', fit.date, mpm) }
 
-        // The view the document ended up with, not the record handed in: an instruction already
-        // at that date is merged into rather than replaced, so this is what the curve to be
-        // closed actually says.
-        const inserted = mpm.insertInstruction('dynamics', instruction, this.options?.scope)
-        this.closeTransition(mpm, inserted, fittingWindow)
+        // `fillInAt`, not `addDynamics`: in a chain, each segment's fit lands on the date the
+        // previous segment's `closeTransition` already wrote a closing `<dynamics>` at. One
+        // element has to carry both — the closing volume and this curve — or the closer sits in
+        // front of the curve and shadows it.
+        const map = mpm.requireMap('dynamics', this.options.scope)
+        fillInAt(map, instruction, {
+            localName: 'dynamics',
+            add: o => map.addDynamics(o),
+            read: i => map.getDynamicsOptionsOf(i),
+            update: (i, patch) => map.updateDynamicsAt(i, patch),
+        })
+        this.closeTransition(mpm, instruction, fittingWindow)
     }
 
     /**
@@ -73,18 +81,18 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
      * An instruction already at that date already closes the span — in a chain each segment is
      * closed by the next — and is left alone.
      */
-    private closeTransition(mpm: MPM, instruction: Instruction<'dynamics'>, endDate: number) {
+    private closeTransition(mpm: MPM, instruction: AddDynamicsOptions, endDate: number) {
         const target = instruction.transitionTo
         if (target === undefined || endDate <= instruction.date) return
 
         const existing = mpm.getInstructions('dynamics', this.options.scope)
         if (existing.some(dynamics => dynamics.date === endDate)) return
 
-        mpm.insertInstruction('dynamics', {
+        mpm.requireMap('dynamics', this.options.scope).addDynamics({
             id: generateId('dynamics', endDate, mpm),
             date: endDate,
             volume: target
-        }, this.options.scope)
+        })
     }
 
     private asPoints(msm: MSM, part: Scope): DynamicsPoints[] {

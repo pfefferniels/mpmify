@@ -2,15 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import {
-    FrameDomain,
-    InstructionOptions,
-    MPM,
-    NoteOffShift,
-    OrnamentDraft,
-    ornamentDraftOf,
-    setOrnamentDraft,
-} from "../../src/mpm"
+import { FrameDomain, InstructionOptions, MPM, NoteOffShift, OrnamentDraft, fillInAt, ornamentDraftOf, setOrnamentDraft } from "../../src/mpm"
 import { StylizeOrnamentation } from "../../src/transformers"
 
 /**
@@ -41,27 +33,35 @@ const ornaments = (mpm: MPM) => mpm.getInstructions('ornament', 'global')
 /**
  * An `<ornament>` as the fitters leave it — in the two goes it takes to write one.
  *
- * What MPM lets the instruction say goes through `insertInstruction`; the frame, the ramp and
- * the intensity are `<ornamentDef>` fields with no place on an `<ornament>`, so they are parked
- * on its element for `StylizeOrnamentation` to collect. Both halves are the fixture, and a test
- * that stated only the first would describe an ornament nothing had fitted.
+ * What MPM lets the instruction say goes through `fillInAt`, which is what the fitters
+ * themselves write through; the frame, the ramp and the intensity are `<ornamentDef>` fields with
+ * no place on an `<ornament>`, so they are parked on its element for `StylizeOrnamentation` to
+ * collect. Both halves are the fixture, and a test that stated only the first would describe an
+ * ornament nothing had fitted.
  */
 const insertOrnament = (
     mpm: MPM,
     options: InstructionOptions<'ornament'>,
     draft: OrnamentDraft,
 ) => {
-    const inserted = mpm.insertInstruction('ornament', options, 'global')
-    setOrnamentDraft(inserted.element, draft)
-    return inserted
+    const map = mpm.requireMap('ornament', 'global')
+    const element = fillInAt(map, options, {
+        localName: 'ornament',
+        add: o => map.addOrnamentV3(o),
+        read: i => map.getOrnamentOptionsOf(i),
+        update: (i, patch) => map.updateOrnamentAt(i, patch),
+    })
+    setOrnamentDraft(element, draft)
+    return element
 }
 
 /**
  * Give an ornament already in the document a frame of literal `NaN`.
  *
- * `insertInstruction` cannot produce one: `MPM`'s finiteness guard refuses to spell a non-finite
- * number as an attribute, so nothing an ornament *says* can be NaN. Its draft can — parking is
- * plain attribute writing and has no such guard — which is the shape an ornament arrives in out
+ * No transformer can produce one: `MPM.audit` sweeps the attributes an instruction states and
+ * `AbstractTransformer.run` fails the run on a non-finite one, so nothing an ornament *says*
+ * survives as NaN. Its draft can — parking is plain attribute writing, onto attributes no options
+ * type names, so the sweep never looks at them — which is the shape an ornament arrives in out
  * of a file some earlier version wrote. That is exactly where issue #28's corpus ornaments came
  * from, so parking `NaN` is the faithful fixture, not a workaround.
  *

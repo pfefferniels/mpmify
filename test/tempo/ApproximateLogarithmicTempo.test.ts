@@ -364,12 +364,12 @@ describe('ApproximateLogarithmicTempo', () => {
     test('keeps existing tempos unchanged when fitting yields no segments', () => {
         const msm = new MSM([], { numerator: 4, denominator: 4 });
         const mpm = new MPM();
-        mpm.insertInstruction('tempo', {
+        mpm.requireMap('tempo', 'global').addTempo({
             id: 'tempo_existing',
             date: 0,
             bpm: 88,
             beatLength: 0.25
-        }, 'global');
+        });
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global',
@@ -390,26 +390,25 @@ describe('ApproximateLogarithmicTempo', () => {
             { date: 2 * BEAT, onset: 1 }
         ]);
         const mpm = new MPM();
-        mpm.insertInstructions('tempo', [
-            {
-                id: 'tempo_1',
-                date: 0,
-                bpm: 90,
-                beatLength: 0.25
-            },
-            {
-                id: 'tempo_2',
-                date: BEAT,
-                bpm: 91,
-                beatLength: 0.25
-            },
-            {
-                id: 'tempo_boundary',
-                date: 2 * BEAT,
-                bpm: 150,
-                beatLength: 0.25
-            }
-        ], 'global');
+        const tempi = mpm.requireMap('tempo', 'global');
+        tempi.addTempo({
+            id: 'tempo_1',
+            date: 0,
+            bpm: 90,
+            beatLength: 0.25
+        });
+        tempi.addTempo({
+            id: 'tempo_2',
+            date: BEAT,
+            bpm: 91,
+            beatLength: 0.25
+        });
+        tempi.addTempo({
+            id: 'tempo_boundary',
+            date: 2 * BEAT,
+            bpm: 150,
+            beatLength: 0.25
+        });
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global',
@@ -431,20 +430,19 @@ describe('ApproximateLogarithmicTempo', () => {
             { date: BEAT, onset: 1 }
         ]);
         const mpm = new MPM();
-        mpm.insertInstructions('tempo', [
-            {
-                id: 'tempo_1',
-                date: 0,
-                bpm: 50,
-                beatLength: 0.25
-            },
-            {
-                id: 'tempo_2',
-                date: BEAT / 2,
-                bpm: 200,
-                beatLength: 0.25
-            }
-        ], 'global');
+        const tempi = mpm.requireMap('tempo', 'global');
+        tempi.addTempo({
+            id: 'tempo_1',
+            date: 0,
+            bpm: 50,
+            beatLength: 0.25
+        });
+        tempi.addTempo({
+            id: 'tempo_2',
+            date: BEAT / 2,
+            bpm: 200,
+            beatLength: 0.25
+        });
 
         const transformer = new ApproximateLogarithmicTempo({
             scope: 'global',
@@ -547,12 +545,12 @@ describe('ApproximateLogarithmicTempo', () => {
         const mpm = new MPM();
 
         // Insert a predecessor with different beatLength
-        mpm.insertInstruction('tempo', {
+        mpm.requireMap('tempo', 'global').addTempo({
             id: 'tempo_other',
             date: 0,
             bpm: 60,
             beatLength: 0.5
-        }, 'global');
+        });
 
         // Fit segment starting at 4*BEAT with continue — should NOT chain with beatLength=0.5
         const transformer = new ApproximateLogarithmicTempo({

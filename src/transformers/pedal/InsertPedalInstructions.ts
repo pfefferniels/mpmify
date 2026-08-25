@@ -77,43 +77,45 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         const depth = normalized(this.options.depth || 1)
         const released = normalized(0)
 
+        const map = mpm.requireMap('movement', 'global')
+
         for (const pedal of validPedals) {
             const tickDate = residual.ofPedal(pedal)!.tickDate!
             const tickDuration = residual.ofPedal(pedal)!.tickDuration!
 
             if (this.options.direction === 'down') {
-                mpm.insertInstruction('movement', {
+                map.addMovement({
                     id: `${pedal['xml:id']}_start`,
                     date: tickDate + this.options.start,
                     position: released,
                     transitionTo: depth,
                     controller: pedal.type
-                }, 'global')
+                })
 
-                mpm.insertInstruction('movement', {
+                map.addMovement({
                     id: `${pedal['xml:id']}_moveDown`,
                     date: tickDate + this.options.start + this.options.duration,
                     position: depth,
                     controller: pedal.type
-                }, 'global')
+                })
             }
             else {
                 const endDate = tickDate + tickDuration
 
-                mpm.insertInstruction('movement', {
+                map.addMovement({
                     id: `${pedal['xml:id']}_moveUp`,
                     date: endDate + this.options.start,
                     position: depth,
                     transitionTo: released,
                     controller: pedal.type
-                }, 'global')
+                })
 
-                mpm.insertInstruction('movement', {
+                map.addMovement({
                     id: `${pedal['xml:id']}_end`,
                     date: endDate + this.options.start + this.options.duration,
                     position: released,
                     controller: pedal.type
-                }, 'global')
+                })
             }
         }
     }

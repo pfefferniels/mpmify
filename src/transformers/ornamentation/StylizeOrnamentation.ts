@@ -406,7 +406,11 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
      * one that defined it — which is what licenses taking the draft back off afterwards.
      */
     private nameAfter(mpm: MPM, ornament: FittedOrnament, def: OrnamentDef, defined: Set<Element>) {
-        mpm.updateInstruction(ornament.instruction, { nameRef: def.getName() })
+        const map = mpm.requireMap('ornament', ornament.instruction.scope)
+        map.updateOrnamentAt(
+            map.getElementIndexOf(ornament.instruction.element),
+            { nameRef: def.getName() }
+        )
         defined.add(ornament.instruction.element)
     }
 }

@@ -46,8 +46,9 @@ const score = () => {
 
 const twoTempi = () => {
     const mpm = new MPM()
+    const tempi = mpm.requireMap('tempo', 'global')
     for (const [id, date] of [['t0', 0], ['t1', BOUNDARY]] as const) {
-        mpm.insertInstruction('tempo', { id, date, bpm: 60, beatLength: 0.25 }, 'global')
+        tempi.addTempo({ id, date, bpm: 60, beatLength: 0.25 })
     }
     return mpm
 }
@@ -118,10 +119,8 @@ describe('every recorded event gets a position', () => {
 describe('the walk reads an instruction the way the renderer resolves it', () => {
     const under = (tempo: Partial<InstructionOptions<'tempo'>>) => {
         const mpm = new MPM()
-        mpm.insertInstruction(
-            'tempo',
-            { id: 't', date: 0, bpm: 60, beatLength: 0.25, ...tempo },
-            'global'
+        mpm.requireMap('tempo', 'global').addTempo(
+            { id: 't', date: 0, bpm: 60, beatLength: 0.25, ...tempo }
         )
         return computeTickTimes(score(), mpm)
     }

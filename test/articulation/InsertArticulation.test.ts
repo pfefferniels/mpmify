@@ -60,7 +60,7 @@ const msmFixture = () => new MSM([
 /** The tempo the recorded seconds above are read against. */
 const atSixtyBpm = () => {
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 

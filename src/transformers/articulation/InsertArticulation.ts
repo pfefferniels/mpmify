@@ -184,13 +184,14 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // The id is minted immediately before each insertion, not for the batch up front:
         // `generateId` numbers by how many instructions the map already holds at that date, so
         // a batch that no longer has one entry per date has to let it see each one land.
+        const map = mpm.requireMap('articulation', this.options.scope)
         for (const { date, noteid } of articulations) {
-            mpm.insertInstruction('articulation', {
+            map.addArticulation({
                 date,
                 noteid,
                 nameRef: name,
                 id: generateId('articulation', date, mpm),
-            }, this.options.scope)
+            })
         }
     }
 }

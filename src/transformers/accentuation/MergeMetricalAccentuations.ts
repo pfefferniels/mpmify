@@ -43,11 +43,17 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
         toMerge.forEach(def => mpm.removeDefinition('accentuationPatternDef', def))
         mpm.insertDefinition('accentuationPatternDef', mergedPattern, this.options.scope)
 
-        mpm.getInstructions('accentuationPattern', this.options.scope)
-            .filter(a => this.options.names.includes(a.accentuationPatternDefName))
-            .forEach(a => mpm.updateInstruction(a, {
+        // Repoint the instructions at the merged def. A scope with no `<metricalAccentuationMap>`
+        // has no instructions to repoint, and asking for its map would only create an empty one.
+        const map = mpm.mapOf('accentuationPattern', this.options.scope)
+        if (!map) return
+
+        for (const instruction of mpm.getInstructions('accentuationPattern', this.options.scope)) {
+            if (!this.options.names.includes(instruction.accentuationPatternDefName)) continue
+            map.updateAccentuationPatternAt(map.getElementIndexOf(instruction.element), {
                 accentuationPatternDefName: this.options.into
-            }))
+            })
+        }
     }
 
     /**

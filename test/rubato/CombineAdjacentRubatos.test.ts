@@ -23,6 +23,12 @@ const rubato = (date: number, intensity: number): InstructionOptions<'rubato'> =
     id: `rubato_${date}`, date, frameLength: 720, intensity,
 })
 
+/** Put a run of frames into the document, through the map `InsertRubato` writes them into. */
+const given = (mpm: MPM, rubatos: InstructionOptions<'rubato'>[]) => {
+    const map = mpm.requireMap('rubato', 'global')
+    for (const rubato of rubatos) map.addRubato(rubato)
+}
+
 /** Call the protected `transform` method for testing */
 const run = (transformer: CombineAdjacentRubatos, msm: MSM, mpm: MPM) => {
     type Transformable = { transform(msm: MSM, mpm: MPM): void }
@@ -44,11 +50,11 @@ test('it terminates when the last rubato has no frame left before the final note
         { numerator: 4, denominator: 4 }
     )
     const mpm = new MPM()
-    mpm.insertInstructions('rubato', [
+    given(mpm, [
         rubato(0, 0.5),
         rubato(720, 2.0),   // opposite side of 1: not mergeable with its predecessor
         rubato(2160, 0.5),  // reached as `ref`; its next frame starts at the last note
-    ], 'global')
+    ])
 
     run(transformer(), msm, mpm)
 
@@ -61,12 +67,12 @@ test('it folds a run of similar rubatos into one looping instruction', () => {
         { numerator: 4, denominator: 4 }
     )
     const mpm = new MPM()
-    mpm.insertInstructions('rubato', [
+    given(mpm, [
         rubato(0, 1.4),
         rubato(720, 1.45),
         rubato(1440, 1.5),
         rubato(2160, 0.6),  // stops the run
-    ], 'global')
+    ])
 
     run(transformer(), msm, mpm)
 

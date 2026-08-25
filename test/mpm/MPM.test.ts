@@ -23,8 +23,9 @@ const tempo = (date: number, bpm: number, id = `tempo_${date}`): InstructionOpti
 describe("instructions", () => {
     test("go into the map their type names, sorted by date", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(1440, 90), 'global')
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo(tempo(1440, 90))
+        map.addTempo(tempo(0, 60))
 
         expect(mpm.getInstructions('tempo', 'global').map(t => t.date)).toEqual([0, 1440])
         expect(mpm.toXML()).toContain('<tempoMap>')
@@ -32,182 +33,135 @@ describe("instructions", () => {
 
     test("are snapshots: reading twice does not hand back the same object", () => {
         const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', tempo(0, 60), 'global')
+        mpm.requireMap('tempo', 'global').addTempo(tempo(0, 60))
+
+        const [first] = mpm.getInstructions('tempo', 'global')
+        const [again] = mpm.getInstructions('tempo', 'global')
 
         // The old layer proxied every property onto the element and cached one view per
         // element, so this was `toBe`. Nothing relies on that any more, and a value that looks
         // like data and silently is not was the reason to stop.
-        expect(mpm.getInstructions('tempo', 'global')[0]).not.toBe(inserted)
-        expect(mpm.getInstructions('tempo', 'global')[0]).toEqual(inserted)
+        expect(again).not.toBe(first)
+        expect(again).toEqual(first)
     })
 
-    test("are changed through updateInstruction, which reaches the XML", () => {
+    test("are changed through the espressivo map, which reaches the XML", () => {
         const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', tempo(0, 60), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        const index = map.addTempo(tempo(0, 60))
 
-        const updated = mpm.updateInstruction(inserted, { bpm: 72, transitionTo: 90 })
+        map.updateTempoAt(index, { bpm: 72, transitionTo: 90 })
 
         expect(mpm.toXML()).toContain('bpm="72"')
         expect(mpm.toXML()).toContain('transition.to="90"')
-        expect(updated.bpm).toBe(72)
         expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe(72)
-    })
-
-    test("patching a field to undefined removes its attribute", () => {
-        const mpm = new MPM()
-        const inserted = mpm.insertInstruction(
-            'tempo',
-            { ...tempo(0, 60), meanTempoAt: 0.5, transitionTo: 90 },
-            'global'
-        )
-
-        mpm.updateInstruction(inserted, { meanTempoAt: undefined, transitionTo: undefined })
-
-        expect(mpm.toXML()).not.toContain('meanTempoAt')
-        expect(mpm.toXML()).not.toContain('transition.to')
-    })
-
-    test("a field the patch omits is left alone", () => {
-        const mpm = new MPM()
-        const inserted = mpm.insertInstruction(
-            'tempo',
-            { ...tempo(0, 60), meanTempoAt: 0.5 },
-            'global'
-        )
-
-        const updated = mpm.updateInstruction(inserted, { bpm: 72 })
-
-        expect(updated.meanTempoAt).toBe(0.5)
     })
 
     test("carry the element they stand for, and their scope", () => {
         const mpm = new MPM()
-        const inserted = mpm.insertInstruction('tempo', tempo(0, 60), 'global')
+        mpm.requireMap('tempo', 'global').addTempo(tempo(0, 60))
 
+        const [inserted] = mpm.getInstructions('tempo', 'global')
         expect(inserted.element.getLocalName()).toBe('tempo')
         expect(inserted.scope).toBe('global')
         expect(inserted.type).toBe('tempo')
     })
 
-    test("keep a working field the format has no attribute for out of the document", () => {
-        const mpm = new MPM()
-        // `endDate` is `InsertDynamicsInstructions`'s fitting window, not an MPM attribute.
-        // The old layer kept it out with a schema table; now it cannot get in at all, because
-        // `AddDynamicsOptions` has no such field and espressivo writes nothing else.
-        const fitted = { date: 0, volume: 60, endDate: 720 }
-        const { endDate: _window, ...options } = fitted
-        mpm.insertInstruction('dynamics', options, 'global')
-
-        expect(mpm.toXML()).not.toContain('endDate')
-    })
-
     test("removing takes the element out of the map", () => {
         const mpm = new MPM()
-        const first = mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-        mpm.insertInstruction('tempo', tempo(720, 90), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo(tempo(0, 60))
+        map.addTempo(tempo(720, 90))
 
-        mpm.removeInstruction(first)
+        mpm.removeInstruction(mpm.getInstructions('tempo', 'global')[0])
 
         expect(mpm.getInstructions('tempo', 'global').map(t => t.date)).toEqual([720])
         expect(mpm.toXML()).not.toContain('bpm="60"')
     })
 })
 
-describe("merging at a date", () => {
-    // The mechanism InsertDynamicsGradient and InsertTemporalSpread describe one <ornament>
-    // between them: the second insert lands in the first's element rather than beside it.
-    const ornament = (
-        over: Partial<InstructionOptions<'ornament'>> = {}
-    ): InstructionOptions<'ornament'> => ({
-        id: 'ornament_0', date: 0, nameRef: 'neutralArpeggio', ...over,
+describe("mapOf and requireMap", () => {
+    test("requireMap creates the part, the dated and the map; mapOf creates nothing", () => {
+        const mpm = new MPM()
+
+        expect(mpm.mapOf('tempo', 3)).toBeNull()
+        expect(mpm.scopes()).toEqual(['global'])
+
+        const map = mpm.requireMap('tempo', 3)
+        map.addTempo(tempo(0, 60))
+
+        expect(mpm.scopes()).toEqual(['global', 3])
+        expect(mpm.mapOf('tempo', 3)).toBe(map)
     })
 
-    test("a second instruction at the same date and noteid fills the first in", () => {
+    test("hands back espressivo's own class, with its whole surface", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('ornament', ornament({ scale: 5 }), 'global')
-        mpm.insertInstruction('ornament', ornament({ noteOrder: '#a #b' }), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo(tempo(0, 120))
 
-        const ornaments = mpm.getInstructions('ornament', 'global')
-        expect(ornaments).toHaveLength(1)
-        expect(ornaments[0].scale).toBe(5)
-        expect(ornaments[0].noteOrder).toBe('#a #b')
+        // Not a wrapper: the renderer's own readers answer on it. `getTempoAt` scans strictly
+        // BEFORE the date it is given (`getElementIndexBefore`), so ask after the instruction.
+        expect(map.getTempoAt(720)).toBeCloseTo(120, 6)
+        expect(map.getTempoDataOf(0)?.kind).toBe('constant')
+    })
+})
+
+describe("audit", () => {
+    test("fingerprints every instruction that has an id", () => {
+        const mpm = new MPM()
+        mpm.requireMap('tempo', 'global').addTempo(tempo(0, 60, 't1'))
+
+        const { fingerprints, unnamed, nonFinite } = mpm.audit()
+        expect([...fingerprints.keys()]).toEqual(['t1'])
+        expect(fingerprints.get('t1')).toContain('bpm="60"')
+        expect(unnamed).toEqual([])
+        expect(nonFinite).toEqual([])
     })
 
-    test("the draft half of an ornament merges onto the same element", () => {
+    test("names an instruction written without an xml:id", () => {
         const mpm = new MPM()
-        const gradient = mpm.insertInstruction('ornament', ornament(), 'global')
-        setOrnamentDraft(gradient.element, { transitionFrom: -1, transitionTo: 0 })
+        mpm.requireMap('tempo', 'global').addTempo({ date: 720, bpm: 60, beatLength: 0.25 })
 
-        const spread = mpm.insertInstruction('ornament', ornament(), 'global')
-        setOrnamentDraft(spread.element, { frameStart: -100, frameLength: 200 })
-
-        expect(mpm.getInstructions('ornament', 'global')).toHaveLength(1)
-        expect(ornamentDraftOf(spread.element)).toEqual({
-            transitionFrom: -1, transitionTo: 0, frameStart: -100, frameLength: 200,
-        })
+        expect(mpm.audit().unnamed).toEqual(['<tempo> at 720'])
+        expect(mpm.audit().fingerprints.size).toBe(0)
     })
 
-    test("without overwrite, a value already there wins", () => {
+    test("names a non-finite attribute, wherever it was written from", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-        mpm.insertInstruction('tempo', tempo(0, 90), 'global')
+        // Straight through the espressivo map, which is exactly the path a check on the way in
+        // would not have covered.
+        mpm.requireMap('tempo', 'global')
+            .addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25, meanTempoAt: NaN })
 
-        expect(mpm.getInstructions('tempo', 'global')[0].bpm).toBe(60)
+        expect(mpm.audit().nonFinite).toEqual(['<tempo @meanTempoAt>="NaN"'])
     })
 
-    test("with overwrite, the incoming value wins", () => {
+    test("the fingerprint changes when an instruction is edited, not only when one is added", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-        mpm.insertInstruction('tempo', tempo(0, 90), 'global', true)
+        const map = mpm.requireMap('tempo', 'global')
+        const index = map.addTempo(tempo(0, 60, 't1'))
+        const before = mpm.audit().fingerprints
 
-        const tempos = mpm.getInstructions('tempo', 'global')
-        expect(tempos).toHaveLength(1)
-        expect(tempos[0].bpm).toBe(90)
-    })
+        map.updateTempoAt(index, { bpm: 90 })
 
-    test("different noteids at one date stay separate instructions", () => {
-        const mpm = new MPM()
-        mpm.insertInstruction('articulation', { id: 'a', date: 0, nameRef: 'legato', noteid: '#a' }, 'global')
-        mpm.insertInstruction('articulation', { id: 'b', date: 0, nameRef: 'legato', noteid: '#b' }, 'global')
-
-        expect(mpm.getInstructions('articulation', 'global')).toHaveLength(2)
-    })
-
-    test("a date the map does not hold does not merge into the next instruction", () => {
-        const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(720, 90), 'global')
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-
-        expect(mpm.getInstructions('tempo', 'global').map(t => t.bpm)).toEqual([60, 90])
-    })
-
-    test("a <style> switch sharing the date is not merged into", () => {
-        const mpm = new MPM()
-        mpm.insertStyle(
-            { 'xml:id': 'style_0', date: 0, 'name.ref': 'performance_style' },
-            'tempo',
-            'global'
-        )
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-
-        expect(mpm.getInstructions('tempo', 'global')).toHaveLength(1)
-        expect(mpm.getStyles('tempo', 'global')).toHaveLength(1)
+        expect(mpm.audit().fingerprints.get('t1')).not.toBe(before.get('t1'))
     })
 })
 
 describe("style switches", () => {
     test("go before the instructions sharing their date, so the style is in force", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-        mpm.insertInstruction('tempo', tempo(720, 90), 'global')
+        const map = mpm.requireMap('tempo', 'global')
+        map.addTempo(tempo(0, 60))
+        map.addTempo(tempo(720, 90))
         mpm.insertStyle(
             { 'xml:id': 'style_0', date: 0, 'name.ref': 'performance_style' },
             'tempo',
             'global'
         )
 
-        const map = mpm.toXML().match(/<tempoMap>(.*?)<\/tempoMap>/s)![1]
-        expect(map.indexOf('<style')).toBeLessThan(map.indexOf('<tempo '))
+        const serialized = mpm.toXML().match(/<tempoMap>(.*?)<\/tempoMap>/s)![1]
+        expect(serialized.indexOf('<style')).toBeLessThan(serialized.indexOf('<tempo '))
     })
 
     test("carry defaultArticulation when given one", () => {
@@ -291,7 +245,7 @@ describe("definitions", () => {
 describe("scopes", () => {
     test("a part is created on demand and numbered as MSM expects", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(0, 60), 1)
+        mpm.requireMap('tempo', 1).addTempo(tempo(0, 60))
 
         expect(mpm.scopes()).toEqual(['global', 1])
         expect(mpm.toXML()).toContain('number="2"')
@@ -300,8 +254,8 @@ describe("scopes", () => {
 
     test("reading without a scope reaches every part", () => {
         const mpm = new MPM()
-        mpm.insertInstruction('tempo', tempo(0, 60), 'global')
-        mpm.insertInstruction('tempo', tempo(720, 90), 0)
+        mpm.requireMap('tempo', 'global').addTempo(tempo(0, 60))
+        mpm.requireMap('tempo', 0).addTempo(tempo(720, 90))
 
         expect(mpm.getInstructions('tempo').map(t => t.date)).toEqual([0, 720])
     })
@@ -384,32 +338,30 @@ describe("round trip", () => {
 describe("the ornament draft", () => {
     test("is not part of the instruction, and survives a patch of one", () => {
         const mpm = new MPM()
-        const ornament = mpm.insertInstruction(
-            'ornament', { id: 'o1', date: 0, nameRef: 'roll' }, 'global'
-        )
-        setOrnamentDraft(ornament.element, {
+        const map = mpm.requireMap('ornament', 'global')
+        const ornament = map.getElement(map.addOrnamentV3({ id: 'o1', date: 0, nameRef: 'roll' }))!
+        setOrnamentDraft(ornament, {
             frameStart: -100, frameLength: 200, frameDomain: FrameDomain.Milliseconds,
         })
 
-        mpm.updateInstruction(ornament, { scale: 0.5 })
+        map.updateOrnamentAt(map.getElementIndexOf(ornament), { scale: 0.5 })
 
-        expect(ornamentDraftOf(ornament.element).frameStart).toBe(-100)
+        expect(ornamentDraftOf(ornament).frameStart).toBe(-100)
         expect(mpm.getInstructions('ornament', 'global')[0]).not.toHaveProperty('frameStart')
     })
 
     test("comes off entirely when a real definition holds it", () => {
         const mpm = new MPM()
-        const ornament = mpm.insertInstruction(
-            'ornament', { id: 'o1', date: 0, nameRef: 'roll' }, 'global'
-        )
-        setOrnamentDraft(ornament.element, {
+        const map = mpm.requireMap('ornament', 'global')
+        const ornament = map.getElement(map.addOrnamentV3({ id: 'o1', date: 0, nameRef: 'roll' }))!
+        setOrnamentDraft(ornament, {
             transitionFrom: 0, transitionTo: 1, frameStart: -100, frameLength: 200,
             frameDomain: FrameDomain.Ticks, noteOffShift: NoteOffShift.True, intensity: 0.5,
         })
 
-        clearOrnamentDraft(ornament.element)
+        clearOrnamentDraft(ornament)
 
-        expect(ornamentDraftOf(ornament.element)).toEqual({})
+        expect(ornamentDraftOf(ornament)).toEqual({})
         expect(mpm.toXML()).toContain('<ornament')
         for (const gone of ['transition.from', 'frame.start', 'time.unit', 'noteoff.shift']) {
             expect(mpm.toXML()).not.toContain(gone)

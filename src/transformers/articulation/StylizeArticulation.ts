@@ -206,6 +206,13 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
 
         for (const scope of mpm.scopes()) {
+            // The scope's own `<articulationMap>`, which is where the repointing below is
+            // written. A scope without one has nothing to cluster — every step in the body is a
+            // no-op on an empty set of articulations — and asking for it would create an empty
+            // map in a scope that never had one.
+            const map = mpm.mapOf('articulation', scope)
+            if (!map) continue
+
             // Find clusters
             const articulations = mpm.getInstructions('articulation', scope)
             const effective = articulations.map(a => this.effectiveOf(a, mpm))
@@ -252,8 +259,9 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                 if (points[i].label === -1) continue
 
                 // What it articulates is the cluster's def from here on, so the two values it
-                // states itself are removed rather than left to override it.
-                mpm.updateInstruction(articulations[i], {
+                // states itself are removed rather than left to override it: a key carried as
+                // `undefined` takes the attribute off, one left out leaves it alone.
+                map.updateArticulationAt(map.getElementIndexOf(articulations[i].element), {
                     nameRef: `def_${points[i].label}`,
                     relativeDuration: undefined,
                     relativeVelocity: undefined,

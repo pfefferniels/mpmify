@@ -26,7 +26,7 @@ const fixture = () => new MSM(
 
 const withTempo = () => {
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
@@ -71,7 +71,7 @@ describe('deriveResidual, velocity', () => {
 
     test('measures against the curve once there is one', () => {
         const mpm = withTempo()
-        mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: 80 }, 'global')
+        mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
 
         const derived = deriveResidual(fixture(), mpm)
         expect(derived.notes.map(n => n.velocity)).toEqual([20, 20, 0])
@@ -81,7 +81,7 @@ describe('deriveResidual, velocity', () => {
     // dimension out and what comes back is what the rest of the MPM leaves for you.
     test('without holds a dimension out of the measurement', () => {
         const mpm = withTempo()
-        mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: 80 }, 'global')
+        mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 80 })
 
         const withDynamics = deriveResidual(fixture(), mpm)
         const withoutDynamics = deriveResidual(fixture(), mpm, { without: ['dynamics'] })

@@ -3,9 +3,9 @@ import { MPM } from "../../src/mpm"
 
 const populated = () => {
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global')
-    mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: 64 }, 'global')
-    mpm.insertInstruction('dynamics', { id: 'd2', date: 720, volume: 90 }, 1)
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+    mpm.requireMap('dynamics', 'global').addDynamics({ id: 'd1', date: 0, volume: 64 })
+    mpm.requireMap('dynamics', 1).addDynamics({ id: 'd2', date: 720, volume: 90 })
     return mpm
 }
 

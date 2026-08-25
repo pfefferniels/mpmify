@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { FrameDomain } from "espressivo"
 import { MSM } from "../../src/msm"
-import { InstructionOptions, MPM, OrnamentDraft, ornamentDraftOf, setOrnamentDraft } from "../../src/mpm"
+import { InstructionOptions, MPM, OrnamentDraft, fillInAt, ornamentDraftOf, setOrnamentDraft } from "../../src/mpm"
 import { TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
 import { deriveResidual } from "../../src/residual"
 
@@ -61,12 +61,12 @@ const msmFixture = new MSM(
 // lives. This transformer no longer touches the score at all.
 test('at 60bpm a recorded onset lands on the tick the beat length implies', () => {
     const mpm = new MPM()
-    mpm.insertInstructions('tempo', [{
+    mpm.requireMap('tempo', 'global').addTempo({
         id: 'tempo_el',
         bpm: 60,
         beatLength: 0.25,
         date: 0
-    }], 'global')
+    })
 
     const residual = deriveResidual(msmFixture, mpm)
 
@@ -84,12 +84,12 @@ test('it translates existing physical modifiers into tick modifiers', () => {
     ], { numerator: 4, denominator: 4 })
 
     const mpm = new MPM()
-    mpm.insertInstructions('tempo', [{
+    mpm.requireMap('tempo', 'global').addTempo({
         date: 0,
         id: 'tempo_1',
         beatLength: 0.25,
         bpm: 60,
-    }], 'global')
+    })
 
     // The frame is not an `<ornament>` attribute — it describes the `<temporalSpread>` of the def
     // the `@name.ref` points at, and until `StylizeOrnamentation` builds that def it is parked on
@@ -105,8 +105,14 @@ test('it translates existing physical modifiers into tick modifiers', () => {
             { frameStart: -25, frameLength: 50, frameDomain: FrameDomain.Milliseconds },
         ]
     ]
+    const ornaments = mpm.requireMap('ornament', 'global')
     for (const [options, draft] of physicalArpeggios) {
-        setOrnamentDraft(mpm.insertInstruction('ornament', options, 'global').element, draft)
+        setOrnamentDraft(fillInAt(ornaments, options, {
+            localName: 'ornament',
+            add: o => ornaments.addOrnamentV3(o),
+            read: i => ornaments.getOrnamentOptionsOf(i),
+            update: (i, patch) => ornaments.updateOrnamentAt(i, patch),
+        }), draft)
     }
 
     // Act

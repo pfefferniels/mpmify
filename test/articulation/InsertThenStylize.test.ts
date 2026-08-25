@@ -34,7 +34,7 @@ const note = (id: string, date: number, pitch: number, playedTicks: number): Msm
 /** The tempo those recorded seconds are read against. */
 const atSixtyBpm = () => {
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 

@@ -56,7 +56,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
             } : {})
         }
 
-        mpm.insertInstruction('tempo', tempo, scope, true)
+        mpm.requireMap('tempo', scope).addTempo(tempo)
     }
 
     private removeAffectedTempoInstructions(mpm: MPM, scope: Scope, from: number, to: number) {
@@ -83,7 +83,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
                     for (const t of existing) {
                         if (isCovered(t.date)) mpm.removeInstruction(t)
                     }
-                    mpm.insertInstruction('tempo', restore, scope, false)
+                    mpm.requireMap('tempo', scope).addTempo(restore)
                     return
                 }
             }

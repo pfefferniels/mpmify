@@ -1,5 +1,5 @@
 import { AddOrnamentOptions, FrameDomain, NoteOffShift } from "espressivo"
-import { MPM, OrnamentDraft, setOrnamentDraft } from "../../mpm"
+import { MPM, OrnamentDraft, fillInAt, setOrnamentDraft } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { isDefined } from "../../utils/utils"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
@@ -209,9 +209,16 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
             })
         }
 
+        // `fillInAt`, not `addOrnamentV3`: `InsertDynamicsGradient` may already have written
+        // the ornament at this date, and the two describe one element between them.
+        const map = mpm.requireMap('ornament', this.options.scope)
         for (const { options, draft } of ornaments) {
-            const ornament = mpm.insertInstruction('ornament', options, this.options.scope)
-            setOrnamentDraft(ornament.element, draft)
+            setOrnamentDraft(fillInAt(map, options, {
+            localName: 'ornament',
+            add: o => map.addOrnamentV3(o),
+            read: i => map.getOrnamentOptionsOf(i),
+            update: (i, patch) => map.updateOrnamentAt(i, patch),
+        }), draft)
         }
     }
 }

@@ -7,9 +7,10 @@
  * writes that MPM does not define — `@corresp` and the ornament draft.
  */
 export * from './types'
-export { MPM } from './MPM'
+export { MPM, type InstructionAudit } from './MPM'
 export * from './corresp'
 export * from './ornamentDraft'
+export * from './fillInAt'
 
 /**
  * The espressivo classes a transformer builds a definition with, re-exported so that writing an

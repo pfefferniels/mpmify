@@ -44,8 +44,8 @@ bookkeeping.
 
 espressivo owns **MPM**. mpmify owns **the fitting**.
 
-Concretely, espressivo answers three questions about every instruction, and mpmify asks all
-three rather than modelling any of them:
+Concretely, espressivo answers four questions about every instruction, and mpmify asks all four
+rather than modelling any of them:
 
 ```
 add<X>(Add<X>Options)        write a document
@@ -63,15 +63,52 @@ runtime. Definitions are espressivo's classes, not records.
 cannot tell `meanTempoAt="0.5"` from an absent `@meanTempoAt`, resolves an unresolvable `@bpm`
 to a hardcoded 100.0, and has no inverse.
 
-### Reads are snapshots
+### A transformer writes through espressivo, not through `MPM`
 
-`getInstructions` hands back what the document says when asked. It is not a live view — an
-earlier version proxied every property access onto the element, which made `tempo.bpm = 72` edit
-the document and a value that looks like data silently not be. Changing an instruction is
-`mpm.updateInstruction(instruction, patch)`, which says so at the call site and returns a fresh
-snapshot; the one passed in is stale.
+```ts
+const map = mpm.requireMap('tempo', scope)      // espressivo's TempoMap
+map.addTempo({ id, date, bpm, beatLength })
+map.updateTempoAt(index, { bpm: 90 })
+```
 
----
+`MPM` has no `insertInstruction`. It had one, with a table dispatching it to the eight `add<X>`
+methods, and that table was the whole of the facade: it existed because `AbstractTransformer`
+built its `created` list by intercepting every write, so every write had to funnel. That list is
+**derived** now — `run` fingerprints every instruction before and after `transform` and diffs —
+so the funnel is gone and so is the table's write half.
+
+Deriving is also more accurate, and it changed what `@corresp` means: a transformer that
+*modifies* an instruction is now attributed to it, where interception saw insertions only. It is
+"answerable for", not "inserted".
+
+### What is left in `MPM`, and why each is not a facade
+
+| what | why espressivo cannot answer it |
+|---|---|
+| `requireMap` / `mapOf` / `scopes` | a {@link Scope} is mpmify's and MSM's way of naming a part. Turning one into a `<global>` or numbered `<part>`, then its `<dated>`, then the map, creating each on the way, is four steps no transformer should repeat. |
+| `getInstructions` | espressivo reads by index and by type; "every `<tempo>` in scope S" is the question mpmify asks. The `READ` table in `MPM.ts` is the only thing left that knows one instruction type from another, and it has no write half. |
+| `audit` / `fingerprints` | what a transformer changed, what it left unnamed, what it wrote as `NaN` — all by looking at the document afterwards. |
+| `insertStyle` / `ensureDefaultStyle` | mpmify's one-`<styleDef>`-per-collection convention, and the `<style date="0">` switch without which every `@name.ref` in a map is unresolvable. |
+| the definition methods | espressivo has no `Scope`; these resolve one to a `<header>` and its `<styleDef>`. |
+| `setMetadata` | `<appInfo>` is not MPM. See §2. |
+| `without` | rendering a probe with one dimension held out, which is what the residual is. |
+
+### `fillInAt`, the one contract the generic insert was hiding
+
+`src/mpm/fillInAt.ts` fills in the instruction already at a date instead of writing a second one.
+Exactly two places need it, and both are **two transformers describing one element**:
+
+- `InsertDynamicsGradient` + `InsertTemporalSpread` — a velocity ramp and a roll, one
+  `<ornament>`. Two elements at one date and the renderer applies both.
+- `InsertDynamicsInstructions` — each segment's fit lands on the date the previous segment's
+  `closeTransition` wrote its closing `<dynamics>` at. Two elements and the closer shadows the
+  curve.
+
+The caller names the three espressivo calls it wants, because it knows which map it is holding.
+There is no table behind it. Under the old `insertInstruction` this was implicit and applied to
+*every* insert, which made a contract between named transformers look like a property of the
+format — and it broke silently the moment writes went direct, in both places, caught by the
+structural digest rather than by any test.
 
 ## 2. The three things mpmify writes that MPM does not define
 

@@ -29,13 +29,12 @@ const fixture = () => new MSM(
 
 const withTempo = () => {
     const mpm = new MPM()
-    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
+    mpm.requireMap('tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
     return mpm
 }
 
-const rubatoAt = (mpm: MPM, date: number) => mpm.insertInstruction(
-    'rubato', { id: `r${date}`, date, frameLength: FRAME, intensity: 0.65 }, 'global'
-)
+const rubatoAt = (mpm: MPM, date: number) => mpm.requireMap('rubato', 'global')
+    .addRubato({ id: `r${date}`, date, frameLength: FRAME, intensity: 0.65 })
 
 /**
  * The tick walk is three steps — onsets, then durations measured from them, then the rubato warp

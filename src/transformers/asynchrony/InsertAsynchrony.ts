@@ -59,17 +59,19 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
         
         const averageShift = shifts.reduce((acc, shift) => acc + shift, 0) / shifts.length
 
-        mpm.insertInstruction('asynchrony', {
+        const map = mpm.requireMap('asynchrony', this.options.part as Scope)
+
+        map.addAsynchrony({
             id: 'asynchrony_' + v4(),
             date: this.options.from,
             millisecondsOffset: averageShift
-        }, this.options.part as Scope)
+        })
 
-        mpm.insertInstruction('asynchrony', {
+        map.addAsynchrony({
             id: 'asynchrony_' + v4(),
             date: this.options.to,
             millisecondsOffset: 0
-        }, this.options.part as Scope)
+        })
 
         // Move the onsets by the average shift
         for (const [_, chord] of chords) {

@@ -20,14 +20,13 @@ const tempoAttributeOrder = (mpm: MPM) => {
 describe('editing an instruction', () => {
     test('leaves the attribute where it was in the document', () => {
         const mpm = new MPM()
-        const tempo = mpm.insertInstruction(
-            'tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global'
-        )
+        const map = mpm.requireMap('tempo', 'global')
+        const index = map.addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
 
         const before = tempoAttributeOrder(mpm)
         expect(before).toEqual(['date', 'bpm', 'beatLength', 'xml:id'])
 
-        mpm.updateInstruction(tempo, { bpm: 132 })
+        map.updateTempoAt(index, { bpm: 132 })
 
         // espressivo's `Element.addAttribute` is remove-then-append, so writing through it
         // would move `bpm` to the end and make every edited document differ from its source by
@@ -41,11 +40,10 @@ describe('editing an instruction', () => {
     // re-set took the append arm.
     test('holds for the namespaced xml:id too', () => {
         const mpm = new MPM()
-        const tempo = mpm.insertInstruction(
-            'tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global'
-        )
+        const map = mpm.requireMap('tempo', 'global')
+        const index = map.addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
 
-        mpm.updateInstruction(tempo, { id: 't2' })
+        map.updateTempoAt(index, { id: 't2' })
 
         expect(tempoAttributeOrder(mpm)).toEqual(['date', 'bpm', 'beatLength', 'xml:id'])
         expect(mpm.toXML()).toContain('xml:id="t2"')
@@ -53,11 +51,10 @@ describe('editing an instruction', () => {
 
     test('a new attribute lands at the end rather than displacing one', () => {
         const mpm = new MPM()
-        const tempo = mpm.insertInstruction(
-            'tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global'
-        )
+        const map = mpm.requireMap('tempo', 'global')
+        const index = map.addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
 
-        mpm.updateInstruction(tempo, { transitionTo: 90 })
+        map.updateTempoAt(index, { transitionTo: 90 })
 
         expect(tempoAttributeOrder(mpm)).toEqual(['date', 'bpm', 'beatLength', 'xml:id', 'transition.to'])
     })
