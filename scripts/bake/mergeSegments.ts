@@ -1,5 +1,5 @@
-import { getRange, Alignment, Segment, Transformer } from 'mpmify';
-import type { Residual } from 'mpmify';
+import { getRange, Alignment, Segment, Transformer } from '../../src/index.js';
+import type { Residual } from '../../src/index.js';
 
 /**
  * Fold segments covering exactly the same ticks into one.

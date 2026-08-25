@@ -1,4 +1,4 @@
-import { Alignment, AlignedNote, AlignedPedal } from 'mpmify';
+import { Alignment, AlignedNote, AlignedPedal } from '../../src/index.js';
 import { v4 } from 'uuid';
 
 /**

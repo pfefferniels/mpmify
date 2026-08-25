@@ -26,7 +26,7 @@ globalThis.Element = window.Element;
 globalThis.Node = window.Node;
 
 const { spotlightMpm } = await import('espressivo');
-const { getInstructions, getRange } = await import('mpmify');
+const { getInstructions, getRange } = await import('../../src/index.js');
 const { derive } = await import('./deriveSegments.js');
 const { negotiateIntensityCurve } = await import('./intensityCurve.js');
 import type { Reconstruction, Segment } from './Reconstruction.js';

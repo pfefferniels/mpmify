@@ -5,8 +5,13 @@ import {
   getInstructions,
   removeInstruction,
   requireMap,
-} from 'mpmify';
-import type { InstructionOptions, Mpm, Scope, ScopedTransformationOptions } from 'mpmify';
+} from '../../src/index.js';
+import type {
+  InstructionOptions,
+  Mpm,
+  Scope,
+  ScopedTransformationOptions,
+} from '../../src/index.js';
 
 interface InsertTempoOptions extends ScopedTransformationOptions {
   from: number;

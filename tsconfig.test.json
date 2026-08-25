@@ -1,10 +1,9 @@
 // replaces tsconfig.test.json (note the name: espressivo spells it tsconfig.tests.json).
 // typecheck-only project over everything tsconfig.json excludes.
 //
-// no baseUrl and no paths. mpmify's old tsconfig.test.json mapped the bare specifier `mpmify`
-// to ./src for scripts/bake; baseUrl is REMOVED in TypeScript 7, and step 2 rewrites those
-// eight specifiers to relative imports anyway. leaving the mapping out is what makes this
-// config compile under both TS6 and TS7.
+// no baseUrl and no paths. baseUrl is REMOVED in TypeScript 7, and nothing here needs a
+// bare-specifier mapping: scripts/bake reaches src/ relatively, like everything else. the alias
+// in vite.config.ts stays for the consumers that still import mpmify by package name.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {

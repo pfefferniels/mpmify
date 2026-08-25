@@ -17,8 +17,14 @@ import {
   InsertMetadata,
   registerTransformer,
   validate,
-} from 'mpmify';
-import type { InstructionType, Mpm, Alignment, Segment as WorkSegment, Transformer } from 'mpmify';
+} from '../../src/index.js';
+import type {
+  InstructionType,
+  Mpm,
+  Alignment,
+  Segment as WorkSegment,
+  Transformer,
+} from '../../src/index.js';
 import { convertMeiToMsm } from 'espressivo';
 import { InsertTempo } from './InsertTempo.js';
 import { asMSM } from './asMSM.js';
