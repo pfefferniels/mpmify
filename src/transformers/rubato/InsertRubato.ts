@@ -4,49 +4,15 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions } from "..
 import { clamp, DefinedProperty } from "../../utils/utils"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
+import { calculateRubatoOnDate, removeRubatoDistortion } from "./rubatoMath"
+
+// Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
+// moved, and mpm-desk's rubato desk imports it from "mpmify".
+export { calculateRubatoOnDate } from "./rubatoMath"
 
 const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
     return notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
 }
-
-/**
- * This function calculates the effect of the rubato
- * on the MSM notes
- */
-export const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
-    // compute the position of the map element within the rubato frame
-    const localDate = (date - rubato.date) % rubato.frameLength;
-    const lateStart = Math.max(Math.min(rubato.lateStart || 0, 0.9), 0)
-    const earlyEnd = Math.max(Math.min(rubato.earlyEnd || 1, 1), 0.1)
-    const d = (Math.pow(localDate / rubato.frameLength, rubato.intensity) * (earlyEnd - lateStart) + lateStart) * rubato.frameLength;
-    return date + d - localDate
-}
-
-/**
- * This function does the opposite of `calculateRubatoDate`:
- * It removes the "rubato effect" from a given date.
- * TODO: find a numerical, non-iterative solution.
- */
-const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
-    const target = rubato.date + ((newDate - rubato.date) % rubato.frameLength);
-    let lowerBound = rubato.date;
-    let upperBound = rubato.date + rubato.frameLength;
-
-    while (upperBound - lowerBound > 1e-6) {
-        const middle = (upperBound + lowerBound) / 2;
-        const middleNewDate = calculateRubatoOnDate(middle, rubato);
-
-        if (Math.abs(target - middleNewDate) < 1) {
-            return middle - rubato.date;
-        } else if (middleNewDate < target) {
-            lowerBound = middle;
-        } else {
-            upperBound = middle;
-        }
-    }
-
-    return lowerBound - rubato.date;
-};
 
 export interface InsertRubatoOptions extends ScopedTransformationOptions {
     date: number
@@ -137,49 +103,13 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     }
 
     /**
-     * This method removes any rubato distortions from the
-     * duration of notes.
-     * 
-     * @todo remove the distortion from pedals as well.
-     * @param msm 
-     * @param mpm 
+     * Takes the distortion of `selectedRubatos` back off the notes they cover.
+     *
+     * The identity test is the point: `instructionsEffectiveAtDate` answers with the view over
+     * the element, and `selectedRubatos` holds the views this run inserted, so a rubato some
+     * earlier run wrote is left alone.
      */
     removeRubatoDistortionFrom(selectedRubatos: Rubato[], msm: MSM, mpm: MPM) {
-        const affectedNotes =
-            this.options.scope === 'global' ?
-                msm.allNotes :
-                msm.allNotes.filter(n => n.part - 1 === this.options.scope)
-
-        for (const note of affectedNotes) {
-            if (!note.tickDuration) continue
-
-            const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', this.options.scope)[0];
-            if (!onsetRubato || !selectedRubatos.includes(onsetRubato)) continue
-
-            const onsetInTicks = onsetRubato
-                ? calculateRubatoOnDate(note.date, onsetRubato)
-                : note.date
-
-            const onsetDiff = onsetInTicks - note.date
-            if (note.tickDate) {
-                note.tickDate -= onsetDiff
-            }
-            note.tickDuration -= onsetDiff
-
-            // TODO: note.date (symbolic) + note.tickDuration (performed) mixes coordinate systems.
-            // Should this be note.date + note.duration (both symbolic)?
-            const offset = note.date + note.tickDuration
-
-            const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', this.options.scope)
-            const effectiveRubato = rubatos[0]
-            if (!effectiveRubato || !selectedRubatos.includes(effectiveRubato)) continue
-
-            const rubatoStart = offset - ((offset - effectiveRubato.date) % effectiveRubato.frameLength)
-            const remainder = offset - rubatoStart
-            note['tickDuration'] -= remainder
-
-            const remainderWithoutRubato = removeRubatoFromDate(effectiveRubato.date + remainder, effectiveRubato)!
-            note['tickDuration'] += remainderWithoutRubato
-        }
+        removeRubatoDistortion(msm, mpm, this.options.scope, r => selectedRubatos.includes(r))
     }
 }

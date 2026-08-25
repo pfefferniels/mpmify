@@ -276,8 +276,7 @@ export const tierThreeCases: Case[] = [
             ],
             rubato: [{ date: 0, frameLength: 4 * QUARTER, intensity: 0.65, loop: true }],
         },
-        note: 'issues #27, #40 — a frame boundary leaves notes without a tick date, and '
-            + 'removeRubatoDistortionFrom mixes symbolic and performed positions',
+        note: 'issue #27 — a frame boundary leaves notes without a tick date',
         bounds: { onset: { mean: 195, max: 430 }, duration: { mean: 130, max: 600 }, velocity: { max: 0.5 } },
     },
     {
@@ -306,8 +305,8 @@ export const tierThreeCases: Case[] = [
         name: 'all five aspects at once',
         score: { beats: 17 },
         truth: EVERYTHING,
-        note: 'issues #39, #40 — the accelerando and the rubato interaction dominate',
-        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 875, max: 1520 }, velocity: { mean: 16, max: 40 } },
+        note: 'issue #39 — the accelerando dominates',
+        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 820, max: 1480 }, velocity: { mean: 16, max: 40 } },
     },
     {
         name: 'all five aspects, boundaries withheld',
@@ -319,7 +318,7 @@ export const tierThreeCases: Case[] = [
         // should do that clustering, and issue #25 says it cannot: it clusters on the very
         // attributes `InsertArticulation` has just blanked.
         note: 'issue #25 — the chain cannot recover the segmentation it was not given',
-        bounds: { onset: { mean: 265, max: 1410 }, duration: { mean: 1455, max: 3230 }, velocity: { mean: 17, max: 33 } },
+        bounds: { onset: { mean: 265, max: 1410 }, duration: { mean: 1310, max: 3070 }, velocity: { mean: 17, max: 33 } },
     },
 ]
 
