@@ -44,9 +44,30 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         }
     }
 
+    /**
+     * The velocity the dynamics curve prescribes at this note's date.
+     *
+     * `setRelativeVolume` defines `absoluteVelocityChange = midi.velocity - should`, so the
+     * curve's own value is what is left when the residual is taken back off. This is the
+     * quantity `relativeVelocity` has to be measured against: the renderer computes
+     * `velocity = dynamics x relativeVelocity`, so the divisor has to be the dynamics side of
+     * that product. Dividing by the *performed* velocity instead — what this used to do — is
+     * right only when the residual is zero, which is exactly when the attribute would be 1 and
+     * do nothing anyway. See issue #23.
+     */
+    private prescribedVelocity(note: ArticulatedNote) {
+        return note["midi.velocity"] - (note.absoluteVelocityChange ?? 0)
+    }
+
     private noteToArticulation(aspects: Set<ArticulationProperty>, note: ArticulatedNote): Articulation {
         const relativeDuration = note.tickDuration ? (note.tickDuration / note.duration) : undefined
-        const relativeVelocity = ((note.absoluteVelocityChange ?? 0) + note["midi.velocity"]) / note["midi.velocity"]
+
+        // A prescribed volume of zero (or below) cannot be scaled into the performed one by any
+        // multiplier, so there is no ratio to write. Leaving the attribute off says that
+        // honestly; a guessed value would be silently wrong.
+        const prescribed = this.prescribedVelocity(note)
+        const relativeVelocity = prescribed > 0 ? note["midi.velocity"] / prescribed : undefined
+
         const absoluteDuration = note.tickDuration
         const absoluteDurationChange = note.tickDuration - note.duration
 
@@ -68,8 +89,14 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
                 note.tickDuration /= def.relativeDuration
             }
             if (def.relativeVelocity !== undefined) {
-                // TODO
-                note.absoluteVelocityChange = 0
+                // What the document now says this note's velocity is: the curve's value scaled
+                // by the def. The residual left for whatever runs next is measured against that,
+                // so it moves by the part of the curve the def has taken over. Zeroing it — what
+                // this used to do — claimed the def explained the note exactly, which it does
+                // not: the def carries the *average* ratio of its group.
+                note.absoluteVelocityChange =
+                    (note.absoluteVelocityChange ?? 0)
+                    - this.prescribedVelocity(note as ArticulatedNote) * (def.relativeVelocity - 1)
             }
             if (def.absoluteDuration !== undefined) {
                 note.tickDuration = note.duration
