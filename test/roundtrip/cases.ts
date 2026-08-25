@@ -457,9 +457,18 @@ export const tierThreeCases: Case[] = [
         truth: EVERYTHING,
         // One fitting window over the whole piece for both tempo and dynamics, and one
         // articulation call that has to cluster itself back apart. `StylizeArticulation` is what
-        // should do that clustering, and issue #25 says it cannot: it clusters on the very
-        // attributes `InsertArticulation` has just blanked.
-        note: 'issue #25 — the chain cannot recover the segmentation it was not given',
+        // should do that clustering, and since issue #25 it runs: it reads what an
+        // `<articulation>` articulates through the def its `@name.ref` names rather than off the
+        // attributes `InsertArticulation` has just blanked, and the seventeen instructions here
+        // are folded into one `defaultArticulation` instead of being labelled noise.
+        //
+        // What it still cannot do is recover a segmentation that is no longer in the document to
+        // recover. A single `InsertArticulation` writes a single def holding the mean of every
+        // note it covers — 0.79 / 1.03 here, against a truth that alternates 1.15 / 1.3 with
+        // 0.65 / 0.8 — so the seventeen points offered to dbscan are seventeen copies of one
+        // value and there is exactly one cluster. The figures below did not move when #25 was
+        // fixed, for that reason: what changed is the document, not what it renders as.
+        note: 'one articulation unit averages the alternation away before clustering can see it',
         bounds: { onset: { mean: 210, max: 490 }, duration: { mean: 330, max: 1350 }, velocity: { mean: 17, max: 31 } },
     },
 ]

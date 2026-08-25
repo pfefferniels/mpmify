@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, MPM } from "../../mpm";
+import { Articulation, ArticulationDef, MPM, Scope } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { dbscan, IPoint } from "../../utils/dbscan";
@@ -10,6 +10,26 @@ interface StylizeArticulationOptions extends TransformationOptions {
     relativeDurationTolerance: number
 }
 
+/**
+ * What an `<articulation>` articulates once the definition it points at has had its say.
+ *
+ * `absolute` records whether either absolute attribute is in force from either side. Such an
+ * articulation is not a candidate for a shared definition: the defs written here carry only the
+ * two relative attributes, so repointing it would silently drop the absolute one, which
+ * overrides them in the renderer.
+ */
+interface EffectiveArticulation {
+    relativeDuration?: number
+    relativeVelocity?: number
+    absolute: boolean
+}
+
+/**
+ * Merge the articulations of a document into a handful of shared definitions: cluster them by
+ * what they articulate, give each cluster one `<articulationDef>`, point its members at that def
+ * instead of at what they said before, and let the largest cluster become the map's
+ * `defaultArticulation` so its instructions can go away entirely.
+ */
 export class StylizeArticulation extends AbstractTransformer<StylizeArticulationOptions> {
     name = 'StylizeArticulation'
     requires = [InsertArticulation]
@@ -21,19 +41,49 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         })
     }
 
-    private findConflicts(withinNotes: MsmNote[], clusteredArticulations: Articulation[], residual: Residual) {
+    /**
+     * What an `<articulation>` actually articulates: what it says itself, and where it says
+     * nothing, what the `<articulationDef>` its `@name.ref` names says on its behalf.
+     *
+     * Reading the instruction alone made this transformer a no-op in the very chain it exists
+     * for (issue #25). `InsertArticulation` — the transformer it `requires`, and the only one
+     * that writes `<articulation>` — folds the values it measured into a def and blanks them on
+     * every instruction before inserting it, so both attributes read here were `undefined` for
+     * all of them, `Math.abs(undefined - x)` was NaN, and `NaN <= epsilon` put every point in
+     * nobody's neighbourhood: no cluster, no def, no default, nothing written. The values were
+     * never lost, only moved one reference away, which is where they are read from now.
+     */
+    private effectiveOf(articulation: Articulation, mpm: MPM): EffectiveArticulation {
+        const name = articulation['name.ref']
+        const def = name !== undefined
+            ? mpm.getDefinition('articulationDef', name) as ArticulationDef | null
+            : null
+
+        return {
+            relativeDuration: articulation.relativeDuration ?? def?.relativeDuration,
+            relativeVelocity: articulation.relativeVelocity ?? def?.relativeVelocity,
+            absolute:
+                (articulation.absoluteDuration ?? def?.absoluteDuration) !== undefined
+                || (articulation.absoluteDurationChange ?? def?.absoluteDurationChange) !== undefined,
+        }
+    }
+
+    private findConflicts(
+        withinNotes: MsmNote[],
+        clusteredArticulations: Articulation[],
+        meanRelativeDuration: number,
+        residual: Residual
+    ) {
         const conflictList: Set<Articulation> = new Set()
 
         // What every note in this cluster gets stretched to once its articulation refers to the
-        // cluster's def, and so the length the conflict below has to be tested against. An
-        // articulation that carries no `relativeDuration` measured none and contributes nothing
-        // to that mean — averaging it in as `undefined` made the mean NaN, and every comparison
+        // cluster's def, and so the length the conflict below has to be tested against. It is
+        // the def's own figure, handed in rather than re-averaged off the instructions — which
+        // by this point say nothing, having inherited what they articulate from a def. A cluster
+        // whose def carries no `relativeDuration` stretches nothing and can collide with
+        // nothing; averaging `undefined` in used to make the mean NaN, and every comparison
         // against NaN is false, which retired the entire conflict check without saying so.
-        const measured = clusteredArticulations
-            .map(a => a.relativeDuration)
-            .filter(relativeDuration => relativeDuration !== undefined)
-        if (measured.length === 0) return conflictList
-        const meanRelativeDuration = measured.reduce((acc, d) => acc + d, 0) / measured.length
+        if (!Number.isFinite(meanRelativeDuration)) return conflictList
 
         for (const articulation of clusteredArticulations) {
             const date = articulation.date
@@ -79,30 +129,58 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
      * One point per articulation, in the same order, labelled with the cluster it belongs to.
      *
      * The clustering happens in (`relativeDuration`, `relativeVelocity`) space, so an
-     * articulation missing either attribute has no position in it. That is not exotic:
-     * `InsertArticulation` blanks both once it has folded them into a def (issue #25), and the
-     * residual leaves either off whenever it could not measure it. Such an articulation is
-     * neither evidence for a cluster nor a candidate for one, so it is kept out of the distance
-     * computation entirely and returned as noise — which is what it means for it to be left
-     * alone, carrying whatever it already says. Feeding it in instead would have compared
-     * `undefined` coordinates, and `Math.abs(NaN) <= epsilon` puts it in nobody's neighbourhood
-     * while still counting as a point.
+     * articulation for which neither the instruction nor its definition names both has no
+     * position in it — as has one carrying an absolute duration, which no shared def written
+     * here could carry over. Such an articulation is neither evidence for a cluster nor a
+     * candidate for one, so it is kept out of the distance computation entirely and returned as
+     * noise, which is what it means for it to be left alone, carrying whatever it already says.
+     * Feeding it in instead would have compared `undefined` coordinates, and
+     * `Math.abs(NaN) <= epsilon` puts it in nobody's neighbourhood while still counting as a
+     * point.
      */
-    generateClusters(articulations: Articulation[]): IPoint[] {
+    generateClusters(effective: EffectiveArticulation[]): IPoint[] {
         const coordinates: number[][] = []
         const placed: number[] = []
-        articulations.forEach(({ relativeDuration, relativeVelocity }, index) => {
+        effective.forEach(({ relativeDuration, relativeVelocity, absolute }, index) => {
             if (relativeDuration === undefined || relativeVelocity === undefined) return
+            if (absolute) return
             coordinates.push([relativeDuration, relativeVelocity])
             placed.push(index)
         })
 
-        const points: IPoint[] = articulations.map((_, index) => ({ index, value: [], label: -1 }))
+        const points: IPoint[] = effective.map((_, index) => ({ index, value: [], label: -1 }))
         dbscan(coordinates, {
             epsilons: [this.options.relativeDurationTolerance, this.options.volumeTolerance]
         }).forEach((point, i) => points[placed[i]] = { ...point, index: placed[i] })
 
         return points
+    }
+
+    /**
+     * Drop the definitions this scope's articulations used to point at and no longer do.
+     *
+     * Only those: a def that nothing referred to before is not this transformer's to remove, and
+     * one that is still referred to — by a conflicting articulation that kept its own reference,
+     * by a style's `defaultArticulation`, or from another scope — is still doing its job.
+     * Without this, merging leaves the styleDef holding both the def a cluster came from and the
+     * def it was merged into, saying the same thing twice.
+     */
+    private removeMergedDefs(mpm: MPM, scope: Scope, previouslyReferenced: Set<string>) {
+        if (previouslyReferenced.size === 0) return
+
+        const referenced = new Set<string>()
+        for (const one of mpm.scopes()) {
+            for (const articulation of mpm.getInstructions('articulation', one)) {
+                if (articulation['name.ref'] !== undefined) referenced.add(articulation['name.ref'])
+            }
+            for (const style of mpm.getStyles('articulation', one)) {
+                if (style.defaultArticulation !== undefined) referenced.add(style.defaultArticulation)
+            }
+        }
+
+        mpm.getDefinitions<ArticulationDef>('articulationDef', scope)
+            .filter(def => previouslyReferenced.has(def.name) && !referenced.has(def.name))
+            .forEach(def => mpm.removeDefinition(def))
     }
 
     protected transform(msm: MSM, mpm: MPM) {
@@ -114,27 +192,36 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         for (const scope of mpm.scopes()) {
             // Find clusters
             const articulations = mpm.getInstructions('articulation', scope)
-            const points = this.generateClusters(articulations)
+            const effective = articulations.map(a => this.effectiveOf(a, mpm))
+            const points = this.generateClusters(effective)
+
+            // Taken before anything is rewritten: what these articulations inherited from is
+            // the only thing this transformer can orphan.
+            const previouslyReferenced = new Set(
+                articulations
+                    .map(a => a['name.ref'])
+                    .filter((name): name is string => name !== undefined)
+            )
 
             const clusters: [string, IPoint[]][] = Object
                 .entries(Object.groupBy(points, p => p.label))
                 .filter(([label]) => label !== '-1')
                 .map(([label, cluster = []]) => [label, cluster])
 
-            const defs: ArticulationDef[] = clusters
+            const defs = new Map<string, ArticulationDef>(clusters
                 .map(([label, cluster]) => {
                     const relativeDuration = cluster.reduce((acc, p) => acc + p.value[0], 0) / cluster.length
                     const relativeVelocity = cluster.reduce((acc, p) => acc + p.value[1], 0) / cluster.length
 
-                    return {
+                    return [label, {
                         type: 'articulationDef',
                         name: `def_${label}`,
                         relativeDuration,
                         relativeVelocity
-                    }
-                })
+                    }]
+                }))
 
-            mpm.insertDefinitions(defs, scope)
+            mpm.insertDefinitions([...defs.values()], scope)
 
             const labeledArticulations = points.reduce<Record<number, Articulation[]>>((acc, p, i) => {
                 if (p.label === -1) return acc
@@ -144,8 +231,10 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
             }, {})
 
             const conflictList = []
-            for (const [, cluster] of Object.entries(labeledArticulations)) {
-                conflictList.push(...this.findConflicts(msm.allNotes, cluster, residual))
+            for (const [label, cluster] of Object.entries(labeledArticulations)) {
+                const meanRelativeDuration = defs.get(label)?.relativeDuration
+                if (meanRelativeDuration === undefined) continue
+                conflictList.push(...this.findConflicts(msm.allNotes, cluster, meanRelativeDuration, residual))
             }
 
             for (let i = 0; i < points.length; i++) {
@@ -172,11 +261,13 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
                 mpm.ensureDefaultStyle('articulation', scope, { defaultArticulation: defName })
             }
-            else if (defs.length > 0) {
+            else if (defs.size > 0) {
                 // if no best cluster could be determined, but there
                 // are clusters, insert a default style switch
                 mpm.ensureDefaultStyle('articulation', scope)
             }
+
+            this.removeMergedDefs(mpm, scope, previouslyReferenced)
         }
     }
 }
