@@ -21,6 +21,40 @@
 import { MPM, Tempo } from "../../mpm";
 import { MSM } from "../../msm";
 import { computeMillisecondsAt, TempoWithEndDate } from "./tempoCalculations";
+import { removeRubatoDistortion } from "../rubato/rubatoMath";
+
+/** Where one note or pedal fell on the score grid. Absent fields mean "no tempo covered it". */
+export interface TickTime {
+    tickDate?: number
+    tickDuration?: number
+}
+
+/**
+ * The derived positions, notes and pedals kept apart because their ids are only unique within
+ * their own map.
+ */
+export interface TickTimes {
+    readonly notes: Map<string, TickTime>
+    readonly pedals: Map<string, TickTime>
+}
+
+export const emptyTickTimes = (): TickTimes => ({ notes: new Map(), pedals: new Map() })
+
+/**
+ * The entry for an id, created on first ask.
+ *
+ * Returning a mutable record rather than a value is deliberate: it lets the walks below keep
+ * reading and writing positions as `at(...).tickDate = x`, which is what they did when the
+ * positions lived on the note, so the arithmetic and the control flow are unchanged from the
+ * version this was measured against.
+ */
+const at = (table: Map<string, TickTime>, id: string): TickTime => {
+    const existing = table.get(id)
+    if (existing) return existing
+    const fresh: TickTime = {}
+    table.set(id, fresh)
+    return fresh
+}
 
 /**
  * Translates MIDI onset times into tempo-dependent
@@ -31,7 +65,7 @@ import { computeMillisecondsAt, TempoWithEndDate } from "./tempoCalculations";
  * @param mpm The MPM to take the tempo instructions from. 
  *            It must contain a `tempoMap`.
  */
-export const addTickOnsets = (msm: MSM, mpm: MPM) => {
+const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
     for (const scope of mpm.scopes()) {
         const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
@@ -54,13 +88,13 @@ export const addTickOnsets = (msm: MSM, mpm: MPM) => {
                 const onsetMilliseconds = n["midi.onset"] * 1000
 
                 // replace MIDI time with tick time.
-                n.tickDate = approximateDate(onsetMilliseconds - currentMs, tempoWithEndDate)
+                at(times.notes, n["xml:id"]).tickDate = approximateDate(onsetMilliseconds - currentMs, tempoWithEndDate)
             })
 
             const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
 
             msm.pedals
-                .filter(p => p.tickDate === undefined) // not yet processed
+                .filter(p => at(times.pedals, p["xml:id"]).tickDate === undefined) // not yet processed
                 .filter(p => {
                     // filter pedals that are within the current tempo frame
                     const onsetMs = p['midi.onset'] * 1000
@@ -71,7 +105,7 @@ export const addTickOnsets = (msm: MSM, mpm: MPM) => {
                 })
                 .forEach(p => {
                     const onsetMs = p['midi.onset'] * 1000
-                    p.tickDate = approximateDate(onsetMs - currentMs, tempoWithEndDate)
+                    at(times.pedals, p["xml:id"]).tickDate = approximateDate(onsetMs - currentMs, tempoWithEndDate)
                 })
 
             const note = msm.notesInPart(scope).find(n => n.date === endDate)
@@ -92,7 +126,7 @@ export const addTickOnsets = (msm: MSM, mpm: MPM) => {
  * @param msm 
  * @param mpm 
  */
-export const addTickDurations = (msm: MSM, mpm: MPM, deleteMIDI = false) => {
+const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
     for (const scope of mpm.scopes()) {
         const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
@@ -122,16 +156,12 @@ export const addTickDurations = (msm: MSM, mpm: MPM, deleteMIDI = false) => {
                     const relativeOffsetMs = offsetMs - currentFrameBeginMs
                     if (relativeOffsetMs > endMs) return
 
-                    n.tickDuration = approximateDate(relativeOffsetMs, tempoWithEndDate) - n.tickDate
-
-                    if (deleteMIDI) {
-                        delete n["midi.duration"]
-                        delete n["midi.onset"]
-                    }
+                    at(times.notes, n["xml:id"]).tickDuration =
+                        approximateDate(relativeOffsetMs, tempoWithEndDate) - at(times.notes, n["xml:id"]).tickDate!
                 })
 
             msm.pedals
-                .filter(p => p.tickDuration === undefined) // not yet processed
+                .filter(p => at(times.pedals, p["xml:id"]).tickDuration === undefined) // not yet processed
                 .filter(p => {
                     const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
                     return (
@@ -141,12 +171,8 @@ export const addTickDurations = (msm: MSM, mpm: MPM, deleteMIDI = false) => {
                 })
                 .forEach(p => {
                     const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
-                    p.tickDuration = approximateDate(offsetMs - currentFrameBeginMs, tempoWithEndDate) - p.tickDate
-
-                    if (deleteMIDI) {
-                        delete p['midi.duration']
-                        delete p['midi.onset']
-                    }
+                    at(times.pedals, p["xml:id"]).tickDuration =
+                        approximateDate(offsetMs - currentFrameBeginMs, tempoWithEndDate) - at(times.pedals, p["xml:id"]).tickDate!
                 })
 
             const note = msm.notesInPart(scope).find(n => n.date === endDate)
@@ -186,3 +212,29 @@ export const approximateDate = (targetMilliseconds: number, effectiveTempoInstru
     return Math.round(guess);
 }
 
+
+
+/**
+ * Where every note and pedal fell on the score grid, under the MPM as it stands.
+ *
+ * The order is the whole of what this adds over the three steps it calls, and it is not free to
+ * change: durations are measured from the onsets, and the rubato warp comes off positions that
+ * already exist. A `<rubato>` the document holds has explained its share of the deviation, so it
+ * is taken back off — leaving what nothing has explained yet, which is what a fitter wants.
+ */
+export const computeTickTimes = (msm: MSM, mpm: MPM): TickTimes => {
+    const times = emptyTickTimes()
+
+    addTickOnsets(msm, mpm, times)
+    addTickDurations(msm, mpm, times)
+
+    // Scopes with no rubato are skipped rather than walked. If a global and a part rubato ever
+    // covered the same note the removal would compound, which is not what a part map overriding
+    // a global one should mean; mpmify writes rubatos in one scope, so it does not arise.
+    for (const scope of mpm.scopes()) {
+        if (mpm.getInstructions('rubato', scope).length === 0) continue
+        removeRubatoDistortion(msm, mpm, scope, times)
+    }
+
+    return times
+}

@@ -6,9 +6,8 @@
  * the part of a note's deviation that rubato accounts for is no longer anyone else's to explain,
  * and `removeRubatoDistortion` is what takes it off.
  *
- * It lives apart from `InsertRubato` because two callers need it: the transformer, which applies
- * it to the rubatos it has just written, and `deriveResidual`, which applies it to every rubato
- * the MPM already carries. `explains` is what tells those two apart.
+ * It lives apart from `InsertRubato` because the transformer no longer performs it: the score is
+ * left as it was found, and the warp comes off the derived positions instead.
  *
  * The frame lookups address the score grid, so the positions handed to them are symbolic. That
  * was issue #40: the offset used to be `note.date + note.tickDuration`, a symbolic position plus
@@ -16,6 +15,7 @@
  */
 import { MPM, Rubato, Scope } from "../../mpm"
 import { MSM } from "../../msm"
+import { TickTimes } from "../tempo/tickTimes"
 
 /**
  * This function calculates the effect of the rubato
@@ -57,19 +57,19 @@ const removeRubatoFromDate = (newDate: number, rubato: Rubato) => {
 };
 
 /**
- * Takes the rubato warp back off the tick date and duration of every note it covers.
+ * Takes the rubato warp back off the derived tick date and duration of every note it covers.
+ *
+ * Every rubato the document holds is by definition already explained, so unlike the version
+ * this replaces there is nothing to filter: the transformer that used to call it with only the
+ * frames it had just written no longer compensates the score at all.
  *
  * @todo remove the distortion from pedals as well.
- * @param explains which rubatos count as already accounted for. `InsertRubato` passes an
- * identity test against the frames it has just written, so a frame some earlier run wrote is
- * left alone; `deriveResidual` passes `() => true`, because every rubato the document carries
- * is by then explained.
  */
 export const removeRubatoDistortion = (
     msm: MSM,
     mpm: MPM,
     scope: Scope,
-    explains: (rubato: Rubato) => boolean
+    times: TickTimes
 ) => {
     const affectedNotes =
         scope === 'global' ?
@@ -77,20 +77,21 @@ export const removeRubatoDistortion = (
             msm.allNotes.filter(n => n.part - 1 === scope)
 
     for (const note of affectedNotes) {
-        if (!note.tickDuration) continue
+        const time = times.notes.get(note['xml:id'])
+        if (!time?.tickDuration) continue
 
         const onsetRubato = mpm.instructionsEffectiveAtDate<Rubato>(note.date, 'rubato', scope)[0];
-        if (!onsetRubato || !explains(onsetRubato)) continue
+        if (!onsetRubato) continue
 
         const onsetInTicks = onsetRubato
             ? calculateRubatoOnDate(note.date, onsetRubato)
             : note.date
 
         const onsetDiff = onsetInTicks - note.date
-        if (note.tickDate) {
-            note.tickDate -= onsetDiff
+        if (time.tickDate) {
+            time.tickDate -= onsetDiff
         }
-        note.tickDuration -= onsetDiff
+        time.tickDuration -= onsetDiff
 
         // Where the note ends, on the score grid. Both terms are symbolic, which is the domain
         // the rubato frames below are addressed in. This used to read
@@ -100,13 +101,13 @@ export const removeRubatoDistortion = (
 
         const rubatos = mpm.instructionsEffectiveAtDate<Rubato>(offset, 'rubato', scope)
         const effectiveRubato = rubatos[0]
-        if (!effectiveRubato || !explains(effectiveRubato)) continue
+        if (!effectiveRubato) continue
 
         const rubatoStart = offset - ((offset - effectiveRubato.date) % effectiveRubato.frameLength)
         const remainder = offset - rubatoStart
-        note['tickDuration'] -= remainder
+        time.tickDuration -= remainder
 
         const remainderWithoutRubato = removeRubatoFromDate(effectiveRubato.date + remainder, effectiveRubato)!
-        note['tickDuration'] += remainderWithoutRubato
+        time.tickDuration += remainderWithoutRubato
     }
 }

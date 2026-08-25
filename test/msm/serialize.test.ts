@@ -59,8 +59,6 @@ describe('MSM.serialize pedals', () => {
         const msm = new MSM([note('n1', 1, 0)])
         msm.pedals = [{
             'xml:id': 'p1',
-            date: 0,
-            'date.end': 720,
             type: 'sustain',
             'midi.onset': 0,
             'midi.duration': 1,

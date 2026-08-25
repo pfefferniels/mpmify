@@ -94,9 +94,16 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
             if ('from' in this.options && 'to' in this.options) {
                 const { from, to } = this.options as RangeChoice
 
-                for (const pedal of msm.pedals) {
-                    if (pedal.date < from || pedal.date > to) continue
+                // The range is not applied to pedals, and never has been. This compared
+                // `pedal.date` against it, but nothing has ever written a symbolic date onto a
+                // pedal — the field was declared optional and left unset by every producer — so
+                // the comparison was `undefined < number`, false, and every pedal fell through
+                // to the source test regardless of the range. Saying that plainly is the same
+                // behaviour without the appearance of a bound being honoured. Giving pedals a
+                // symbolic position is a change of its own; they carry `midi.onset` only.
+                void from; void to;
 
+                for (const pedal of msm.pedals) {
                     if (pedal.source !== pedallingPreference) {
                         msm.pedals.splice(msm.pedals.indexOf(pedal), 1)
                     }

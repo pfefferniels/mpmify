@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
 import { Dynamics, MPM, Tempo } from "../../src/mpm"
 import { deriveResidual } from "../../src/residual"
-import { addTickDurations, addTickOnsets } from "../../src/transformers/tempo/tickTimes"
+import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 
 const note = (position: number, onset: number, velocity = 100, duration = 1): MsmNote => ({
     'xml:id': `n_${position}`,
@@ -33,21 +33,19 @@ const withTempo = () => {
 }
 
 describe('deriveResidual, tick domain', () => {
-    // The point of the whole exercise: what the transformer wrote onto the score, computed
-    // instead. If these ever diverge, every rubato and articulation fit moves with them.
-    test('reproduces what TranslatePhysicalTimeToTicks writes, note for note', () => {
+    // deriveResidual adds the render on top of the tick walk; the tick figures themselves must
+    // pass through untouched.
+    test('hands back exactly what the tick walk computed', () => {
         const mpm = withTempo()
 
-        const accumulated = fixture()
-        addTickOnsets(accumulated, mpm)
-        addTickDurations(accumulated, mpm)
-
-        const derived = deriveResidual(fixture(), mpm)
+        const msm = fixture()
+        const computed = computeTickTimes(msm, mpm)
+        const derived = deriveResidual(msm, mpm)
 
         expect(derived.notes.map(n => n.tickDate))
-            .toEqual(accumulated.allNotes.map(n => n.tickDate))
+            .toEqual(msm.allNotes.map(n => computed.notes.get(n['xml:id'])?.tickDate))
         expect(derived.notes.map(n => n.tickDuration))
-            .toEqual(accumulated.allNotes.map(n => n.tickDuration))
+            .toEqual(msm.allNotes.map(n => computed.notes.get(n['xml:id'])?.tickDuration))
     })
 
     test('leaves the score it measured untouched', () => {
@@ -57,7 +55,6 @@ describe('deriveResidual, tick domain', () => {
         deriveResidual(msm, withTempo())
 
         expect(JSON.stringify(msm.allNotes)).toEqual(before)
-        expect(msm.allNotes.every(n => n.tickDate === undefined)).toBe(true)
     })
 
     test('an MPM with no tempo leaves the tick figures unknown, not zero', () => {

@@ -8,19 +8,21 @@ type PhysicalAttributes = {
 }
 
 /**
- * Temporary attributes used and manipulated in the process of approximation.
+ * What the score carries beyond the score.
+ *
+ * This used to hold the reduction as it ran — `tickDate`, `tickDuration` and
+ * `absoluteVelocityChange`, each transformer subtracting its share and writing the rest back for
+ * the next one. All three are gone: what a fitter has left to explain is derived from the score,
+ * the recording and the MPM by `deriveResidual`, so an MSM comes out of a chain the way it went
+ * in. `source` is not part of that — it records which reading of a passage a note came from, and
+ * `MakeChoice` selects on it.
  */
 type TemporaryAttributes = Partial<{
-    tickDate: number
-    tickDuration: number
-    absoluteVelocityChange: number
     source: string
 }>
 
 export type MsmPedal = {
     'xml:id': string
-    date?: number
-    'date.end'?: number
     type: 'sustain' | 'soft'
 } & PhysicalAttributes & TemporaryAttributes
 

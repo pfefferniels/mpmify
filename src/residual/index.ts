@@ -39,8 +39,7 @@
  */
 import { InstructionType, MPM } from "../mpm"
 import { MSM, MsmNote, MsmPedal } from "../msm"
-import { addTickDurations, addTickOnsets } from "../transformers/tempo/tickTimes"
-import { removeRubatoDistortion } from "../transformers/rubato/rubatoMath"
+import { computeTickTimes } from "../transformers/tempo/tickTimes"
 import { performMsmToData } from "espressivo"
 
 export interface NoteResidual {
@@ -104,16 +103,16 @@ export const deriveResidual = (
 ): Residual => {
     const probe = options.without?.length ? mpm.without(options.without) : mpm
 
-    const ticks = tickTimesOf(msm, probe)
+    const ticks = computeTickTimes(msm, probe)
     const rendered = renderedVelocities(msm, probe)
 
     const notes: NoteResidual[] = msm.allNotes.map(note => {
-        const scratch = ticks.notes.get(note['xml:id'])
+        const placed = ticks.notes.get(note['xml:id'])
         const renderedVelocity = rendered?.get(note['xml:id'])
         return {
             note,
-            tickDate: scratch?.tickDate,
-            tickDuration: scratch?.tickDuration,
+            tickDate: placed?.tickDate,
+            tickDuration: placed?.tickDuration,
             velocity: renderedVelocity === undefined
                 ? undefined
                 : note['midi.velocity'] - renderedVelocity,
@@ -122,8 +121,8 @@ export const deriveResidual = (
     })
 
     const pedals: PedalResidual[] = msm.pedals.map(pedal => {
-        const scratch = ticks.pedals.get(pedal['xml:id'])
-        return { pedal, tickDate: scratch?.tickDate, tickDuration: scratch?.tickDuration }
+        const placed = ticks.pedals.get(pedal['xml:id'])
+        return { pedal, tickDate: placed?.tickDate, tickDuration: placed?.tickDuration }
     })
 
     const byNote = new Map(notes.map(entry => [entry.note['xml:id'], entry]))
@@ -134,46 +133,6 @@ export const deriveResidual = (
         ofPedal: pedal => byPedal.get(pedal['xml:id']),
         notes,
         pedals,
-    }
-}
-
-interface TickTimes {
-    tickDate: number | undefined
-    tickDuration: number | undefined
-}
-
-/**
- * The tick figures, computed on a scratch copy of the score.
- *
- * `addTickOnsets` and `addTickDurations` write onto the notes they are given, which is what
- * `TranslatePhysicalTimeToTicks` wants and what this must not do. Running them against a deep
- * clone gets the numbers without touching the score being fitted — and, because it is the same
- * code the transformer runs, gets them identically rather than approximately.
- */
-const tickTimesOf = (msm: MSM, mpm: MPM) => {
-    const scratch = msm.deepClone()
-    addTickOnsets(scratch, mpm)
-    addTickDurations(scratch, mpm)
-
-    // A `<rubato>` the MPM already carries has explained its share of the deviation, so it comes
-    // back off — the same step `InsertRubato` performs on the rubatos it writes, over every
-    // rubato the probe holds instead of just its own.
-    //
-    // Scopes with no rubato are skipped rather than walked. If a global and a part rubato ever
-    // covered the same note the removal would compound, which is not what a part map overriding
-    // a global one should mean; mpmify writes rubatos in one scope, so it does not arise.
-    for (const scope of mpm.scopes()) {
-        if (mpm.getInstructions('rubato', scope).length === 0) continue
-        removeRubatoDistortion(scratch, mpm, scope, () => true)
-    }
-
-    return {
-        notes: new Map<string, TickTimes>(
-            scratch.allNotes.map(n => [n['xml:id'], { tickDate: n.tickDate, tickDuration: n.tickDuration }])
-        ),
-        pedals: new Map<string, TickTimes>(
-            scratch.pedals.map(p => [p['xml:id'], { tickDate: p.tickDate, tickDuration: p.tickDuration }])
-        ),
     }
 }
 

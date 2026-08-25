@@ -2,10 +2,17 @@
 
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { Articulation, ArticulationDef, MPM } from "../../src/mpm"
+import { Articulation, ArticulationDef, MPM, Tempo } from "../../src/mpm"
 import { MakeDefaultArticulation } from "../../src/transformers/articulation/MakeDefaultArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
 
+/**
+ * A note that was played for `tickDuration` ticks.
+ *
+ * Stated as a recording rather than as tick figures: both transformers here derive where a note
+ * fell from the recording and the tempo, so the fixture has to say what was recorded. At 60bpm
+ * with a quarter-note beat one second is 720 ticks, which is the whole of the conversion below.
+ */
 const note = (id: string, date: number, pitch: number, tickDuration: number): MsmNote => ({
     'xml:id': id,
     date,
@@ -16,11 +23,18 @@ const note = (id: string, date: number, pitch: number, tickDuration: number): Ms
     duration: 720,
     'midi.pitch': pitch,
     'midi.onset': date / 720,
-    'midi.duration': 1,
+    'midi.duration': tickDuration / 720,
     'midi.velocity': 64,
-    tickDate: date,
-    tickDuration,
 })
+
+/** The tempo those recorded seconds are read against. */
+const atSixtyBpm = () => {
+    const mpm = new MPM()
+    mpm.insertInstruction<Tempo>({
+        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
+    }, 'global')
+    return mpm
+}
 
 /** Call the protected `transform` method for testing */
 const callTransform = (
@@ -43,7 +57,7 @@ test('MakeDefaultArticulation excludes the notes a date-scoped <articulation> al
         note('n2', 720, 60, 720),
     ], { numerator: 4, denominator: 4 })
 
-    const mpm = new MPM()
+    const mpm = atSixtyBpm()
     mpm.insertInstruction({
         type: 'articulation', 'xml:id': 'articulation_0', date: 0, 'name.ref': 'explicit',
     } as Articulation, 'global')
@@ -65,7 +79,7 @@ test('StylizeArticulation sees every note a multi-note @noteid names', () => {
         note('n2', 720, 60, 720),
     ], { numerator: 4, denominator: 4 })
 
-    const mpm = new MPM()
+    const mpm = atSixtyBpm()
     mpm.insertInstructions([
         {
             type: 'articulation', 'xml:id': 'articulation_0', date: 0, noteid: '#n0 #n1',
