@@ -126,15 +126,27 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         const residual = deriveResidual(msm, mpm, { without: ['accentuationPattern'] })
 
         const velocities = this.extractVelocities(this.options, msm, residual)
-        let scale = this.calculateScale(velocities)
+
+        // The cell the pattern is derived from, and the reference every acceptance test below
+        // measures against. `hasSameBeatStructure` already compares each repeat's values with
+        // the prototype's; measuring the scale against the running mean instead would let the
+        // window drift with the data, since each repeat moves the thing it is judged by. With a
+        // tolerance of 5 the scales 10, 14, 18, 22 each pass against the mean so far, and the
+        // cell finally admitted is twice the strength of the one that defined the pattern.
+        const prototypeScale = this.calculateScale(velocities)
         const accentuations = this.calculateAccentuations(velocities, this.options.neutralEnd)
 
-        if (accentuations.length === 0 || scale === 0) return
+        if (accentuations.length === 0 || prototypeScale === 0) return
+
+        // The reported `@scale` is the mean of the scales of every cell the pattern covers —
+        // the prototype's included. `cellsInMean` is how many it already stands for, so it
+        // starts at 1 rather than 0: the prototype is a sample, not an empty accumulator.
+        let scale = prototypeScale
+        let cellsInMean = 1
 
         // try to loop until we cannot fit the data into the 
         // pattern anymore or we reach the next cell
         const currentCell = { ...cell }
-        let iterations = 0;
         while (currentCell.end < (nextCell?.date || msm.end)) {
             const cellLength = currentCell.end - currentCell.start
             currentCell.start += cellLength
@@ -160,14 +172,14 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 return Math.round(a.value) === Math.round(corresp.value)
             }))
 
-            const scaleWithinRange = Math.abs(currentScale - scale) <= this.options.scaleTolerance
+            const scaleWithinRange = Math.abs(currentScale - prototypeScale) <= this.options.scaleTolerance
 
             if (!hasSameBeatStructure || !scaleWithinRange) {
                 break;
             }
 
-            scale = (scale * iterations + currentScale) / (iterations + 1)
-            iterations++;
+            scale = (scale * cellsInMean + currentScale) / (cellsInMean + 1)
+            cellsInMean++;
         }
 
         const accentuationPatternDef: AccentuationPatternDef = {
