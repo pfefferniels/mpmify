@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { describe, expect, test } from "vitest"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
 import { StylizeOrnamentation } from "../../src/transformers/ornamentation/StylizeOrnamentation"

@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { describe, expect, test } from "vitest"
 import { Alignment } from "../../src/alignment"
 import {

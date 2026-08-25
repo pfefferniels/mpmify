@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { expect, test } from "vitest"
 import { FrameDomain } from "espressivo"
 import { Alignment } from "../../src/alignment"

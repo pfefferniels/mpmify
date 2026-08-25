@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { describe, expect, test } from "vitest"
 import { createMpm, InstructionOptions, Mpm, requireMap } from "../../src/mpm"
 import { generateId } from "../../src/transformers/Transformer"

@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { describe, test } from "vitest"
 import { tierThreeCases } from "./cases"
 import { expectCase } from "./expectations"

@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { expect, test } from "vitest"
 import { Alignment, AlignedNote } from "../../src/alignment"
 import { Mpm, createMpm, getDefinition, getInstructions, getStyles, requireMap } from "../../src/mpm"

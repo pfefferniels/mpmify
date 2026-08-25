@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { expect, test } from "vitest"
 import { calculateRubatoOnDate, RubatoFrame } from "../../src/transformers/rubato/rubatoMath"
 
