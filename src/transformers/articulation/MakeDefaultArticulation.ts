@@ -3,6 +3,7 @@ import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { TranslatePhysicalTimeToTicks } from "../tempo";
+import { deriveResidual } from "../../residual";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MakeDefaultArticulationOptions extends ScopedTransformationOptions {
@@ -52,8 +53,14 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
 
         if (notes.length === 0) return
 
+        // Held out rather than read off the score: these are the notes nothing else articulates,
+        // so what articulation has to explain for them is whatever the rest of the MPM does not.
+        // That includes any `defaultArticulation` a previous step left in the map — this one is
+        // about to replace it, so measuring against it would be measuring against itself.
+        const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
+
         const relativeDurations = notes
-            .map(note => note.tickDuration / note.duration)
+            .map(note => residual.of(note)?.tickDuration / note.duration)
             .filter(n => !isNaN(n))
 
         const mean = relativeDurations.reduce((acc, curr) => acc + curr, 0) / relativeDurations.length
