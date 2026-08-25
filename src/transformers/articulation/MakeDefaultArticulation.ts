@@ -1,7 +1,6 @@
-import { ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
+import { ArticulationDef, MPM } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, ScopedTransformationOptions } from "../Transformer";
-import { v4 } from "uuid";
 import { TranslatePhysicalTimeToTicks } from "../tempo";
 import { deriveResidual } from "../../residual";
 
@@ -81,12 +80,6 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         }
         mpm.insertDefinition(def, this.options.scope)
 
-        mpm.insertStyle({
-            type: 'style',
-            'xml:id': v4(),
-            date: 0,
-            'name.ref': DEFAULT_STYLE_NAME,
-            defaultArticulation: def.name,
-        }, 'articulation', this.options.scope)
+        mpm.ensureDefaultStyle('articulation', this.options.scope, { defaultArticulation: def.name })
     }
 }

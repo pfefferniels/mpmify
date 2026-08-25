@@ -13,25 +13,65 @@
  * was issue #40: the offset used to be `note.date + note.tickDuration`, a symbolic position plus
  * a performed one.
  */
+import { resolveRubato, type Rubato as ResolvedRubato } from "espressivo"
 import { MPM, Rubato, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { TickTimes } from "../tempo/tickTimes"
 
 /**
- * This function calculates the effect of the rubato
- * on the MSM notes
+ * One `<rubato>` record with its parameters defaulted and clamped the way the renderer does it.
+ *
+ * The defaulting and the clamping used to be written out here, and they had drifted from meico
+ * in two ways that a perfectly ordinary document reaches:
+ *
+ * - `lateStart` was capped at **0.9** and `earlyEnd` floored at **0.1**. Neither bound exists in
+ *   meico, which only floors `lateStart` at 0 and caps `earlyEnd` at 1 — so a `lateStart="0.95"`
+ *   was fitted against 0.9 while rendering at 0.95.
+ * - an inverted or empty window (`lateStart >= earlyEnd`) was left inverted, producing a
+ *   *reversed* warp, where meico widens it to the whole frame and produces the identity.
+ *
+ * Measured on a 720-tick frame read at its midpoint, four of seven test windows disagreed, by up
+ * to 72 ticks. `resolveRubato` is the renderer's own resolution and settles all of it, in
+ * RubatoMap.java's order, including the `@intensity` default of 1.0.
+ *
+ * `null` where there is no frame to warp — an absent `@frameLength`, which is the one parameter
+ * with no default. That used to divide by `undefined` and hand back `NaN`.
+ *
+ * The `def` argument is `null` because mpmify models no `<rubatoDef>`: it writes every parameter
+ * onto the instruction. This is the seam where def inheritance would arrive, and passing the
+ * argument explicitly is what keeps that a one-line change rather than a rewrite.
+ */
+const resolve = (rubato: Rubato): ResolvedRubato | null => resolveRubato(
+    { startDate: rubato.date, endDate: rubato.date + rubato.frameLength },
+    {
+        frameLength: rubato.frameLength,
+        intensity: rubato.intensity,
+        lateStart: rubato.lateStart,
+        earlyEnd: rubato.earlyEnd,
+        loop: rubato.loop,
+    },
+    null,
+)
+
+/**
+ * Where a symbolic date lands once the rubato has warped its frame.
+ *
+ * The three lines of arithmetic are meico's `RubatoMap.computeRubatoTransformation`, which
+ * espressivo keeps private — it is the one `…At()` evaluator the package does not export, where
+ * tempo, dynamics and movement all do. Everything that decides *what numbers go into* it comes
+ * from {@link resolve}, so what is duplicated here is a formula with no defaults and no
+ * branches, rather than the policy that had actually drifted. If espressivo ever exports a
+ * `rubatoAt`, this becomes a one-line delegation.
+ *
+ * An unresolvable rubato leaves the date where it was, which is what an identity warp means.
  */
 export const calculateRubatoOnDate = (date: number, rubato: Rubato) => {
+    const rd = resolve(rubato)
+    if (rd === null) return date
+
     // compute the position of the map element within the rubato frame
-    const localDate = (date - rubato.date) % rubato.frameLength;
-    // An absent @intensity is not "no intensity": the renderer reads it as 1.0, the identity
-    // warp (espressivo `resolveRubato`, and RubatoData.java before it). Reading it raw made
-    // `Math.pow(x, undefined)` NaN, and the frames CombineAdjacentRubatos writes to close a
-    // loop carry no @intensity by design — so every date under one came back NaN.
-    const intensity = rubato.intensity ?? 1
-    const lateStart = Math.max(Math.min(rubato.lateStart || 0, 0.9), 0)
-    const earlyEnd = Math.max(Math.min(rubato.earlyEnd || 1, 1), 0.1)
-    const d = (Math.pow(localDate / rubato.frameLength, intensity) * (earlyEnd - lateStart) + lateStart) * rubato.frameLength;
+    const localDate = (date - rd.startDate) % rd.frameLength;
+    const d = (Math.pow(localDate / rd.frameLength, rd.intensity) * (rd.earlyEnd - rd.lateStart) + rd.lateStart) * rd.frameLength;
     return date + d - localDate
 }
 

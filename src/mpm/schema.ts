@@ -50,6 +50,21 @@ const DATED = {
     corresp: 'string',
 } as const satisfies Record<string, AttrKind>
 
+/**
+ * What an articulation *does* to a note, as attributes.
+ *
+ * The same four sit on `<articulation>` and on `<articulationDef>`, and they mean the same thing
+ * in both places — that is the whole of MPM's def mechanism: an instruction states the modifiers
+ * inline, or names a def that states them. So they are named once rather than kept in step by
+ * hand. (MPM defines more of these; these four are the ones mpmify reads and writes.)
+ */
+const ARTICULATION_MODIFIERS = {
+    relativeDuration: 'number',
+    relativeVelocity: 'number',
+    absoluteDuration: 'number',
+    absoluteDurationChange: 'number',
+} as const satisfies Record<string, AttrKind>
+
 const SCHEMAS = {
     tempo: {
         type: 'tempo',
@@ -87,10 +102,7 @@ const SCHEMAS = {
         type: 'articulation',
         attributes: {
             ...DATED,
-            relativeDuration: 'number',
-            relativeVelocity: 'number',
-            absoluteDuration: 'number',
-            absoluteDurationChange: 'number',
+            ...ARTICULATION_MODIFIERS,
         },
     },
     asynchrony: {
@@ -157,10 +169,7 @@ const SCHEMAS = {
         attributes: {
             name: 'string',
             'xml:id': 'string',
-            relativeDuration: 'number',
-            relativeVelocity: 'number',
-            absoluteDuration: 'number',
-            absoluteDurationChange: 'number',
+            ...ARTICULATION_MODIFIERS,
         },
     },
     accentuationPatternDef: {

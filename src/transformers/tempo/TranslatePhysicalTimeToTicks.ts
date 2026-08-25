@@ -1,7 +1,8 @@
-import { MPM, Tempo } from "../../mpm";
+import { MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { computeMillisecondsAt, ticksForConstantTempo, TempoWithEndDate } from "./tempoCalculations";
+import { millisecondsAt, ticksForConstantTempo } from "./tempoCalculations";
+import { placeTempos, PlacedTempo } from "./placedTempos";
 import { approximateDate } from "./tickTimes";
 
 export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
@@ -61,73 +62,36 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      * nothing: exact wherever that boundary segment is constant, and the right limit approaching
      * the boundary where it is not.
      */
-    private msToTicks(ms: number, tempos: Tempo[], msm: MSM): number | undefined {
-        if (tempos.length === 0) return undefined
+    private msToTicks(ms: number, segments: PlacedTempo[]): number | undefined {
+        if (segments.length === 0) return undefined
 
-        const first = tempos[0]
+        const first = segments[0].tempo
         if (ms < 0) {
             return first.date + ticksForConstantTempo(ms, first)
         }
 
-        let currentMs = 0
-        let lastDate = first.date
-        for (let i = 0; i < tempos.length; i++) {
-            const tempo = tempos[i]
-            const nextTempo = tempos[i + 1]
-            const endDate = nextTempo ? nextTempo.date : msm.end
-
-            const tempoWithEndDate: TempoWithEndDate = {
-                ...tempo,
-                endDate
+        for (const { tempo, startMs, modelledMs } of segments) {
+            if (ms >= startMs && ms < startMs + modelledMs) {
+                return approximateDate(ms - startMs, tempo)
             }
-
-            const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
-
-            if (ms >= currentMs && ms < (currentMs + endMs)) {
-                return approximateDate(ms - currentMs, tempoWithEndDate)
-            }
-
-            const note = msm.allNotes.find(n => n.date === endDate)
-            if (!note) {
-                currentMs += endMs
-            }
-            else {
-                currentMs = note["midi.onset"] * 1000
-            }
-            lastDate = endDate
         }
 
         // Past the final segment: extrapolate at the tempo it arrives at.
-        const last = tempos[tempos.length - 1]
-        return lastDate + ticksForConstantTempo(ms - currentMs, {
-            bpm: last["transition.to"] ?? last.bpm,
-            beatLength: last.beatLength,
+        const last = segments[segments.length - 1]
+        const elapsed = last.startMs + last.measuredMs
+        return last.tempo.endDate + ticksForConstantTempo(ms - elapsed, {
+            bpm: last.tempo["transition.to"] ?? last.tempo.bpm,
+            beatLength: last.tempo.beatLength,
         })
     }
 
-    private ticksToMs(ticks: number, tempos: Tempo[], msm: MSM) {
-        let currentMs = 0
-        for (let i = 0; i < tempos.length; i++) {
-            const tempo = tempos[i]
-            const nextTempo = tempos[i + 1]
-            const endDate = nextTempo ? nextTempo.date : msm.end
-
-            const tempoWithEndDate: TempoWithEndDate = {
-                ...tempo,
-                endDate
-            }
-
-            if (ticks >= tempo.date && ticks < endDate) {
-                return currentMs + computeMillisecondsAt(ticks, tempoWithEndDate)
-            }
-
-            const note = msm.allNotes.find(n => n.date === endDate)
-            if (!note) {
-                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
-                currentMs += endMs
-            }
-            else {
-                currentMs = note["midi.onset"] * 1000
+    private ticksToMs(ticks: number, segments: PlacedTempo[]) {
+        for (const { tempo, resolved, startMs } of segments) {
+            // The tick window is the instruction's own span, and for the last segment that ends
+            // at the end of the score rather than running open — so this is deliberately not
+            // `coversDate`, which lets the last segment take everything after it.
+            if (ticks >= tempo.date && ticks < tempo.endDate) {
+                return startMs + millisecondsAt(ticks, resolved)
             }
         }
     }
@@ -139,7 +103,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      */
     translatePhysicalMPMModifiers(mpm: MPM, msm: MSM) {
         for (const scope of mpm.scopes()) {
-            const tempos = mpm.getInstructions('tempo', scope)
+            const segments = placeTempos(msm, mpm, scope)
 
             const ornaments = mpm.getInstructions('ornament', scope)
             for (const ornament of ornaments) {
@@ -157,14 +121,14 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
                     continue
                 }
 
-                const ornamentMs = this.ticksToMs(ornament.date, tempos, msm)
+                const ornamentMs = this.ticksToMs(ornament.date, segments)
                 if (ornamentMs === undefined) continue
 
                 const frameStartMs = ornamentMs + ornament["frame.start"]
                 const frameEndMs = frameStartMs + ornament.frameLength
 
-                const frameStartTicks = this.msToTicks(frameStartMs, tempos, msm)
-                const frameEndTicks = this.msToTicks(frameEndMs, tempos, msm)
+                const frameStartTicks = this.msToTicks(frameStartMs, segments)
+                const frameEndTicks = this.msToTicks(frameEndMs, segments)
 
                 // Leave the ornament in milliseconds rather than stamp an unusable frame on it.
                 // Milliseconds are a legal `time.unit`, so an untranslated ornament still

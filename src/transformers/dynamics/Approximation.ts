@@ -1,3 +1,4 @@
+import { bezierPoint, innerControlPointsXPositions, tForDate } from "espressivo"
 import { v4 } from "uuid"
 import { DynamicsWithEndDate } from "./InsertDynamicsInstructions"
 import { Movement } from "../../mpm"
@@ -13,105 +14,70 @@ export type InnerControlPoints = {
     x2: number
 }
 
-// An absent `@curvature`/`@protraction` is not "no value" — it is the renderer's default, and
-// for <dynamics> espressivo/meico fills both with 0.0 (`resolveDynamics` in
-// `mpm/elements/maps/data/dynamics.ts`). Scoring a candidate as if the attributes were merely
-// missing would fit against a curve the renderer never draws. They are named apart because the
-// defaults are not shared: <movement> takes 0.4 for curvature.
-const DEFAULT_CURVATURE = 0.0
-const DEFAULT_PROTRACTION = 0.0
-
+/**
+ * The two inner control points of the cubic Bézier a `<dynamics>` or `<movement>` transition is
+ * shaped by, derived from `@curvature` and `@protraction`.
+ *
+ * espressivo's, not a second copy: the `protraction === 0` branch is not an optimisation — the
+ * general formula divides by `protraction` — and getting that wrong is invisible until a curve
+ * bends the wrong way. Callers default an absent `@curvature`/`@protraction` before calling,
+ * because the two elements do not share a default: `<dynamics>` takes 0.0 for curvature and
+ * `<movement>` takes 0.4.
+ */
 export const computeInnerControlPointsXPositions = (curvature: number, protraction: number): InnerControlPoints => {
-    if (protraction == 0.0) {
-        return {
-            x1: curvature,
-            x2: 1 - curvature
-        }
-    }
-
-    return {
-        x1: curvature + ((Math.abs(protraction) + protraction) / (2.0 * protraction) - (Math.abs(protraction) / protraction) * curvature) * protraction,
-        x2: 1.0 - curvature + ((protraction - Math.abs(protraction)) / (2.0 * protraction) + (Math.abs(protraction) / protraction) * curvature) * protraction
-    }
+    const [x1, x2] = innerControlPointsXPositions(curvature, protraction)
+    return { x1, x2 }
 }
 
 /**
- * compute parameter t of the Bézier curve that corresponds to time position date
- * @param date time position
- * @return
+ * The value a transition holds at `date`, for the one shape `<dynamics>` and `<movement>` share.
+ *
+ * Both elements ramp from a start value to a `@transition.to` along a cubic Bézier whose
+ * x-component is inverted to find the curve parameter, and they did so through two separately
+ * written copies of the same twelve lines. This is that shape once, with the inversion
+ * (`tForDate`) and the cubic (`bezierPoint`) taken from espressivo rather than rewritten beside
+ * it.
+ *
+ * The absent-target test is `??` and not truthiness, which is a fix rather than a translation: a
+ * `@transition.to` of **0** — a dynamics fading to silence, a pedal lifting fully — is a real
+ * target that the old `!instruction["transition.to"]` read as no transition at all, holding the
+ * start value flat across the whole span. See issue #46.
  */
-const getTForDate = (instruction: { date: number, endDate: number} & InnerControlPoints, date: number) => {
-    if (date === instruction.date)
-        return 0.0;
+const transitionValueAt = (
+    span: { date: number, endDate: number } & InnerControlPoints,
+    from: number,
+    to: number,
+    date: number,
+): number => {
+    if (date < span.date) return from
+    if (from === to) return from
+    if (date >= span.endDate) return to
 
-    if (date === instruction.endDate)
-        return 1.0;
-
-    // values that are often required
-    const frameLength = instruction.endDate - instruction.date;
-    date = date - instruction.date;
-    const u = (3.0 * instruction.x1) - (3.0 * instruction.x2) + 1.0;
-    const v = (-6.0 * instruction.x1) + (3.0 * instruction.x2);
-    const w = 3.0 * instruction.x1;
-
-    // binary search for the t that is integer precise on the x-axis/time domain
-    let t = 0.5;
-    let diffX = ((((u * t) + v) * t + w) * t * frameLength) - date;
-
-    // while the difference in the x-domain is >= 1.0
-    for (let tt = 0.25; Math.abs(diffX) >= 1.0; tt *= 0.5) {
-        if (diffX > 0.0) {
-            // t is too big
-            t -= tt;
-        }
-        else {
-            // t is too small
-            t += tt;
-        }
-        // compute difference
-        diffX = ((((u * t) + v) * t + w) * t * frameLength) - date;
-    }
-    return t;
+    // `tForDate` is a binary search that stops within one tick on the x-axis, so it only ever
+    // *approximates* the two endpoints. espressivo answers them before calling it
+    // (`tForDynamicsDate`, `tForMovementDate`, both of which say so), and a caller that skips
+    // this reads 99.93 where the instruction plainly says 100. Not a shortcut.
+    const t = date === span.date
+        ? 0.0
+        : tForDate(span.x1, span.x2, span.date, span.endDate, date)
+    return bezierPoint(span.x1, span.x2, span.date, span.endDate, from, to, t)[1]
 }
 
-export const volumeAtDate = (instruction: DynamicsWithEndDate & InnerControlPoints, date: number) => {
-    if (date < instruction.date) {
-        return +instruction.volume
-    }
-    if (!instruction["transition.to"] || instruction.volume === instruction["transition.to"]) {
-        return +instruction.volume;
-    }
-    if (date >= instruction.endDate) {
-        return instruction["transition.to"]
-    }
+/** What the fitted `<dynamics>` sounds `date` at. */
+export const volumeAtDate = (instruction: DynamicsWithEndDate & InnerControlPoints, date: number) =>
+    transitionValueAt(instruction, +instruction.volume, instruction["transition.to"] ?? +instruction.volume, date)
 
-    const t = getTForDate(instruction, date);
-    return ((((3.0 - (2.0 * t)) * t * t) * (instruction["transition.to"] - +instruction.volume)) + +instruction.volume);
-}
-
-export const positionAtDate = (instruction: Movement & { endDate: number } & InnerControlPoints, date: number) => {
-    if (date < instruction.date) {
-        return +instruction.position
-    }
-    if (instruction["transition.to"] === undefined || (instruction.position === instruction["transition.to"])) {
-        return +instruction.position;
-    }
-    if (date >= instruction.endDate) {
-        return instruction["transition.to"]
-    }
-
-    const t = getTForDate(instruction, date);
-
-    return ((((3.0 - (2.0 * t)) * t * t) * (instruction["transition.to"] - +instruction.position)) + +instruction.position);
-}
+/** Where the fitted `<movement>` puts its controller at `date`. */
+export const positionAtDate = (instruction: Movement & { endDate: number } & InnerControlPoints, date: number) =>
+    transitionValueAt(instruction, +instruction.position, instruction["transition.to"] ?? +instruction.position, date)
 
 const computeError = (instruction: DynamicsWithEndDate, points: DynamicsPoints[]) => {
     const computedInstruction = {
         ...instruction,
-        ...computeInnerControlPointsXPositions(
-            instruction.curvature ?? DEFAULT_CURVATURE,
-            instruction.protraction ?? DEFAULT_PROTRACTION
-        )
+        // `<dynamics>` defaults both to 0.0, which is what `resolveDynamics` fills in — scoring
+        // a candidate as if the attributes were merely missing would fit against a curve the
+        // renderer never draws.
+        ...computeInnerControlPointsXPositions(instruction.curvature ?? 0.0, instruction.protraction ?? 0.0)
     }
 
     let sum = 0;
@@ -131,8 +97,8 @@ const generateNeighbour = (prev: DynamicsWithEndDate, random: Random) => {
     const maxCurvatureChange = 0.05;
 
     // Generate random changes within the defined range
-    const newProtraction = (prev.protraction ?? DEFAULT_PROTRACTION) + (random() * 2 - 1) * maxProtractionChange;
-    const newCurvature = (prev.curvature ?? DEFAULT_CURVATURE) + (random() * 2 - 1) * maxCurvatureChange;
+    const newProtraction = (prev.protraction ?? 0.0) + (random() * 2 - 1) * maxProtractionChange;
+    const newCurvature = (prev.curvature ?? 0.0) + (random() * 2 - 1) * maxCurvatureChange;
 
     // Ensure the new values are within valid bounds
     const validProtraction = Math.max(Math.min(newProtraction, 1.0), -1.0);

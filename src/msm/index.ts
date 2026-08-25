@@ -1,6 +1,7 @@
 import { Scope } from "../mpm";
 import { parse } from "js2xmlparser";
 import { isDefined } from "../utils/utils";
+import { PULSES_PER_QUARTER } from "../ppq";
 
 type PhysicalAttributes = {
     'midi.onset': number
@@ -180,7 +181,7 @@ export class MSM {
         const msm = {
             '@': {
                 title: 'aligned performance',
-                pulsesPerQuarter: 720,
+                pulsesPerQuarter: PULSES_PER_QUARTER,
             },
             'global': {
                 'header': {},

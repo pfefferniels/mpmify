@@ -94,10 +94,9 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
         const firstVel = arpeggioNotes[0]["midi.velocity"]
         const lastVel = arpeggioNotes[arpeggioNotes.length - 1]["midi.velocity"]
 
-        const dynamicDiff = lastVel - firstVel
-        if (dynamicDiff === 0) return
-
         const diffVel = lastVel - firstVel
+        if (diffVel === 0) return
+
         const diffGradient = gradient.to - gradient.from
         const scale = diffVel / diffGradient
         const standard = firstVel - gradient.from * scale

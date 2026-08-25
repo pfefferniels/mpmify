@@ -4,6 +4,8 @@ import { MSM, MsmNote } from "../../msm";
 import { TempoWithEndDate, getTempoAt } from "./tempoCalculations";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { hashSeed, Random, seededRandom } from "../../utils/random";
+import { clamp } from "../../utils/utils";
+import { beatLengthInTicks } from "../../ppq";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -350,7 +352,7 @@ function fitSegments(
     for (const seg of chainSegments) chain.push(seg.to);
 
     const beatLength = chainSegments[0].beatLength;
-    const beatLengthTicks = beatLength * 4 * 720;
+    const beatLengthTicks = beatLengthInTicks(beatLength);
 
     const fullRange: TempoSegment = {
         from: chain[0], to: chain[chain.length - 1], beatLength
@@ -578,6 +580,35 @@ function partitionOnsets(
  * τ_left = a (at x=0) and τ_right = a + b (at x=1).
  * Shared boundaries average the estimates from adjacent segments.
  */
+/**
+ * The weighted least-squares line `bpm = intercept + slope·x` through `data`.
+ *
+ * Degenerate where the weighted x-variance vanishes — one distinct x, or one point carrying all
+ * the weight — and the honest answer there is the weighted mean with no slope, which is what the
+ * `det` guard returns. Written once because both callers want the same fit and differ only in
+ * which half of it they read: `initBoundaryTempos` wants the endpoints, and
+ * `estimateSegmentBoundaryDelta` wants the slope, which over a normalised x is the same number as
+ * the endpoint difference.
+ */
+function weightedLinearFit(data: DataPoint[]): { intercept: number, slope: number } {
+    let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
+    for (const d of data) {
+        sw += d.weight;
+        swx += d.weight * d.x;
+        swy += d.weight * d.bpm;
+        swxx += d.weight * d.x * d.x;
+        swxy += d.weight * d.x * d.bpm;
+    }
+
+    const det = sw * swxx - swx * swx;
+    if (Math.abs(det) < 1e-10) return { intercept: swy / sw, slope: 0 };
+
+    return {
+        intercept: (swxx * swy - swx * swxy) / det,
+        slope: (sw * swxy - swx * swy) / det,
+    };
+}
+
 function initBoundaryTempos(segData: DataPoint[][], nBoundaries: number): number[] {
     const nSeg = nBoundaries - 1;
     const tau = new Array(nBoundaries).fill(0);
@@ -596,24 +627,7 @@ function initBoundaryTempos(segData: DataPoint[][], nBoundaries: number): number
             continue;
         }
 
-        // Weighted linear regression: BPM = a + b·x
-        let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
-        for (const d of data) {
-            sw += d.weight;
-            swx += d.weight * d.x;
-            swy += d.weight * d.bpm;
-            swxx += d.weight * d.x * d.x;
-            swxy += d.weight * d.x * d.bpm;
-        }
-        const det = sw * swxx - swx * swx;
-        let a: number, b: number;
-        if (Math.abs(det) < 1e-10) {
-            a = swy / sw;
-            b = 0;
-        } else {
-            a = (swxx * swy - swx * swxy) / det;
-            b = (sw * swxy - swx * swy) / det;
-        }
+        const { intercept: a, slope: b } = weightedLinearFit(data);
 
         tau[k] += a;         // value at x = 0
         tau[k + 1] += a + b; // value at x = 1
@@ -647,12 +661,8 @@ function interpolatePhysicalTime(onsets: OnsetPair[], date: number): number {
 function powerBasis(x: number, im: number): number {
     if (x <= 0) return 0;
     if (x >= 1) return 1;
-    const p = Math.log(0.5) / Math.log(Math.max(0.001, Math.min(0.999, im)));
+    const p = Math.log(0.5) / Math.log(clamp(im, 0.001, 0.999));
     return Math.pow(x, p);
-}
-
-function clamp(value: number, lo: number, hi: number): number {
-    return Math.max(lo, Math.min(hi, value));
 }
 
 function computePowerElapsedMs(
@@ -857,21 +867,8 @@ function inferSegmentDirections(segData: DataPoint[][]): TempoDirection[] {
 function estimateSegmentBoundaryDelta(data: DataPoint[]): number | null {
     if (data.length < 2) return null;
 
-    let sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
-    for (const d of data) {
-        sw += d.weight;
-        swx += d.weight * d.x;
-        swy += d.weight * d.bpm;
-        swxx += d.weight * d.x * d.x;
-        swxy += d.weight * d.x * d.bpm;
-    }
-
-    const det = sw * swxx - swx * swx;
-    if (Math.abs(det) < 1e-10) return 0;
-
-    const slope = (sw * swxy - swx * swy) / det;
-    // x is normalised to [0,1], so this equals τ_right - τ_left.
-    return slope;
+    // x is normalised to [0,1], so the slope equals τ_right - τ_left.
+    return weightedLinearFit(data).slope;
 }
 
 function enforceDirectionConstraints(

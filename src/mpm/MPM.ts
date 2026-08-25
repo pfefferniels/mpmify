@@ -51,6 +51,8 @@ import {
     RelatedResource,
 } from './types'
 import { elementFrom, elementOf, viewOf } from './view'
+import { PULSES_PER_QUARTER, PULSES_PER_WHOLE } from '../ppq'
+import { v4 } from 'uuid'
 
 /** espressivo answers `Result<T, E>` in places; this is the "or give up" reading of one. */
 const unwrap = <T>(result: T | { ok: boolean; value?: T }, what: string): T => {
@@ -65,7 +67,6 @@ const unwrap = <T>(result: T | { ok: boolean; value?: T }, what: string): T => {
 
 /** The `<performance>` mpmify writes into. mpm-ts wrote exactly one, unnamed. */
 const PERFORMANCE_NAME = 'unknown'
-const PULSES_PER_QUARTER = 720
 
 export class MPM {
     /** The espressivo document. The single source of truth for everything this class answers. */
@@ -345,6 +346,47 @@ export class MPM {
         return view
     }
 
+    /**
+     * The `<style date="0">` switch that puts mpmify's own `<styleDef>` in scope for a map,
+     * creating it only if the map has none.
+     *
+     * A `<style>` switch is what makes a `@name.ref` resolvable: without one in the map, meico's
+     * backwards scan finds no style and every definition the header holds is unreachable. Six
+     * transformers needed one and six wrote the same literal — `{ type: 'style', 'xml:id': v4(),
+     * date: 0, 'name.ref': DEFAULT_STYLE_NAME }` — of which four guarded on the map being empty
+     * of styles and two did not.
+     *
+     * That inconsistency was a latent duplicate: neither this class nor espressivo's
+     * `addStyleSwitch` deduplicates, so a chain running both `MakeDefaultArticulation` and
+     * `StylizeArticulation` put *two* `<style date="0">` into one `articulationMap`. Asking for
+     * the switch rather than inserting one makes that unrepresentable, and lets the second caller
+     * amend what the first wrote instead of shadowing it.
+     *
+     * @param extras fields to set on the switch, whether it was just created or already there.
+     * `defaultArticulation` is the only one any caller has ever needed.
+     */
+    ensureDefaultStyle(
+        instructionType: InstructionType,
+        scope: Scope,
+        extras: Pick<Style, 'defaultArticulation'> = {},
+    ): Style {
+        const existing = this.getStyles(instructionType, scope)
+            .find(style => style.date === 0 && style['name.ref'] === DEFAULT_STYLE_NAME)
+
+        const style = existing ?? this.insertStyle({
+            type: 'style',
+            'xml:id': v4(),
+            date: 0,
+            'name.ref': DEFAULT_STYLE_NAME,
+        }, instructionType, scope)
+
+        if (extras.defaultArticulation !== undefined) {
+            style.defaultArticulation = extras.defaultArticulation
+        }
+
+        return style
+    }
+
     getStyles(instructionType: InstructionType, scope: Scope): Style[] {
         const map = this.map(instructionType, scope, false)
         if (!map) return []
@@ -469,7 +511,9 @@ export class MPM {
                     const def = pattern['name.ref']
                         ? this.getDefinition('accentuationPatternDef', pattern['name.ref']) as AccentuationPatternDef | null
                         : null
-                    if (def && date < pattern.date + def.length * 720 * 4 / 4) {
+                    // `@length` is in bars; this reads them as whole notes, which is the 4/4
+                    // the expression's `* 4 / 4` was spelling out. Unchanged, just named.
+                    if (def && date < pattern.date + def.length * PULSES_PER_WHOLE / 4) {
                         result.push(ongoing)
                     }
                 }

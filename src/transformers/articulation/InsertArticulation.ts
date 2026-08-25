@@ -1,4 +1,4 @@
-import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm"
+import { Articulation, ArticulationDef, MPM } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -123,14 +123,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // @name.ref below resolves to nothing and the articulation is inert. Only
         // StylizeArticulation and MakeDefaultArticulation used to emit it, so a chain that ran
         // neither produced definitions no renderer could reach. See old-bugs.md.
-        if (mpm.getStyles('articulation', this.options.scope).length === 0) {
-            mpm.insertStyle({
-                type: 'style',
-                'xml:id': v4(),
-                date: 0,
-                'name.ref': DEFAULT_STYLE_NAME,
-            }, 'articulation', this.options.scope)
-        }
+        mpm.ensureDefaultStyle('articulation', this.options.scope)
 
         articulations = articulations.reduce((acc, curr) => {
             aspects.forEach(aspect => curr[aspect] = undefined)

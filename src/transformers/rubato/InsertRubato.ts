@@ -2,6 +2,7 @@ import { MPM, Rubato } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
 import { clamp } from "../../utils/utils"
+import { PULSES_PER_QUARTER } from "../../ppq"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
 import { deriveResidual, Residual } from "../../residual"
@@ -43,7 +44,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         super(options || {
             scope: 'global',
             date: 0,
-            length: 720
+            length: PULSES_PER_QUARTER
         })
     }
 
@@ -82,8 +83,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         // frame that starts on time says nothing rather than saying nothing new.
         let lateStart: number | undefined =
             clamp(
-                0,
                 (startDate - frame.date) / frame.length,
+                0,
                 0.9
             )
         if (lateStart === 0) lateStart = undefined

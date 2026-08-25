@@ -1,4 +1,4 @@
-import { DEFAULT_STYLE_NAME, DynamicsGradient, MPM, Ornament, OrnamentDef, Scope, TemporalSpread } from "../../mpm"
+import { DynamicsGradient, MPM, Ornament, OrnamentDef, Scope, TemporalSpread } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { v4 } from "uuid"
@@ -143,12 +143,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
 
             this.defineGradientOnly(mpm, scope, gradientOnly, defined)
 
-            mpm.insertStyle({
-                date: 0,
-                type: 'style',
-                'xml:id': v4(),
-                'name.ref': DEFAULT_STYLE_NAME,
-            }, 'ornament', scope)
+            mpm.ensureDefaultStyle('ornament', scope)
 
             // The working attributes move into the definition, so they come off the
             // instruction — but only for the ornaments that got one. This used to test

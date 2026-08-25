@@ -1,7 +1,6 @@
-import { Articulation, ArticulationDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
+import { Articulation, ArticulationDef, MPM } from "../../mpm";
 import { MSM, MsmNote } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { v4 } from "uuid";
 import { dbscan, IPoint } from "../../utils/dbscan";
 import { InsertArticulation } from "./InsertArticulation";
 import { deriveResidual, Residual } from "../../residual";
@@ -171,23 +170,12 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
                     .filter(a => a["name.ref"] === defName)
                     .forEach(a => mpm.removeInstruction(a))
 
-                mpm.insertStyle({
-                    type: 'style',
-                    'xml:id': v4(),
-                    date: 0,
-                    'name.ref': DEFAULT_STYLE_NAME,
-                    defaultArticulation: defName
-                }, 'articulation', scope)
+                mpm.ensureDefaultStyle('articulation', scope, { defaultArticulation: defName })
             }
             else if (defs.length > 0) {
                 // if no best cluster could be determined, but there
                 // are clusters, insert a default style switch
-                mpm.insertStyle({
-                    type: 'style',
-                    'xml:id': v4(),
-                    date: 0,
-                    'name.ref': DEFAULT_STYLE_NAME,
-                }, 'articulation', scope)
+                mpm.ensureDefaultStyle('articulation', scope)
             }
         }
     }

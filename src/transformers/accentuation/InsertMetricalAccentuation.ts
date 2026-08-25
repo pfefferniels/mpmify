@@ -1,9 +1,10 @@
-import { Accentuation, AccentuationPattern, AccentuationPatternDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
+import { Accentuation, AccentuationPattern, AccentuationPatternDef, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
+import { PULSES_PER_WHOLE } from "../../ppq";
 
 export interface InsertMetricalAccentuationOptions extends ScopedTransformationOptions {
     name: string
@@ -40,11 +41,10 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         msm: MSM,
         residual: Residual
     ): Velocity[] {
-        const ppq = 720
         const velocities = []
         const frameLength = end - start
-        for (let beat = 0; beat <= frameLength / 4 / ppq; beat += beatLength) {
-            const date = start + beat * 4 * ppq
+        for (let beat = 0; beat <= frameLength / PULSES_PER_WHOLE; beat += beatLength) {
+            const date = start + beat * PULSES_PER_WHOLE
 
             const notesAtDate = msm.notesAtDate(date, this.options.scope)
                 .filter(note => residual.of(note)?.velocity !== undefined)
@@ -173,7 +173,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         const accentuationPatternDef: AccentuationPatternDef = {
             type: 'accentuationPatternDef',
             name: this.options.name,
-            length: ((cell.end - cell.start) / 4 / 720) * (msm.timeSignature?.denominator || 4),
+            length: ((cell.end - cell.start) / PULSES_PER_WHOLE) * (msm.timeSignature?.denominator || 4),
             children: accentuations,
         }
 
@@ -202,14 +202,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
 
 
-        if (mpm.getStyles('accentuationPattern', this.options.scope).length === 0) {
-            mpm.insertStyle({
-                "name.ref": DEFAULT_STYLE_NAME,
-                date: 0,
-                'type': 'style',
-                'xml:id': v4(),
-            }, 'accentuationPattern', this.options.scope)
-        }
+        mpm.ensureDefaultStyle('accentuationPattern', this.options.scope)
     }
 
 
