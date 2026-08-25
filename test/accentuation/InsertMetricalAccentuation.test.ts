@@ -52,15 +52,20 @@ const SHAPE = [0.3, 1, 0.5, 0.2]
  * One bar per entry of `scales`, each carrying `SHAPE` at that strength, then a closing downbeat
  * with no residual at all. The closing note ends the loop the way the end of a piece does: the
  * cell after the last bar has a scale of 0, and a scale of 0 is not a pattern.
+ *
+ * Dropping it (`closingDownbeat: false`) ends the piece the *other* way it can end — flush with
+ * the last bar line, so `msm.end` is a cell boundary and the loop runs out of piece rather than
+ * out of pattern. That is a different exit from the same `while`, and issue #43 is about the two
+ * exits disagreeing.
  */
-const fixture = (scales: number[]) => {
+const fixture = (scales: number[], { closingDownbeat = true } = {}) => {
     const notes: MsmNote[] = []
     for (let bar = 0; bar < scales.length; bar++) {
         for (let beat = 0; beat < 4; beat++) {
             notes.push(note(bar * 4 + beat, VOLUME + SHAPE[beat] * scales[bar]))
         }
     }
-    notes.push(note(scales.length * 4, VOLUME))
+    if (closingDownbeat) notes.push(note(scales.length * 4, VOLUME))
 
     const msm = new MSM(notes, { numerator: 4, denominator: 4 })
 
@@ -177,5 +182,65 @@ describe('the scale tolerance is measured against the prototype', () => {
 
         // Bar 2 is within 5 of the prototype and joins; bar 3 is 20 away and does not.
         expect(fitted(mpm).scale).toBe(11)
+    })
+})
+
+describe('the closing neutral marks the end of the last accepted cell', () => {
+    // Issue #43. The loop advances `currentCell` before judging it and the neutral was placed
+    // at `currentCell.start`. On the `break` path that is the start of the *rejected* cell,
+    // which is also the end of the last accepted one — right by coincidence. On the path where
+    // the `while` condition simply goes false there is no rejected cell: `currentCell` is the
+    // one that was just accepted, and the neutral landed a bar early, on top of a repetition
+    // the loop had validated, cancelling it.
+    const neutralsIn = (mpm: MPM) => mpm
+        .getInstructions('accentuationPattern', 'global')
+        .filter(p => p["name.ref"] === 'neutral')
+
+    test('a piece ending on the bar line closes the loop after the last bar, not before it', () => {
+        // Without the closing downbeat the last note fills bar 3, so `msm.end` is the bar line
+        // itself and the third repetition is accepted by the last pass the `while` allows.
+        const { msm, mpm } = fixture([10, 10, 10], { closingDownbeat: false })
+        expect(msm.end).toBe(12 * PULSES_PER_QUARTER)
+
+        run(msm, mpm, 1)
+
+        // All three bars are in: the pattern loops and reports their common scale.
+        const pattern = fitted(mpm)
+        expect(pattern.loop).toBe(true)
+        expect(pattern.scale).toBe(10)
+
+        // So the neutral belongs after bar 3, not on its downbeat at 8 quarters.
+        expect(neutralsIn(mpm).map(n => n.date)).toEqual([12 * PULSES_PER_QUARTER])
+    })
+
+    test('a following desk on the bar line does not pull the neutral back into the loop', () => {
+        const { msm, mpm } = fixture([10, 10, 10])
+
+        // A second accentuation desk starting at bar 4 — the ordinary shape of two adjacent
+        // desks, and what makes this exit reachable on a piece that does not end flush.
+        mpm.insertInstruction({
+            type: 'accentuationPattern',
+            'xml:id': 'next_desk',
+            'name.ref': 'other',
+            date: 12 * PULSES_PER_QUARTER,
+            scale: 7,
+        }, 'global')
+
+        run(msm, mpm, 1)
+
+        const pattern = fitted(mpm)
+        expect(pattern.loop).toBe(true)
+        expect(pattern.scale).toBe(10)
+
+        // The run was accepted right up to the following desk, so nothing may cancel it before
+        // then. The neutral due at 12 quarters is where the next desk already takes over, and
+        // `insertInstruction` merges it into that desk rather than duplicating the date — which
+        // leaves the desk's own pattern in place, as it must.
+        expect(neutralsIn(mpm).filter(n => n.date < 12 * PULSES_PER_QUARTER)).toEqual([])
+
+        const nextDesk = mpm.getInstructions('accentuationPattern', 'global')
+            .find(p => p["xml:id"] === 'next_desk')!
+        expect(nextDesk["name.ref"]).toBe('other')
+        expect(nextDesk.scale).toBe(7)
     })
 })
