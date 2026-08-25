@@ -146,3 +146,25 @@ test('a chain running both transformers leaves exactly one <style> in the articu
     // And it is the switch the later transformer amended, not a shadowing duplicate.
     expect(styles[0].defaultArticulation).toBe('default articulation')
 })
+
+test('MakeDefaultArticulation measures the part it was scoped to, not the whole score', () => {
+    // The articulations were read per-scope and the definition written per-scope, but the
+    // candidate notes came from `msm.allNotes` — so a part-scoped call averaged every other
+    // part's notes into this part's `relativeDuration` and then published that as the part's
+    // default (issue #44).
+    //
+    // The left hand is played half-length, the right hand double. Scoped to the left hand the
+    // answer is 0.5; over the whole score it would be 1.25.
+    const msm = new MSM([
+        { ...note('l0', 0, 60, 360), part: 1 },
+        { ...note('l1', 720, 62, 360), part: 1 },
+        { ...note('r0', 0, 72, 1440), part: 2 },
+        { ...note('r1', 720, 74, 1440), part: 2 },
+    ], { numerator: 4, denominator: 4 })
+
+    const mpm = atSixtyBpm()
+    callTransform(new MakeDefaultArticulation({ scope: 0 }), msm, mpm)
+
+    const def = mpm.getDefinition('articulationDef', 'default articulation') as ArticulationDef
+    expect(def.relativeDuration).toBeCloseTo(0.5, 10)
+})
