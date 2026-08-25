@@ -483,49 +483,69 @@ export class MPM {
      * The instructions in force at a date: those exactly at it, plus the last one before it
      * where that instruction is still running.
      *
+     * A *set*, in the sense that no instruction is named twice. It used to be a list that could
+     * name one three times: an instruction exactly at the date was pushed by the filter and
+     * again as `ongoing`, and a looping rubato covering the date matched both of the two
+     * separate `if`s below (issue #47). Every caller took `[0]`, so nothing was wrong today —
+     * but "the instructions in force at a date" is a set to anyone reading the name, and the
+     * `Set` works here because `viewOf` caches per element, so two reads of one instruction are
+     * the same object.
+     *
+     * `articulation`, `ornament` and `asynchrony` have no branch: they are instantaneous, so
+     * being in force at a date and being *at* it are the same thing, and the filter above has
+     * already answered. That is a statement about MPM, not an omission.
+     *
      * Ported from mpm-ts, with its loop variable corrected — it read the *requested* type
      * rather than the one being looped over, so an untyped call classified every instruction
      * as whatever type the loop had reached. `InsertRubato`, the only caller, always names a
      * type and never saw it.
+     *
+     * @param beatDenominator the note value one beat of an `<accentuationPatternDef>` is worth,
+     * as a time-signature denominator. An MPM document does not carry the metre — the score
+     * does — so a caller that knows it has to say, and 4 is the assumption rather than the
+     * truth. It used to be spelled `* 720 * 4 / 4`, with the denominator's place left in the
+     * arithmetic as the cancelling `4 / 4` (issue #42).
      */
-    instructionsEffectiveAtDate<K extends InstructionType>(date: number, type: K, scope?: Scope): InstructionOf<K>[]
-    instructionsEffectiveAtDate(date: number, type?: undefined, scope?: Scope): AnyInstruction[]
-    instructionsEffectiveAtDate(date: number, type?: InstructionType, scope?: Scope): AnyInstruction[] {
+    instructionsEffectiveAtDate<K extends InstructionType>(date: number, type: K, scope?: Scope, beatDenominator?: number): InstructionOf<K>[]
+    instructionsEffectiveAtDate(date: number, type?: undefined, scope?: Scope, beatDenominator?: number): AnyInstruction[]
+    instructionsEffectiveAtDate(date: number, type?: InstructionType, scope?: Scope, beatDenominator = 4): AnyInstruction[] {
         const scopes: Scope[] = scope !== undefined ? [scope] : this.scopes()
         const types = type ? [type] : instructionTypes
 
-        const result: AnyInstruction[] = []
+        const result = new Set<AnyInstruction>()
         for (const instructionType of types) {
             for (const one of scopes) {
                 const instructions = this.getInstructions(instructionType, one)
 
-                result.push(...instructions.filter(instruction => instruction.date === date))
+                for (const instruction of instructions) {
+                    if (instruction.date === date) result.add(instruction)
+                }
 
                 const ongoing = instructions.slice().reverse().find(i => i.date <= date)
                 if (!ongoing) continue
 
                 if (instructionType === 'tempo' || instructionType === 'dynamics' || instructionType === 'movement') {
-                    result.push(ongoing)
+                    result.add(ongoing)
                 }
                 else if (instructionType === 'rubato') {
                     const rubato = ongoing as Rubato
-                    if (rubato.loop) result.push(ongoing)
-                    if (date < (rubato.date + rubato.frameLength)) result.push(ongoing)
+                    if (rubato.loop || date < (rubato.date + rubato.frameLength)) result.add(ongoing)
                 }
                 else if (instructionType === 'accentuationPattern') {
                     const pattern = ongoing as AccentuationPattern
                     const def = pattern['name.ref']
                         ? this.getDefinition('accentuationPatternDef', pattern['name.ref']) as AccentuationPatternDef | null
                         : null
-                    // `@length` is in bars; this reads them as whole notes, which is the 4/4
-                    // the expression's `* 4 / 4` was spelling out. Unchanged, just named.
-                    if (def && date < pattern.date + def.length * PULSES_PER_WHOLE / 4) {
-                        result.push(ongoing)
+                    // `@length` is in beats, and a beat is `4 * ppq / denominator` ticks — the
+                    // same conversion espressivo's `MetricalAccentuationMap` makes when it
+                    // renders the pattern.
+                    if (def && date < pattern.date + def.length * PULSES_PER_WHOLE / beatDenominator) {
+                        result.add(ongoing)
                     }
                 }
             }
         }
-        return result
+        return [...result]
     }
 
     // ── metadata ──────────────────────────────────────────────────
