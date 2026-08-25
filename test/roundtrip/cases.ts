@@ -35,7 +35,8 @@ export const tierTwoCases: Case[] = [
                 { date: END, bpm: 60 },
             ],
         },
-        bounds: { onset: { mean: 1.5, max: 3.5 }, duration: { mean: 2.5, max: 7 }, velocity: { max: 0.5 } },
+        // Exact since #39. It was mean 0.88 / max 2.10.
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { max: 0.5 } },
     },
     {
         name: 'tempo: accelerando 60 to 120',
@@ -46,10 +47,10 @@ export const tierTwoCases: Case[] = [
                 { date: END, bpm: 120 },
             ],
         },
-        // The mirror image of the ritardando above, and it fits far worse: the fitter's
-        // elapsed-time constraint is outweighed by its IOI term. See issue #39.
-        note: 'issue #39 — accelerandi fit worse than the mirror-image decelerandi',
-        bounds: { onset: { mean: 7, max: 18 }, duration: { mean: 6, max: 18 }, velocity: { max: 0.5 } },
+        // The mirror image of the ritardando above, and it used to fit five times worse — mean
+        // 4.42 / max 12.18 against 0.88 / 2.10 — because the fitter's two steps descended
+        // different objectives and the pair diverged on an accelerando. Both are exact now (#39).
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { max: 0.5 } },
     },
     {
         name: 'tempo: two segments, slower then faster',
@@ -61,8 +62,13 @@ export const tierTwoCases: Case[] = [
                 { date: 16 * QUARTER, bpm: 110 },
             ],
         },
-        note: 'issue #39 — the accelerando half carries the error',
-        bounds: { onset: { mean: 4, max: 9 }, duration: { mean: 3, max: 8 }, velocity: { max: 0.5 } },
+        // All of what is left is `TURNING_EPS`. The fit is at the optimum the rounding prior
+        // allows — 100.44 → 70.51 → 110.87 against a truth of 100 → 70 → 110 — but that prior
+        // forbids a *linear* shape either side of a turn, and this truth is linear on both
+        // sides: the shapes are held at 0.48 and 0.52 where 0.5 would round-trip exactly. The
+        // single-segment cases above, which have no turn, are exact.
+        note: 'the rounded-turn prior cannot represent a linear approach to a turn',
+        bounds: { onset: { mean: 4, max: 12 }, duration: { mean: 2.5, max: 6.5 }, velocity: { max: 0.5 } },
     },
     {
         name: 'dynamics: constant',
@@ -189,7 +195,12 @@ export const tierTwoCases: Case[] = [
             tempo: STEADY_TEMPO,
             rubato: [{ date: 0, frameLength: 4 * QUARTER, intensity: 0.7, loop: true }],
         },
-        bounds: { onset: { mean: 105, max: 300 }, duration: { mean: 80, max: 330 }, velocity: { max: 0.5 } },
+        // The figures here rose with #39 — onset was mean 25.04 / max 130.95 — and rose for the
+        // reason above rather than against it. The tempo fitter now reproduces the onsets it is
+        // given, and the onsets it is given are warped, so more of the warp ends up in the tempo
+        // curve: over a window that is 1.75 rubato frames long, a steady 120 comes back as
+        // 54 → 128. Fitting tempo and rubato in sequence is the defect, not the fitter.
+        bounds: { onset: { mean: 105, max: 260 }, duration: { mean: 80, max: 140 }, velocity: { max: 0.5 } },
     },
     {
         name: 'accentuation: 4/4 metrical pattern',
@@ -350,7 +361,7 @@ export const tierThreeCases: Case[] = [
                 { date: END, volume: 100 },
             ],
         },
-        bounds: { onset: { mean: 0.5, max: 1 }, duration: { mean: 0.5, max: 1 }, velocity: { mean: 0.9, max: 2 } },
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { mean: 0.9, max: 2 } },
     },
     {
         name: 'tempo + dynamics + alternating articulation',
@@ -374,7 +385,7 @@ export const tierThreeCases: Case[] = [
         },
         // A moving dynamics curve under a per-note articulation: the same averaging limit as
         // the tier-2 case above, now with a curve that moves for a second reason.
-        bounds: { onset: { mean: 0.5, max: 1 }, duration: { mean: 0.5, max: 1 }, velocity: { mean: 17, max: 35 } },
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { mean: 17, max: 35 } },
     },
     {
         name: 'tempo + rubato',
@@ -399,7 +410,7 @@ export const tierThreeCases: Case[] = [
         // what an alignment is and what a render is not. They are covered in test/tempo instead.
         note: 'the tempo fitter runs first, over onsets the rubato has already warped, and a '
             + 'moving tempo gives it more room to explain them away than the steady one above',
-        bounds: { onset: { mean: 195, max: 430 }, duration: { mean: 130, max: 600 }, velocity: { max: 0.5 } },
+        bounds: { onset: { mean: 145, max: 410 }, duration: { mean: 165, max: 290 }, velocity: { max: 0.5 } },
     },
     {
         name: 'tempo + dynamics + accentuation',
@@ -427,8 +438,17 @@ export const tierThreeCases: Case[] = [
         name: 'all five aspects at once',
         score: { beats: 17 },
         truth: EVERYTHING,
-        note: 'issue #39 — the accelerando dominates',
-        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 820, max: 1480 }, velocity: { mean: 8, max: 20 } },
+        // The one row in this file where #39 moved a figure the wrong way, and it is the same
+        // ordering as the two rubato cases above. Every parameter got closer to the truth — the
+        // shared boundary tempo lands on 78.12 against a truth of 78, where it used to be a flat
+        // 94 followed by a ramp to 387 BPM, and the four rubato intensities cluster at
+        // 0.64–0.80 against a truth of 0.6 where they used to spread over 0.28–0.68. Three of
+        // the four timing figures improved with them: worst onset 822 → 575, duration 458 → 310
+        // mean and 1011 → 752 max. Mean onset went 181 → 317, because a tempo curve that now
+        // reproduces the onsets it was handed reproduces the rubato in them too, and leaves the
+        // rubato fitter a residual that is no longer the warp it is built to describe.
+        note: 'tempo is fitted before rubato, over onsets rubato has already warped',
+        bounds: { onset: { mean: 415, max: 750 }, duration: { mean: 405, max: 980 }, velocity: { mean: 8, max: 20 } },
     },
     {
         name: 'all five aspects, boundaries withheld',
@@ -440,7 +460,7 @@ export const tierThreeCases: Case[] = [
         // should do that clustering, and issue #25 says it cannot: it clusters on the very
         // attributes `InsertArticulation` has just blanked.
         note: 'issue #25 — the chain cannot recover the segmentation it was not given',
-        bounds: { onset: { mean: 265, max: 1410 }, duration: { mean: 1310, max: 3070 }, velocity: { mean: 17, max: 31 } },
+        bounds: { onset: { mean: 210, max: 490 }, duration: { mean: 330, max: 1350 }, velocity: { mean: 17, max: 31 } },
     },
 ]
 

@@ -4,6 +4,7 @@ import { describe, test, expect } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Tempo } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
+import { computeMillisecondsAt, TempoWithEndDate } from "../../src/transformers/tempo/tempoCalculations"
 
 /** Call the protected `transform` method for testing */
 function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: MPM) {
@@ -475,7 +476,7 @@ describe('ApproximateLogarithmicTempo', () => {
         expect(tempos[0].bpm).toBeCloseTo(100, 0);
     });
 
-    test('silentOnsets with reference timing mixed into slower student creates negative BPM', () => {
+    test('silentOnsets carrying another performance\'s timing cannot produce a negative BPM', () => {
         // Models the actual Träumerei pipeline:
         //
         // The segment for m2.2 covers dates 3600–5760 (beatLength=0.25).
@@ -493,9 +494,12 @@ describe('ApproximateLogarithmicTempo', () => {
         //   date 5040 →  7.7s  (reference silentOnset!)  ← backwards!
         //   date 5760 → ~11.5s (student)
         //
-        // computeTempoPoints skips the backward interval (4320→5040),
-        // leaving sparse/biased data that the regression can extrapolate
-        // to negative BPM at a segment boundary.
+        // The data is self-contradictory and no tempo curve describes it, so what the fit
+        // returns is not the point. What is, is that it stays a tempo: the fit used to
+        // extrapolate a sparse downward trend straight through zero and write a *negative* BPM,
+        // which the renderer turns into negative elapsed time. Boundary tempos are now held to
+        // the same 5–600 BPM band an inter-onset interval has to fall in to be believed, so a
+        // fit with nothing to say saturates at the edge of that band instead of leaving it.
 
         // Student notes: monotonic but much slower than reference.
         // Reference would be at ~80 BPM; student at ~30 BPM.
@@ -521,16 +525,15 @@ describe('ApproximateLogarithmicTempo', () => {
 
         const tempos = fitAndGetTempos(onsets, 5 * BEAT, 8 * BEAT, 0.25, silentOnsets);
 
-        // The silentOnset at 5040 (7.7s) is ~6s earlier than the student's
-        // actual onset at that date (14s). This creates a backwards jump in
-        // the onset sequence, causing computeTempoPoints to skip the interval
-        // before the silentOnset. The surviving data has a steep downward trend
-        // that the regression extrapolates to negative BPM at the segment end.
         expect(tempos).toHaveLength(2);
-        const hasNegative = tempos.some(t =>
-            t.bpm < 0 || (t['transition.to'] !== undefined && t['transition.to'] < 0)
-        );
-        expect(hasNegative).toBe(true);
+        for (const tempo of tempos) {
+            for (const bpm of [tempo.bpm, tempo['transition.to']]) {
+                if (bpm === undefined) continue;
+                expect(Number.isFinite(bpm)).toBe(true);
+                expect(bpm).toBeGreaterThanOrEqual(5);
+                expect(bpm).toBeLessThanOrEqual(600);
+            }
+        }
     });
 
     // Superseded by test/roundtrip: the 'tempo: ritardando' and 'tempo: accelerando' cases
@@ -565,5 +568,127 @@ describe('ApproximateLogarithmicTempo', () => {
         expect(tempos.find(t => t.date === 0 && t.beatLength === 0.5)).toBeDefined();
         // The new segment should be fitted independently
         expect(tempos.find(t => t.date === 4 * BEAT && t.beatLength === 0.25)).toBeDefined();
+    });
+});
+
+/**
+ * Issue #39, measured the way the issue measured it.
+ *
+ * Every case here is a `<tempo>` the renderer can draw exactly, so a fitter that inverts the
+ * renderer has to recover it to the last digit — anything above zero is the fitter's own error
+ * and nothing else's. The `generateOnsets` cases above integrate the curve themselves and so
+ * carry a quadrature difference of their own; these do not.
+ *
+ * The right-hand column is what the fitter measured when the issue was filed. It reported the
+ * cause as the elapsed-time term being outweighted by the IOI term, and that turned out not to
+ * be it: scored by the *old* objective the truth beat the fit by a factor of 300 000, so the
+ * fitter was not choosing the wrong optimum but failing to reach its own. Its two steps
+ * descended different functions, and on an accelerando the pair diverged — every figure got
+ * monotonically worse for all 30 iterations and the loop stopped by running out of them.
+ */
+describe('recovering a curve the renderer can draw exactly (#39)', () => {
+    const NBEATS = 16;
+
+    const truthSpan = (bpm: number, to: number, im: number, beats: number): TempoWithEndDate => ({
+        type: 'tempo', 'xml:id': 'truth', date: 0, endDate: beats * BEAT,
+        beatLength: 0.25, bpm, 'transition.to': to, meanTempoAt: im,
+    });
+
+    const renderOnsets = (span: TempoWithEndDate, beats: number) =>
+        Array.from({ length: beats + 1 }, (_, beat) => ({
+            date: beat * BEAT,
+            onset: computeMillisecondsAt(beat * BEAT, span) / 1000,
+        }));
+
+    //                                                     was, at the time of the issue
+    const cases: [number, number, number, string][] = [
+        [60, 90, 0.50, '0.3 ms'],
+        [90, 45, 0.70, '5.7 ms'],
+        [120, 60, 0.25, '8.5 ms'],
+        [72, 108, 0.65, '32.1 ms'],
+        [60, 120, 0.30, '130.9 ms'],
+        [60, 120, 0.70, '157.2 ms'],
+        // The pair that made the asymmetry visible: same shape, same 2:1 ratio, and the
+        // accelerando fitted 27 times worse than the ritardando.
+        [45, 90, 0.70, '209.6 ms'],
+        // Shapes at the ends of the writable range, which the renderer's Simpson rule integrates
+        // least well and which a fit measured against anything else gets wrong by several ms.
+        [60, 120, 0.05, 'untested'],
+        [120, 60, 0.95, 'untested'],
+    ];
+
+    for (const [bpm, to, im, before] of cases) {
+        test(`${bpm} → ${to} at im ${im} (was ${before} out)`, () => {
+            const truth = truthSpan(bpm, to, im, NBEATS);
+            const onsets = renderOnsets(truth, NBEATS);
+
+            const fitted = ApproximateLogarithmicTempo.preview({
+                scope: 'global', from: 0, to: NBEATS * BEAT, beatLength: 0.25, silentOnsets: [],
+            }, buildMsm(onsets));
+
+            expect(fitted).toHaveLength(1);
+            const refit = truthSpan(
+                fitted[0].bpm, fitted[0]['transition.to'] ?? fitted[0].bpm,
+                fitted[0].meanTempoAt ?? 0.5, NBEATS);
+
+            for (const { date, onset } of onsets) {
+                expect(computeMillisecondsAt(date, refit) / 1000).toBeCloseTo(onset, 3);
+            }
+        });
+    }
+
+    test('a shorter segment is recovered as exactly as a long one', () => {
+        // Four beats, five onsets, three unknowns. The old fitter needed length to average its
+        // way past the IOI term's bias; this one is solving for the curve that produced the
+        // onsets, so the shortest identifiable segment is enough.
+        const truth = truthSpan(60, 120, 0.7, 4);
+        const onsets = renderOnsets(truth, 4);
+
+        const fitted = ApproximateLogarithmicTempo.preview({
+            scope: 'global', from: 0, to: 4 * BEAT, beatLength: 0.25, silentOnsets: [],
+        }, buildMsm(onsets));
+
+        expect(fitted[0].bpm).toBeCloseTo(60, 2);
+        expect(fitted[0]['transition.to']!).toBeCloseTo(120, 2);
+        expect(fitted[0].meanTempoAt!).toBeCloseTo(0.7, 3);
+    });
+
+    test('the fit is a chord\'s median onset, not whichever note is listed first', () => {
+        // A spread chord: the notes of each beat are 40 ms apart, and the middle one is on the
+        // beat. Reading the first note read the earliest of them, which is a 20 ms bias on
+        // every onset in the piece — and a bias in the onsets is a bias in the tempo.
+        const truth = truthSpan(90, 45, 0.7, 8);
+        const beats = renderOnsets(truth, 8);
+        const spread = [-0.02, 0, 0.02];
+        const notes = beats.flatMap((beat, index) => spread.map((offset, voice) => ({
+            'xml:id': `n_1_${index}_${voice}`, date: beat.date, part: 1,
+            pitchname: 'g' as const, octave: 4 + voice, duration: BEAT, accidentals: 0,
+            'midi.pitch': 67 + 12 * voice, 'midi.onset': beat.onset + offset,
+            'midi.duration': 0.5, 'midi.velocity': 100,
+        })));
+
+        const fitted = ApproximateLogarithmicTempo.preview({
+            scope: 'global', from: 0, to: 8 * BEAT, beatLength: 0.25, silentOnsets: [],
+        }, new MSM(notes, { numerator: 4, denominator: 4 }));
+
+        expect(fitted[0].bpm).toBeCloseTo(90, 2);
+        expect(fitted[0]['transition.to']!).toBeCloseTo(45, 2);
+        expect(fitted[0].meanTempoAt!).toBeCloseTo(0.7, 3);
+    });
+
+    test('the same request twice gives the same answer', () => {
+        // The shape search used to anneal, and a seeded anneal is only as reproducible as the
+        // order it is seeded in. There is nothing random left in the fit.
+        const truth = truthSpan(72, 108, 0.65, 12);
+        const onsets = renderOnsets(truth, 12);
+        const request = {
+            scope: 'global' as const, from: 0, to: 12 * BEAT, beatLength: 0.25, silentOnsets: [],
+        };
+        const first = ApproximateLogarithmicTempo.preview(request, buildMsm(onsets));
+        const second = ApproximateLogarithmicTempo.preview(request, buildMsm(onsets));
+
+        expect(second[0].bpm).toBe(first[0].bpm);
+        expect(second[0]['transition.to']).toBe(first[0]['transition.to']);
+        expect(second[0].meanTempoAt).toBe(first[0].meanTempoAt);
     });
 });
