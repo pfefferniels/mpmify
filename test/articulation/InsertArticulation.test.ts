@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
-import { Articulation, ArticulationDef, MPM, Style } from "../../src/mpm"
+import { Articulation, ArticulationDef, MPM } from "../../src/mpm"
 import { InsertArticulation } from "../../src/transformers"
 
 /**
@@ -77,19 +77,10 @@ test('the definition holds the mean of the measured aspect', () => {
     expect(def.relativeDuration).toBeCloseTo(1.25, 10)
 })
 
-test('it puts the styleDef holding the definition in scope', () => {
-    const msm = msmFixture()
-    const mpm = new MPM()
 
-    run(msm, mpm)
-
-    // Without a <style> switch, @name.ref resolves to nothing and the articulation is inert.
-    // See old-bugs.md.
-    const styles = mpm.getStyles('articulation', 'global') as Style[]
-    expect(styles).toHaveLength(1)
-    expect(styles[0].date).toBe(0)
-    expect(styles[0]['name.ref']).toBe('performance_style')
-})
+// The <style> switch is now checked on every fitted MPM the round-trip suite produces: see
+// the 'a map that references definitions switches to a style' invariant in
+// test/roundtrip/invariants.ts.
 
 test('it takes the definition back out of the notes, leaving the residual duration', () => {
     const msm = msmFixture()

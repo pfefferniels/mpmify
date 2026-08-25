@@ -4,7 +4,6 @@ import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { Dynamics, MPM } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
-import { performMsmToData } from "espressivo"
 
 /**
  * Quickly generates a simple MSM note
@@ -67,21 +66,10 @@ test('it fits one <dynamics> across the range, from the first velocity to the la
     expect(dynamics[0]['transition.to']).toBe(100)
 })
 
-test('it closes the fitted transition, which is what makes the transition render', () => {
-    const msm = msmFixture()
-    const mpm = new MPM()
 
-    run(msm, mpm)
-
-    // An open `transition.to` is not a curve stretched to the end of the piece: the renderer
-    // drops the transition and holds `volume`. So the fit writes the instruction that ends its
-    // span, holding the volume the curve arrives at. See issue #24.
-    const dynamics = mpm.getInstructions<Dynamics>('dynamics', 'global')
-    expect(dynamics).toHaveLength(2)
-    expect(dynamics[1].date).toBe(msm.lastDate())
-    expect(dynamics[1].volume).toBe(100)
-    expect(dynamics[1]['transition.to']).toBeUndefined()
-})
+// The closing instruction (issue #24) is now checked structurally on *every* fitted MPM the
+// round-trip suite produces, rather than on this one fixture: see the 'every transition is
+// closed' invariant in test/roundtrip/invariants.ts.
 
 test('it leaves the residual velocity the curve does not explain on every note', () => {
     const msm = msmFixture()
@@ -112,20 +100,7 @@ test('the fitting window is not written into the document', () => {
     expect(mpm.toXML()).not.toContain('endDate')
 })
 
-test('the fitted curve is what espressivo renders', () => {
-    const msm = msmFixture()
-    const mpm = new MPM()
 
-    run(msm, mpm)
-
-    // The render is the point of the closing instruction: left open, the transition is dropped
-    // and every note comes out at the starting volume. See issue #24.
-    const data = performMsmToData({ msm: msm.serialize(false), mpm: mpm.toXML() })
-    const velocities = data.parts.flatMap(part => part.notes).map(note => note.velocity)
-
-    expect(velocities).toHaveLength(3)
-    expect(velocities[0]).toBe(50)
-    expect(velocities[2]).toBe(100)
-    expect(velocities[1]).toBeGreaterThan(velocities[0])
-    expect(velocities[1]).toBeLessThan(velocities[2])
-})
+// Superseded by test/roundtrip: 'dynamics: linear crescendo 40 to 100' renders the fit and
+// measures the velocity error against the performance it was fitted to, which is strictly
+// stronger than asserting the middle note lies between the outer two.

@@ -65,12 +65,52 @@ export interface AccentuationTruth {
     accentuations: { beat: number, value: number, 'transition.to'?: number }[]
 }
 
+export interface OrnamentDefSpec {
+    name: string
+    /**
+     * The roll. `frame.start` and `frameLength` are in `time.unit`, and the pool is spread
+     * across the frame in `note.order`.
+     */
+    temporalSpread?: {
+        'frame.start': number
+        frameLength: number
+        'time.unit'?: 'milliseconds' | 'ticks'
+        'noteoff.shift'?: 'true' | 'false' | 'monophonic'
+        intensity?: number
+    }
+    /**
+     * The velocity ramp across the roll, in normalized units. What reaches the performance is
+     * `transition.* x @scale` on the instruction — see the note on `scale` below.
+     */
+    dynamicsGradient?: {
+        'transition.from': number
+        'transition.to': number
+    }
+}
+
+export interface OrnamentationTruth {
+    defs: OrnamentDefSpec[]
+    instructions: {
+        date: number
+        'name.ref': string
+        /**
+         * Multiplies both ends of the `<dynamicsGradient>`, and **gates it entirely**: an
+         * absent `@scale` reads as 0.0, so a def carrying a gradient performs nothing at all
+         * while its temporal spread still applies in full. A gradient case that omits this
+         * would render as a plain roll and round-trip perfectly while testing nothing.
+         */
+        scale?: number
+        'note.order'?: string
+    }[]
+}
+
 export interface Truth {
     tempo?: TempoSpan[]
     dynamics?: DynamicsSpan[]
     articulation?: ArticulationTruth
     rubato?: RubatoFrame[]
     accentuation?: AccentuationTruth
+    ornamentation?: OrnamentationTruth
 }
 
 const STYLE = 'truth_style'
@@ -175,6 +215,35 @@ export const truthMpm = (truth: Truth, notes: ScoreNote[] = []): string => {
                 scale: pattern.scale,
                 loop: pattern.loop ?? true,
             })))
+    }
+
+    if (truth.ornamentation) {
+        const ornamentation = truth.ornamentation
+        styles.push(element('ornamentationStyles', {}, element('styleDef', { name: STYLE },
+            ornamentation.defs
+                .map(def => element('ornamentDef', { name: def.name },
+                    (def.temporalSpread
+                        ? element('temporalSpread', {
+                            'frame.start': def.temporalSpread['frame.start'],
+                            frameLength: def.temporalSpread.frameLength,
+                            'time.unit': def.temporalSpread['time.unit'] ?? 'milliseconds',
+                            'noteoff.shift': def.temporalSpread['noteoff.shift'] ?? 'false',
+                            intensity: def.temporalSpread.intensity ?? 1,
+                        })
+                        : '')
+                    + (def.dynamicsGradient ? element('dynamicsGradient', { ...def.dynamicsGradient }) : '')))
+                .join(''))))
+        maps.push(element('ornamentationMap', {},
+            element('style', { date: 0, 'name.ref': STYLE })
+            + ornamentation.instructions
+                .map((instruction, index) => element('ornament', {
+                    date: instruction.date,
+                    'xml:id': `truth_orn_${index}`,
+                    'name.ref': instruction['name.ref'],
+                    scale: instruction.scale,
+                    'note.order': instruction['note.order'] ?? 'ascending pitch',
+                }))
+                .join('')))
     }
 
     if (truth.articulation) {

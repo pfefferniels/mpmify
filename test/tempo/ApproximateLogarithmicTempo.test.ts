@@ -4,7 +4,6 @@ import { describe, test, expect } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Tempo } from "../../src/mpm"
 import { ApproximateLogarithmicTempo, SilentOnset } from "../../src/transformers/tempo/ApproximateLogarithmicTempo"
-import { performMsmToData } from "espressivo"
 
 /** Call the protected `transform` method for testing */
 function callTransform(transformer: ApproximateLogarithmicTempo, msm: MSM, mpm: MPM) {
@@ -534,30 +533,9 @@ describe('ApproximateLogarithmicTempo', () => {
         expect(hasNegative).toBe(true);
     });
 
-    test('the fitted curve is what espressivo renders', () => {
-        const totalTicks = 8 * BEAT;
-        const onsets = generateOnsets((d) => 60 + 60 * (d / totalTicks), 8);
-
-        const msm = buildMsm(onsets);
-        const mpm = new MPM();
-        callTransform(new ApproximateLogarithmicTempo({
-            scope: 'global', from: 0, to: totalTicks, beatLength: 0.25, silentOnsets: []
-        }), msm, mpm);
-
-        // The render is the point of the closing instruction: left open, the transition is
-        // dropped and the whole span comes out at a flat 60 bpm. See issue #24.
-        const data = performMsmToData({ msm: msm.serialize(false), mpm: mpm.toXML() });
-        const dates = data.parts.flatMap(part => part.notes).map(note => note.milliseconds.date);
-        const iois = dates.slice(1).map((date, i) => date - dates[i]);
-
-        expect(iois).toHaveLength(8);
-        for (let i = 1; i < iois.length; i++) {
-            expect(iois[i]).toBeLessThan(iois[i - 1]);
-        }
-        // 60 bpm for the first beat, 120 for the last: the span roughly halves.
-        expect(iois[0]).toBeGreaterThan(900);
-        expect(iois[iois.length - 1]).toBeLessThan(550);
-    });
+    // Superseded by test/roundtrip: the 'tempo: ritardando' and 'tempo: accelerando' cases
+    // render the fit and measure the onset error in milliseconds, rather than asserting only
+    // that the inter-onset intervals decrease.
 
     test('continue chain stops at different beatLength', () => {
         const onsets = generateOnsets(() => 100, 8);

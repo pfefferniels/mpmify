@@ -1,6 +1,6 @@
 import { expect } from "vitest"
 import { Bound, Case, describe as describeErrors, roundTrip, RoundTripResult } from "./harness"
-import { assertWellFormed } from "./invariants"
+import { assertWellFormed, findViolations } from "./invariants"
 
 /**
  * What every render-tier case asserts, in one place.
@@ -24,7 +24,11 @@ export const expectCase = (spec: Case): RoundTripResult => {
         .toBeGreaterThan(0)
 
     // (2) Structure before measurement.
-    assertWellFormed(result.fittedXml, `the MPM fitted for "${spec.name}"`)
+    if (spec.knownViolations?.length) {
+        expectExactlyTheKnownViolations(spec, result.fittedXml)
+    } else {
+        assertWellFormed(result.fittedXml, `the MPM fitted for "${spec.name}"`)
+    }
 
     // (3) Every note the truth sounded has to come back.
     expect(result.errors.missing, `notes the refit failed to produce in "${spec.name}"`).toBe(0)
@@ -55,4 +59,21 @@ const checkBound = (
     if (bound.max !== undefined) {
         expect(measured.max, context).toBeLessThanOrEqual(bound.max)
     }
+}
+
+/**
+ * A case that declares known violations must produce exactly those and no others.
+ *
+ * The exactness is the point. A ceiling ("at most these") would let a second, unrelated defect
+ * hide behind a declared one, and would let a fix go unnoticed. Failing in both directions makes
+ * the declaration a statement about the current state that has to be maintained.
+ */
+const expectExactlyTheKnownViolations = (spec: Case, xml: string) => {
+    const found = [...new Set(findViolations(xml).map(violation => violation.check))].sort()
+    const declared = [...new Set(spec.knownViolations)].sort()
+    const detail = findViolations(xml).map(v => `  [${v.check}] ${v.detail}`).join('\n')
+
+    expect(found, `"${spec.name}" declares ${JSON.stringify(declared)}`
+        + (spec.note ? ` for ${spec.note}` : '')
+        + `\n  found:\n${detail}`).toEqual(declared)
 }

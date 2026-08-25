@@ -87,6 +87,7 @@ npm run test:roundtrip:report
 | `invariants.ts` | The structural checks |
 | `expectations.ts` | What every render-tier case asserts |
 | `cases.ts` | The coverage matrix and its recorded bounds |
+| `pedal.test.ts` | Pedalling, which is deliberately not a round trip — see the file |
 | `report.test.ts` | Opt-in: print what every case currently measures |
 
 `truth.ts` deliberately does **not** use mpmify's own `MPM` class. If the truth went through the
@@ -95,14 +96,39 @@ round trip would pass on wrong output. The only code the truth path shares with 
 test is espressivo's renderer — which is the point: the renderer is the arbiter of what an MPM
 document means, and the fit is being measured against that meaning.
 
+## Known violations
+
+A case may declare `knownViolations` — structural checks it currently fails — alongside a `note`
+naming the issue. This is asserted as an **exact set**, not a ceiling: a new violation fails, and
+so does one that has been fixed but left declared. That keeps the suite green without weakening
+the invariant, and makes the declaration something that has to be maintained rather than
+something that quietly accumulates.
+
+All three ornamentation cases carry one today, and between them they pin a causal chain:
+
+1. a roll that begins before its beat (the ordinary arpeggio) converts to a `NaN` frame, because
+   `TranslatePhysicalTimeToTicks` has no tempo instruction covering a negative time (#26);
+2. an ornament that never had a frame is given a `NaN` one anyway, which is what strips the
+   gradient-only case;
+3. `StylizeOrnamentation.asDef` stamps `@name.ref` on the ornament *before* its caller decides
+   whether to insert the definition, so a skipped definition leaves a dangling reference (#28);
+4. and `asDef` guards the `<dynamicsGradient>` with a truthiness test on `transition.to`, so a
+   crescendo — whose `transition.to` is `0`, mpmify's own default — loses its gradient entirely
+   (#46).
+
+The net effect is that ornamentation does not survive the chain in the common cases. None of it
+is visible one transformer at a time.
+
 ## What is not covered yet
 
-- **Ornamentation** (`InsertTemporalSpread`, `InsertDynamicsGradient`, `StylizeOrnamentation`)
-  and **pedalling** (`InsertPedal`, `movementMap`). Both are renderable, so both fit this
-  harness; neither has a case.
+- **Pedalling is covered, but not as a round trip.** `InsertPedal` takes the movement's shape
+  from constructor options rather than fitting it, so a round trip would only measure the option
+  values this suite itself chose. `pedal.test.ts` asserts what is left: the movements land on the
+  pedal, the document is sound, and the renderer produces an actual sustain stream from it.
 - **Asynchrony.** `InsertAsynchrony` assumes a two-part score and is not registered (#31, #45).
-- **Multi-part scores.** `MSM.serialize` writes exactly two `<part>` elements (#34), so
-  `buildScore` refuses more than two separate parts rather than silently dropping them.
+- **Multi-part scores.** `buildScore` can put voices in separate parts, but no case does; every
+  chord here sits in one part. Nothing in the harness assumes that, so a two-part case is a
+  matter of writing one.
 - **Real performance data.** Every case here is synthetic, which is what makes the ground truth
   exact. #51 asks for an in-repo aligned MEI as well; that measures something different — how
   the chain does on a performance no MPM produced — and does not replace this.

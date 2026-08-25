@@ -7,6 +7,9 @@ import { compareTransformers } from "../../src/transformers"
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo"
 import { InsertDynamicsInstructions } from "../../src/transformers/dynamics"
 import { InsertRubato } from "../../src/transformers/rubato/InsertRubato"
+import { CombineAdjacentRubatos } from "../../src/transformers/rubato/CombineAdjacentRubatos"
+import { InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "../../src/transformers/ornamentation"
+
 import { InsertArticulation, ArticulationProperty } from "../../src/transformers/articulation/InsertArticulation"
 import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
 import { InsertMetricalAccentuation, MergeMetricalAccentuations } from "../../src/transformers/accentuation"
@@ -78,6 +81,14 @@ export interface Case {
      * is what "fixed" means for that issue.
      */
     bounds: Bounds
+    /**
+     * Structural checks this case currently violates, by check name.
+     *
+     * Asserted as an exact set, not a ceiling: a violation that appears fails, and so does one
+     * that has been fixed but left declared. A case may only carry this with a `note` naming the
+     * issue — it is a recorded gap, not a licence.
+     */
+    knownViolations?: string[]
     note?: string
 }
 
@@ -213,6 +224,21 @@ export const chainFor = (spec: Case, msm: MSM): Transformer[] => {
                 length: frame.frameLength,
             }))
         }
+
+        // A looping truth frame is one instruction; the fit is one per repetition. Folding them
+        // back is what `CombineAdjacentRubatos` is for, so a looping case has to run it or it
+        // is not testing what the truth says.
+        if (repetitions > 1) {
+            transformers.push(new CombineAdjacentRubatos({
+                scope: 'global',
+                intensityTolerance: 0.05,
+                compressionTolerance: 0.05,
+            }))
+        }
+    }
+
+    if (spec.truth.ornamentation) {
+        transformers.push(...ornamentationCalls(spec))
     }
 
     if (spec.truth.dynamics?.length) {
@@ -238,6 +264,52 @@ export const chainFor = (spec: Case, msm: MSM): Transformer[] => {
     }
 
     return transformers.sort(compareTransformers)
+}
+
+/**
+ * The ornamentation chain: fit the two families, then cluster them into definitions.
+ *
+ * Only the families the truth actually uses are fitted, so a spread-only case does not have a
+ * gradient fitter reading a chord it has nothing to say about. `StylizeOrnamentation` always
+ * runs: `InsertDynamicsGradient` writes `name.ref="neutralArpeggio"` and parks the attributes
+ * on the instruction, and it is the clustering step that turns those into the `<ornamentDef>`
+ * the reference resolves to. Without it the map names a definition that was never written —
+ * which tier 0 reports rather than measuring around.
+ *
+ * The registry orders `InsertTemporalSpread` before `InsertDynamicsGradient`, while the latter's
+ * own doc comment says the opposite ("should always take place before inserting temporal
+ * spread, since temporal spread will destroy the original order of MIDI onsets"). This chain
+ * follows the registry, because the registry is what the pipeline follows. See issue #32.
+ */
+const ornamentationCalls = (spec: Case): Transformer[] => {
+    const ornamentation = spec.truth.ornamentation!
+    const calls: Transformer[] = []
+
+    if (ornamentation.defs.some(def => def.dynamicsGradient)) {
+        calls.push(new InsertDynamicsGradient({
+            scope: 'global',
+            crescendo: { from: -1, to: 0 },
+            decrescendo: { from: 0, to: -1 },
+            sortVelocities: false,
+        }))
+    }
+
+    if (ornamentation.defs.some(def => def.temporalSpread)) {
+        calls.push(new InsertTemporalSpread({
+            scope: 'global',
+            placement: 'estimate',
+            durationThreshold: 35,
+            noteOffShiftTolerance: 500,
+        }))
+    }
+
+    calls.push(new StylizeOrnamentation({
+        tickTolerance: 10,
+        gradientTolerance: 0.1,
+        intensityTolerance: 0.3,
+    }))
+
+    return calls
 }
 
 /**

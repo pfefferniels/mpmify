@@ -191,6 +191,104 @@ export const tierTwoCases: Case[] = [
         },
         bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { max: 0.5 } },
     },
+    {
+        name: 'ornamentation: rolled chords',
+        // Three notes to a beat, so there is a chord to roll at all.
+        score: { beats: 4, pitches: [60, 64, 67] },
+        truth: {
+            tempo: STEADY_TEMPO,
+            dynamics: [{ date: 0, volume: 64 }],
+            ornamentation: {
+                defs: [{
+                    name: 'roll',
+                    temporalSpread: {
+                        'frame.start': -250, frameLength: 500,
+                        'time.unit': 'milliseconds', intensity: 1,
+                    },
+                }],
+                instructions: [
+                    { date: 0, 'name.ref': 'roll' },
+                    { date: 2 * QUARTER, 'name.ref': 'roll' },
+                ],
+            },
+        },
+        // Two identical rolls, and exactly one survives. The roll at date 0 starts 250 ms
+        // *before* the beat, and `TranslatePhysicalTimeToTicks` has no tempo instruction
+        // covering a negative time ("no tempo found for -250 ms"), so the frame converts to
+        // NaN. `StylizeOrnamentation.asDef` then stamps `name.ref` on the ornament *before* its
+        // caller decides whether to insert the def, so the NaN check skips the definition and
+        // leaves the reference dangling. The roll at 1440 converts fine and round-trips exactly.
+        //
+        // A roll that begins before its beat is the ordinary case for an arpeggio, so this is
+        // not a corner: every piece-initial ornament lands on it.
+        note: 'issues #26, #28 — a pre-beat frame converts to NaN, and the skipped def leaves '
+            + 'the @name.ref that was already stamped on the ornament',
+        knownViolations: ['@name.ref resolves'],
+        bounds: { onset: { mean: 55, max: 300 }, duration: { mean: 55, max: 300 }, velocity: { max: 0.5 } },
+    },
+    {
+        name: 'ornamentation: velocity gradient across the chord',
+        score: { beats: 4, pitches: [60, 64, 67] },
+        truth: {
+            tempo: STEADY_TEMPO,
+            dynamics: [{ date: 0, volume: 64 }],
+            ornamentation: {
+                defs: [{
+                    name: 'ramp',
+                    dynamicsGradient: { 'transition.from': -1, 'transition.to': 0 },
+                }],
+                // @scale gates the gradient entirely — without it the def performs nothing and
+                // this case would round-trip a plain chord. See the note on the field.
+                instructions: [
+                    { date: 0, 'name.ref': 'ramp', scale: 25 },
+                    { date: 2 * QUARTER, 'name.ref': 'ramp', scale: 25 },
+                ],
+            },
+        },
+        // Nothing survives: the whole gradient is lost, both chords. An ornament fitted by
+        // `InsertDynamicsGradient` carries no frame at all, but
+        // `TranslatePhysicalTimeToTicks` stamps one on it anyway — `NaN`, converted from
+        // nothing — which turns an ornament that had no frame into one with an unusable frame.
+        // `StylizeOrnamentation` then skips every definition, and the `<style>` switch it
+        // writes unconditionally names a `<styleDef>` that consequently never gets created.
+        note: 'issue #28 — gradient-only ornaments are stripped, and the style switch is '
+            + 'written whether or not any definition was',
+        knownViolations: ['@name.ref resolves'],
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { mean: 8, max: 30 } },
+    },
+    {
+        name: 'ornamentation: a roll that also swells',
+        score: { beats: 4, pitches: [60, 64, 67] },
+        truth: {
+            tempo: STEADY_TEMPO,
+            dynamics: [{ date: 0, volume: 64 }],
+            ornamentation: {
+                defs: [{
+                    name: 'roll',
+                    temporalSpread: {
+                        'frame.start': -250, frameLength: 500,
+                        'time.unit': 'milliseconds', intensity: 1,
+                    },
+                    dynamicsGradient: { 'transition.from': -1, 'transition.to': 0 },
+                }],
+                instructions: [
+                    { date: 0, 'name.ref': 'roll', scale: 25 },
+                    { date: 2 * QUARTER, 'name.ref': 'roll', scale: 25 },
+                ],
+            },
+        },
+        // Both families on one chord, and both losses above compound. On top of them, the one
+        // definition that does get written carries a `<temporalSpread>` and no
+        // `<dynamicsGradient>` at all, even though its ornament carries `scale="25"`:
+        // `asDef` guards the gradient with `transition.from !== undefined && transition.to`,
+        // and `transition.to` is **0** for a crescendo — falsy, so the gradient is dropped.
+        // mpmify's own default is `crescendo: { from: -1, to: 0 }`, so this fires on the
+        // default configuration rather than on some unusual value.
+        note: 'issues #26, #28, #46 — truthiness guards the gradient, and 0 is a legal '
+            + 'transition.to that mpmify itself emits by default',
+        knownViolations: ['@name.ref resolves'],
+        bounds: { onset: { mean: 55, max: 300 }, duration: { mean: 55, max: 300 }, velocity: { mean: 8, max: 30 } },
+    },
 ]
 
 /**
