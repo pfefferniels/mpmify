@@ -1,11 +1,12 @@
 import { InsertMetricalAccentuation, MergeMetricalAccentuations } from "./accentuation";
 import { InsertArticulation, MakeDefaultArticulation } from "./articulation";
 import { StylizeArticulation } from "./articulation/StylizeArticulation";
+import { InsertAsynchrony } from "./asynchrony/InsertAsynchrony";
 import { MakeChoice } from "./choice/MakeChoice";
 import { InsertDynamicsInstructions } from "./dynamics";
 import { InsertMetadata } from "./metadata";
 import { Modify } from "./modification/Modify";
-import { InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
+import { CompressOrnamentation, InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
 import { InsertPedal } from "./pedal/InsertPedalInstructions";
 import { CombineAdjacentRubatos } from "./rubato/CombineAdjacentRubatos";
 import { InsertRubato } from "./rubato/InsertRubato";
@@ -25,8 +26,18 @@ registerTransformer(Modify);
 registerTransformer(InsertDynamicsGradient);
 registerTransformer(InsertTemporalSpread);
 registerTransformer(ApproximateLogarithmicTempo);
+// Before `TranslatePhysicalTimeToTicks`, because it edits `midi.onset` and that transformer
+// reads the physical domain to convert it. Unregistered, it sorted *after* everything known —
+// `compareTransformers` ranks an unknown name last — so it ran on onsets the conversion had
+// already been done against, and `requires: []` meant `validate` said nothing either. `requires`
+// still cannot carry this: it asserts that a name appears *earlier* in the chain, which is the
+// opposite relation. See issue #31.
+registerTransformer(InsertAsynchrony);
 registerTransformer(TranslatePhysicalTimeToTicks);
 registerTransformer(StylizeOrnamentation);
+// After `StylizeOrnamentation`, which is also what its `requires` says: it rounds the frames of
+// the `<ornamentDef>`s that transformer writes, so there is nothing for it to round before.
+registerTransformer(CompressOrnamentation);
 registerTransformer(InsertRubato);
 registerTransformer(CombineAdjacentRubatos);
 registerTransformer(InsertDynamicsInstructions);
