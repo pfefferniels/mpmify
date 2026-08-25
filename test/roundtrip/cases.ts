@@ -397,14 +397,14 @@ export const tierThreeCases: Case[] = [
                 ],
             },
         },
-        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { mean: 4, max: 10 } },
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { mean: 0.7, max: 1.6 } },
     },
     {
         name: 'all five aspects at once',
         score: { beats: 17 },
         truth: EVERYTHING,
         note: 'issue #39 — the accelerando dominates',
-        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 820, max: 1480 }, velocity: { mean: 12, max: 29 } },
+        bounds: { onset: { mean: 240, max: 1070 }, duration: { mean: 820, max: 1480 }, velocity: { mean: 8, max: 20 } },
     },
     {
         name: 'all five aspects, boundaries withheld',

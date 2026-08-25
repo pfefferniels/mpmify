@@ -1,5 +1,6 @@
 import { Accentuation, AccentuationPattern, AccentuationPatternDef, DEFAULT_STYLE_NAME, MPM, Scope } from "../../mpm";
 import { MSM } from "../../msm";
+import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { InsertDynamicsInstructions } from "../dynamics";
@@ -37,7 +38,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
     }
 
-    private extractVelocities({ from: start, to: end, beatLength }: InsertMetricalAccentuationOptions, msm: MSM): Velocity[] {
+    private extractVelocities(
+        { from: start, to: end, beatLength }: InsertMetricalAccentuationOptions,
+        msm: MSM,
+        residual: Residual
+    ): Velocity[] {
         const ppq = 720
         const velocities = []
         const frameLength = end - start
@@ -45,11 +50,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             const date = start + beat * 4 * ppq
 
             const notesAtDate = msm.notesAtDate(date, this.options.scope)
-                .filter(note => note.absoluteVelocityChange !== undefined)
+                .filter(note => residual.of(note)?.velocity !== undefined)
             if (notesAtDate.length === 0) continue
 
             const avgVelocityChange = notesAtDate
-                .reduce((acc, note) => acc + note.absoluteVelocityChange, 0) / notesAtDate.length
+                .reduce((acc, note) => acc + residual.of(note)!.velocity!, 0) / notesAtDate.length
 
             velocities.push({
                 beat: msm.timeSignature.denominator * beat + 1,
@@ -116,7 +121,11 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         const nextCell = mpm.getInstructions<AccentuationPattern>('accentuationPattern', this.options.scope)
             .find(c => c.date > this.options.from);
 
-        const velocities = this.extractVelocities(this.options, msm)
+        // What the dynamics curve leaves unexplained, per note — the quantity this used to read
+        // off `absoluteVelocityChange`. Accentuation is held out because it is what this fits.
+        const residual = deriveResidual(msm, mpm, { without: ['accentuationPattern'] })
+
+        const velocities = this.extractVelocities(this.options, msm, residual)
         let scale = this.calculateScale(velocities)
         const accentuations = this.calculateAccentuations(velocities, this.options.neutralEnd)
 
@@ -136,7 +145,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
                 from: currentCell.start,
                 to: currentCell.end, 
                 beatLength: this.options.beatLength
-            }, msm)
+            }, msm, residual)
             const currentScale = this.calculateScale(currentVelocities)
             if (currentScale === 0) break
 
