@@ -1,10 +1,8 @@
 import { MPM, Ornament, Tempo } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { computeMillisecondsAt } from "./tempoCalculations";
-interface TempoWithEndDate extends Tempo {
-    endDate: number
-}
+import { computeMillisecondsAt, TempoWithEndDate } from "./tempoCalculations";
+import { addTickDurations, addTickOnsets, approximateDate } from "./tickTimes";
 
 export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
     /**
@@ -39,9 +37,9 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        this.addTickOnsets(msm, mpm)
+        addTickOnsets(msm, mpm)
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
-        this.addTickDurations(msm, mpm)
+        addTickDurations(msm, mpm)
     }
 
     private msToTicks(ms: number, tempos: Tempo[], msm: MSM) {
@@ -131,168 +129,5 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
         }
     }
 
-    /**
-     * Translates MIDI onset times into tempo-dependent
-     * ticks using the newly interpolated tempo curves.
-     * Adds the variable `tickDate` on every MSM note/pedal
-     * and removes the variable `midi.onset`. 
-     * @param msm The MSM to modify.
-     * @param mpm The MPM to take the tempo instructions from. 
-     *            It must contain a `tempoMap`.
-     */
-    addTickOnsets(msm: MSM, mpm: MPM) {
-        for (const scope of mpm.scopes()) {
-            const tempos = mpm.getInstructions<Tempo>('tempo', scope)
 
-            let currentMs = 0
-            for (let i = 0; i < tempos.length; i++) {
-                const tempo = tempos[i]
-                const nextTempo = tempos[i + 1]
-                const endDate = nextTempo ? nextTempo.date : msm.end
-
-                const tempoWithEndDate: TempoWithEndDate = {
-                    ...tempo,
-                    endDate
-                }
-
-                msm.notesInPart(scope).forEach(n => {
-                    // are out of the scope of the current tempo instruction? 
-                    if (nextTempo && n.date >= nextTempo.date) return
-                    if (n.date < tempo.date) return
-
-                    const onsetMilliseconds = n["midi.onset"] * 1000
-
-                    // replace MIDI time with tick time.
-                    n.tickDate = approximateDate(onsetMilliseconds - currentMs, tempoWithEndDate)
-                })
-
-                const endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
-
-                msm.pedals
-                    .filter(p => p.tickDate === undefined) // not yet processed
-                    .filter(p => {
-                        // filter pedals that are within the current tempo frame
-                        const onsetMs = p['midi.onset'] * 1000
-                        return (
-                            onsetMs >= currentMs &&
-                            onsetMs < (currentMs + endMs)
-                        )
-                    })
-                    .forEach(p => {
-                        const onsetMs = p['midi.onset'] * 1000
-                        p.tickDate = approximateDate(onsetMs - currentMs, tempoWithEndDate)
-                    })
-
-                const note = msm.notesInPart(scope).find(n => n.date === endDate)
-                if (!note) {
-                    currentMs += endMs
-                }
-                else {
-                    currentMs = note["midi.onset"] * 1000
-                }
-            }
-        }
-    }
-
-    /**
-     * Translates MIDI durations into tick durations
-     * using the new <tempo> instructions.
-     * 
-     * @param msm 
-     * @param mpm 
-     */
-    addTickDurations(msm: MSM, mpm: MPM, deleteMIDI: boolean = false) {
-        for (const scope of mpm.scopes()) {
-            const tempos = mpm.getInstructions<Tempo>('tempo', scope)
-
-            let currentFrameBeginMs = 0
-            for (let i = 0; i < tempos.length; i++) {
-                const tempo = tempos[i]
-                const nextTempo = tempos[i + 1]
-                const endDate = nextTempo ? nextTempo.date : msm.end
-
-                const tempoWithEndDate: TempoWithEndDate = {
-                    ...tempo,
-                    endDate
-                }
-
-                let endMs = computeMillisecondsAt(endDate, tempoWithEndDate)
-                const empirical = msm.notesInPart(scope).find(n => n.date === endDate)
-                if (empirical) {
-                    endMs = empirical["midi.onset"] * 1000 - currentFrameBeginMs
-                }
-
-                msm.notesInPart(scope)
-                    .filter(n => n["midi.duration"])
-                    .forEach(n => {
-                        const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000
-                        if (offsetMs < currentFrameBeginMs) return
-
-                        const relativeOffsetMs = offsetMs - currentFrameBeginMs
-                        if (relativeOffsetMs > endMs) return
-
-                        n.tickDuration = approximateDate(relativeOffsetMs, tempoWithEndDate) - n.tickDate
-
-                        if (deleteMIDI) {
-                            delete n["midi.duration"]
-                            delete n["midi.onset"]
-                        }
-                    })
-
-                msm.pedals
-                    .filter(p => p.tickDuration === undefined) // not yet processed
-                    .filter(p => {
-                        const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
-                        return (
-                            offsetMs >= currentFrameBeginMs &&
-                            offsetMs < currentFrameBeginMs + endMs
-                        )
-                    })
-                    .forEach(p => {
-                        const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
-                        p.tickDuration = approximateDate(offsetMs - currentFrameBeginMs, tempoWithEndDate) - p.tickDate
-
-                        if (deleteMIDI) {
-                            delete p['midi.duration']
-                            delete p['midi.onset']
-                        }
-                    })
-
-                const note = msm.notesInPart(scope).find(n => n.date === endDate)
-                if (!note) {
-                    currentFrameBeginMs += endMs
-                }
-                else {
-                    currentFrameBeginMs = note["midi.onset"] * 1000
-                }
-            }
-        }
-    }
 }
-
-const physicalToSymbolic = (physicalDate: number, bpm: number, beatLength: number) => {
-    return (physicalDate * (bpm * beatLength * 4 / 60)) * 720
-}
-
-const isTransition = (tempo: Tempo) => {
-    return tempo["transition.to"] && tempo.meanTempoAt
-}
-
-const approximateDate = (targetMilliseconds: number, effectiveTempoInstruction: TempoWithEndDate, initialGuess: number = effectiveTempoInstruction.date, tolerance: number = 1): number => {
-    if (!isTransition(effectiveTempoInstruction)) {
-        return (
-            +effectiveTempoInstruction.date +
-            physicalToSymbolic(targetMilliseconds / 1000, effectiveTempoInstruction.bpm, effectiveTempoInstruction.beatLength)
-        )
-    }
-
-    let guess = initialGuess;
-    let guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
-    for (let i = 0; i < 1000 && Math.abs(guessedMilliseconds - targetMilliseconds) > tolerance; i++) {
-        guess += 0.1 * (targetMilliseconds - guessedMilliseconds)
-        guessedMilliseconds = computeMillisecondsAt(guess, effectiveTempoInstruction);
-    }
-
-    return Math.round(guess);
-}
-
