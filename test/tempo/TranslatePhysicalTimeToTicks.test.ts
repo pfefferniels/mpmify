@@ -4,6 +4,7 @@ import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { MPM, Ornament, Tempo } from "../../src/mpm"
 import { TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
+import { deriveResidual } from "../../src/residual"
 
 /**
  * Quickly generates a simple MSM note
@@ -54,28 +55,22 @@ const msmFixture = new MSM(
 )
 
 
-test('It inserts the right tempo instructions using beat length = denominator', () => {
-    // Arrange
-    const msm = { ...msmFixture }
-
+// The claim this file used to make here — that a 60bpm tempo puts these recorded onsets at
+// these ticks — is now `deriveResidual`'s to answer, and it is asserted where the conversion
+// lives. This transformer no longer touches the score at all.
+test('at 60bpm a recorded onset lands on the tick the beat length implies', () => {
     const mpm = new MPM()
-    const tempo = {
+    mpm.insertInstructions([{
         'xml:id': 'tempo_el',
         type: 'tempo',
         bpm: 60,
         beatLength: 0.25,
         date: 0
-    } as Tempo
-    mpm.insertInstructions([tempo], 'global')
+    } as Tempo], 'global')
 
-    // Act
-    const translate = new TranslatePhysicalTimeToTicks({
-        translatePhysicalModifiers: false
-    })
-    callTransform(translate, msmFixture, mpm)
+    const residual = deriveResidual(msmFixture, mpm)
 
-    // Assert
-    expect(msm.allNotes.map(note => note.tickDate)).toEqual([0, 1440, 2160])
+    expect(residual.notes.map(n => n.tickDate)).toEqual([0, 1440, 2160])
 })
 
 test('it translates existing physical modifiers into tick modifiers', () => {

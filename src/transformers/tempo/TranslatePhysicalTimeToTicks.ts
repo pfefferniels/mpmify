@@ -2,7 +2,7 @@ import { MPM, Ornament, Tempo } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { computeMillisecondsAt, ticksForConstantTempo, TempoWithEndDate } from "./tempoCalculations";
-import { addTickDurations, addTickOnsets, approximateDate } from "./tickTimes";
+import { approximateDate } from "./tickTimes";
 
 export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
     /**
@@ -21,7 +21,17 @@ export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptio
 }
 
 /**
- * Interpolates the global tempo and inserts it into the MPM
+ * Converts the physical parts of the MPM into the tick domain.
+ *
+ * It used to do two things: write `tickDate` and `tickDuration` onto every note, and convert an
+ * ornament's frame from milliseconds to ticks. The first is gone — where a recorded onset falls
+ * on the score grid is derived on demand by `deriveResidual` now, so populating it here served
+ * nobody and made every later fit depend on this having run.
+ *
+ * The second is real work and stays: an `<ornament>` frame written in milliseconds has to become
+ * ticks in the document itself, which is an edit to the MPM rather than a note about the score.
+ * The class keeps its name and its place in the registry — saved work files name it, and
+ * `requires` relations across the chain point at it.
  */
 export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslatePhysicalTimeToTicksOptions> {
     name = 'TranslatePhysicalTimeToTicks'
@@ -37,9 +47,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
     }
 
     protected transform(msm: MSM, mpm: MPM) {
-        addTickOnsets(msm, mpm)
         if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm)
-        addTickDurations(msm, mpm)
     }
 
     /**
