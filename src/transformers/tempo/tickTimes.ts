@@ -24,7 +24,7 @@
 import { getInstructions, Mpm, scopesOf } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
 import { dateAtMilliseconds } from './tempoCalculations.js';
-import { coversDate, placeTempos, PlacedTempo, segmentAtMs } from './placedTempos.js';
+import { coversDate, placeTempos, type PlacedTempo, segmentAtMs } from './placedTempos.js';
 import { removeRubatoDistortion } from '../rubato/rubatoMath.js';
 
 /** Where one note or pedal fell on the score grid. Absent fields mean "no tempo covered it". */

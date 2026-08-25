@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment/index.js';
+import { Alignment, type AlignedNote, type AlignedPedal } from '../../src/alignment/index.js';
 
 /**
  * An `Alignment` is a score, and a score handed to two callers has to behave as two scores.

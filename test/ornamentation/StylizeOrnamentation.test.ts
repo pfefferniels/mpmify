@@ -2,10 +2,10 @@ import { describe, expect, test } from 'vitest';
 import { Alignment } from '../../src/alignment/index.js';
 import {
   FrameDomain,
-  InstructionOptions,
+  type InstructionOptions,
   Mpm,
   NoteOffShift,
-  OrnamentDraft,
+  type OrnamentDraft,
   createMpm,
   fillInAt,
   findInstructionById,

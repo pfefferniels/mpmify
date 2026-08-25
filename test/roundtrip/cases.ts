@@ -1,4 +1,4 @@
-import { Case } from './harness.js';
+import type { Case } from './harness.js';
 import { QUARTER } from './score.js';
 
 /**

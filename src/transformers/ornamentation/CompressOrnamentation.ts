@@ -1,6 +1,6 @@
 import { getDefinitions, Mpm, scopesOf } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
-import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { AbstractTransformer, type TransformationOptions } from '../Transformer.js';
 import { fix } from '../../utils/utils.js';
 import { StylizeOrnamentation } from './StylizeOrnamentation.js';
 
@@ -18,7 +18,7 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
     });
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(_msm: Alignment, mpm: Mpm) {
     const parts = scopesOf(mpm);
     for (const part of parts) {
       const defs = getDefinitions(mpm, 'ornamentDef', part);

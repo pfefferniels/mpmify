@@ -1,17 +1,17 @@
 import {
-  Alignment,
-  AbstractTransformer,
-  generateId,
   getInstructions,
+  type InstructionOptions,
+  Mpm,
   removeInstruction,
   requireMap,
-} from '../../src/index.js';
-import type {
-  InstructionOptions,
-  Mpm,
-  Scope,
-  ScopedTransformationOptions,
-} from '../../src/index.js';
+  type Scope,
+} from '../../src/mpm/index.js';
+import { Alignment } from '../../src/alignment/index.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../../src/transformers/Transformer.js';
 
 interface InsertTempoOptions extends ScopedTransformationOptions {
   from: number;
@@ -31,15 +31,12 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
     super(options || { scope: 'global', from: 0, to: 0, bpm: 120, beatLength: 0.25 });
   }
 
-  public run(msm: Alignment, mpm: Mpm) {
-    this._boundaryId = undefined;
-    super.run(msm, mpm);
-    if (this._boundaryId) {
-      this.created = this.created.filter((id) => id !== this._boundaryId);
-    }
+  protected override disowned(): readonly string[] {
+    return this._boundaryId ? [this._boundaryId] : [];
   }
 
   protected transform(msm: Alignment, mpm: Mpm) {
+    this._boundaryId = undefined;
     msm.shiftToFirstOnset();
     const { from, to, bpm, transitionTo, meanTempoAt, beatLength } = this.options;
     const scope = this.options.scope;

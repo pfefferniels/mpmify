@@ -6,7 +6,10 @@ import {
   isRegistered,
   clearRegistry,
 } from '../src/transformers/TransformerRegistry.js';
-import { AbstractTransformer, TransformationOptions } from '../src/transformers/Transformer.js';
+import {
+  AbstractTransformer,
+  type TransformationOptions,
+} from '../src/transformers/Transformer.js';
 import { exportWork, importWork } from '../src/Work.js';
 
 // Importing Order also registers every built-in transformer, which is what the first describe

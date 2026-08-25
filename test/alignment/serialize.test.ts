@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import { Alignment, type AlignedNote } from '../../src/alignment/index.js';
 
 const note = (id: string, part: number, date: number): AlignedNote =>
   ({

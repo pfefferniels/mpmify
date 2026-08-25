@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest';
-import { calculateRubatoOnDate, RubatoFrame } from '../../src/transformers/rubato/rubatoMath.js';
+import {
+  calculateRubatoOnDate,
+  type RubatoFrame,
+} from '../../src/transformers/rubato/rubatoMath.js';
 
 /**
  * The warp has to agree with the renderer, and it did not.

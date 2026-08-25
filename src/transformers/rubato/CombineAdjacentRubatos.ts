@@ -1,11 +1,15 @@
 import {
   getInstructions,
-  Instruction,
+  type Instruction,
   Mpm,
   removeInstruction,
   requireMap,
 } from '../../mpm/index.js';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../Transformer.js';
 import { InsertRubato } from './InsertRubato.js';
 import { Alignment } from '../../alignment/index.js';
 

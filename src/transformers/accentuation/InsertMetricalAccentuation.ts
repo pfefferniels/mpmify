@@ -9,8 +9,12 @@ import {
   unwrap,
 } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
-import { deriveResidual, Residual } from '../../residual/index.js';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { deriveResidual, type Residual } from '../../residual/index.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../Transformer.js';
 import { v4 } from 'uuid';
 import { InsertDynamicsInstructions } from '../dynamics/index.js';
 import { PULSES_PER_WHOLE } from '../../ppq.js';

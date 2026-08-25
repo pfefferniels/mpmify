@@ -5,8 +5,8 @@ import {
   positionAtDate,
   volumeAtDate,
 } from '../../src/transformers/dynamics/Approximation.js';
-import { DynamicsWithEndDate } from '../../src/transformers/dynamics/InsertDynamicsInstructions.js';
-import { InstructionOptions } from '../../src/mpm/index.js';
+import type { DynamicsWithEndDate } from '../../src/transformers/dynamics/InsertDynamicsInstructions.js';
+import type { InstructionOptions } from '../../src/mpm/index.js';
 
 /**
  * A `@transition.to` of **0** is a target, not an absence.

@@ -1,16 +1,20 @@
 import type { AddDynamicsOptions } from 'espressivo';
 import {
   getInstructions,
-  InstructionOptions,
+  type InstructionOptions,
   Mpm,
   requireMap,
-  Scope,
+  type Scope,
   fillInAt,
 } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
-import { approximateDynamics, DynamicsPoints } from './Approximation.js';
-import { WithEndDate } from '../tempo/tempoCalculations.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../Transformer.js';
+import { approximateDynamics, type DynamicsPoints } from './Approximation.js';
+import type { WithEndDate } from '../tempo/tempoCalculations.js';
 
 /**
  * A fitted `<dynamics>` plus the window it was fitted over.

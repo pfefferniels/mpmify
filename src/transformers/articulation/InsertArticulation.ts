@@ -6,11 +6,15 @@ import {
   requireMap,
   unwrap,
 } from '../../mpm/index.js';
-import { Alignment, AlignedNote } from '../../alignment/index.js';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { Alignment, type AlignedNote } from '../../alignment/index.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../Transformer.js';
 import { v4 } from 'uuid';
 import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
-import { deriveResidual, NoteResidual } from '../../residual/index.js';
+import { deriveResidual, type NoteResidual } from '../../residual/index.js';
 
 export type ArticulationProperty =
   'relativeDuration' | 'relativeVelocity' | 'absoluteDuration' | 'absoluteDurationChange';

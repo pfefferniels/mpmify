@@ -3,7 +3,7 @@ import { Alignment } from '../src/alignment/index.js';
 import { createMpm, exportMPM, getInstructions } from '../src/mpm/index.js';
 import { ApproximateLogarithmicTempo } from '../src/transformers/tempo/ApproximateLogarithmicTempo.js';
 import { InsertDynamicsInstructions } from '../src/transformers/dynamics/InsertDynamicsInstructions.js';
-import { Transformer } from '../src/transformers/Transformer.js';
+import type { Transformer } from '../src/transformers/Transformer.js';
 
 /**
  * The pipeline re-folds the *entire* chain over a fresh MPM on every edit, so the fold has to be

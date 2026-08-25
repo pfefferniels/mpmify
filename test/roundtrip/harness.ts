@@ -2,7 +2,7 @@ import { performMsmToData } from 'espressivo';
 import type { PerformanceData, PerformedNote } from 'espressivo';
 import { Alignment } from '../../src/alignment/index.js';
 import { createMpm, exportMPM, Mpm } from '../../src/mpm/index.js';
-import { Transformer } from '../../src/transformers/Transformer.js';
+import type { Transformer } from '../../src/transformers/Transformer.js';
 import { compareTransformers } from '../../src/transformers/index.js';
 import {
   ApproximateLogarithmicTempo,
@@ -19,15 +19,15 @@ import {
 
 import {
   InsertArticulation,
-  ArticulationProperty,
+  type ArticulationProperty,
 } from '../../src/transformers/articulation/InsertArticulation.js';
 import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation.js';
 import {
   InsertMetricalAccentuation,
   MergeMetricalAccentuations,
 } from '../../src/transformers/accentuation/index.js';
-import { buildScore, PPQ, ScoreSpec } from './score.js';
-import { Truth, truthMpm } from './truth.js';
+import { buildScore, PPQ, type ScoreSpec } from './score.js';
+import { type Truth, truthMpm } from './truth.js';
 
 /**
  * The round trip.

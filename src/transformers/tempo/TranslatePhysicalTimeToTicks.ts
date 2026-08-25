@@ -7,9 +7,9 @@ import {
   setOrnamentDraft,
 } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
-import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { AbstractTransformer, type TransformationOptions } from '../Transformer.js';
 import { dateAtMilliseconds, millisecondsAt } from './tempoCalculations.js';
-import { placeTempos, PlacedTempo, segmentAtMs } from './placedTempos.js';
+import { placeTempos, type PlacedTempo, segmentAtMs } from './placedTempos.js';
 
 export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
   /**
@@ -92,6 +92,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
         return startMs + millisecondsAt(ticks, resolved);
       }
     }
+    return undefined;
   }
 
   /**

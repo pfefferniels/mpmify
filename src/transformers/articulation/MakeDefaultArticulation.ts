@@ -1,6 +1,6 @@
 import { ensureDefaultStyle, getInstructions, insertDefinition, Mpm } from '../../mpm/index.js';
-import { Alignment, AlignedNote } from '../../alignment/index.js';
-import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer.js';
+import { Alignment, type AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, type ScopedTransformationOptions } from '../Transformer.js';
 import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
 import { deriveResidual } from '../../residual/index.js';
 import { makeArticulationDef } from './InsertArticulation.js';

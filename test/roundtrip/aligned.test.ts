@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeAll, describe, expect, test } from 'vitest';
-import { AlignedRun, runAligned } from './aligned.js';
+import { type AlignedRun, runAligned } from './aligned.js';
 import { describe as describeErrors } from './harness.js';
 import { assertWellFormed } from './invariants.js';
 

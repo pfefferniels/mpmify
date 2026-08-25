@@ -2,11 +2,11 @@ import {
   auditInstructions,
   fingerprintInstructions,
   getInstructions,
-  InstructionType,
-  Scope,
+  type InstructionType,
+  type Scope,
 } from '../mpm/index.js';
 import { Alignment } from '../alignment/index.js';
-import { Residual } from '../residual/index.js';
+import type { Residual } from '../residual/index.js';
 import { Mpm } from 'espressivo';
 import { v4 } from 'uuid';
 
@@ -70,7 +70,8 @@ export abstract class AbstractTransformer<
    * well as one it added, so `StylizeArticulation` naming an articulation and
    * `CombineAdjacentRubatos` folding two frames together are both attributed.
    *
-   * Not to be overridden.
+   * Not to be overridden. A transformer that must not be credited with something it wrote says
+   * so through {@link AbstractTransformer.disowned}.
    */
   public run(msm: Alignment, mpm: Mpm) {
     const before = fingerprintInstructions(mpm);
@@ -93,9 +94,21 @@ export abstract class AbstractTransformer<
       );
     }
 
+    const disowned = new Set(this.disowned());
     this.created = [...fingerprints]
-      .filter(([id, xml]) => before.get(id) !== xml)
+      .filter(([id, xml]) => before.get(id) !== xml && !disowned.has(id))
       .map(([id]) => id);
+  }
+
+  /**
+   * The `xml:id`s this call wrote but is not answerable for, as of the `transform` that just ran.
+   *
+   * The diff cannot tell a restoration from an insertion: an instruction written only to put back
+   * what the call displaced looks exactly like one the call meant to add. Naming it here keeps it
+   * out of `created`.
+   */
+  protected disowned(): readonly string[] {
+    return [];
   }
 
   protected abstract transform(msm: Alignment, mpm: Mpm): void;
@@ -234,11 +247,13 @@ export const getRange = (
       .filter((r): r is { from: number; to: number } => r !== undefined);
 
     if (ranges.length === 0) {
-      return;
+      return undefined;
     }
     return {
       from: Math.min(...ranges.map((r) => r.from)),
       to: Math.max(...ranges.map((r) => r.to)),
     };
   }
+
+  return undefined;
 };

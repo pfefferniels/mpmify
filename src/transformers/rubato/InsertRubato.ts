@@ -1,12 +1,16 @@
 import type { AddRubatoOptions } from 'espressivo';
 import { Mpm, requireMap } from '../../mpm/index.js';
-import { Alignment, AlignedNote } from '../../alignment/index.js';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { Alignment, type AlignedNote } from '../../alignment/index.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../Transformer.js';
 import { clamp } from '../../utils/utils.js';
 import { PULSES_PER_QUARTER } from '../../ppq.js';
 import { TranslatePhysicalTimeToTicks } from '../tempo/index.js';
 import { determineIntensity } from '../ornamentation/index.js';
-import { deriveResidual, Residual } from '../../residual/index.js';
+import { deriveResidual, type Residual } from '../../residual/index.js';
 
 // Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
 // moved, and mpm-desk's rubato desk imports it from "mpmify".

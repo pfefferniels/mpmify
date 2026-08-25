@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   AccentuationPatternDef,
   createMpm,
-  InstructionOptions,
+  type InstructionOptions,
   insertDefinition,
   instructionsEffectiveAtDate,
   requireMap,

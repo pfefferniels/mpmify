@@ -12,13 +12,13 @@ import { Element, Mpm } from 'espressivo';
 import { mapOf, scopesOf } from './document.js';
 import { getDefinition } from './styles.js';
 import {
-  AnyInstruction,
-  Instruction,
-  InstructionOptions,
-  InstructionType,
+  type AnyInstruction,
+  type Instruction,
+  type InstructionOptions,
+  type InstructionType,
   instructionTypes,
-  MapFor,
-  Scope,
+  type MapFor,
+  type Scope,
 } from './types.js';
 import { PULSES_PER_WHOLE } from '../ppq.js';
 

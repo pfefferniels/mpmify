@@ -7,7 +7,7 @@ import { createMpm } from '../../src/mpm/index.js';
 import { importWork } from '../../src/Work.js';
 import { asMSM } from '../../scripts/bake/asMSM.js';
 import { runPipeline } from '../../scripts/bake/deriveSegments.js';
-import { AspectError, Errors, EMPTY_MPM, statistics } from './harness.js';
+import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.js';
 
 /**
  * The round trip on a performance no MPM produced.

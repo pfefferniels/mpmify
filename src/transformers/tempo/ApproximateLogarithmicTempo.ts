@@ -2,16 +2,25 @@ import { v4 } from 'uuid';
 import type { Tempo as ResolvedTempo } from 'espressivo';
 import {
   getInstructions,
-  Instruction,
-  InstructionOptions,
+  type Instruction,
+  type InstructionOptions,
   Mpm,
   removeInstruction,
   requireMap,
-  Scope,
+  type Scope,
 } from '../../mpm/index.js';
-import { Alignment, AlignedNote } from '../../alignment/index.js';
-import { TempoWithEndDate, getTempoAt, millisecondsAt, resolveSpan } from './tempoCalculations.js';
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer.js';
+import { Alignment, type AlignedNote } from '../../alignment/index.js';
+import {
+  type TempoWithEndDate,
+  getTempoAt,
+  millisecondsAt,
+  resolveSpan,
+} from './tempoCalculations.js';
+import {
+  AbstractTransformer,
+  generateId,
+  type ScopedTransformationOptions,
+} from '../Transformer.js';
 import { clamp } from '../../utils/utils.js';
 import { beatLengthInTicks } from '../../ppq.js';
 

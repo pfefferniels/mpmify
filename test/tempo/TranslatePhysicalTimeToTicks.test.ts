@@ -2,9 +2,9 @@ import { expect, test } from 'vitest';
 import { FrameDomain } from 'espressivo';
 import { Alignment } from '../../src/alignment/index.js';
 import {
-  InstructionOptions,
+  type InstructionOptions,
   Mpm,
-  OrnamentDraft,
+  type OrnamentDraft,
   createMpm,
   fillInAt,
   getInstructions,

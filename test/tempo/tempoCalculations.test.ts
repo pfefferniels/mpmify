@@ -4,7 +4,7 @@ import {
   getTempoAt,
   millisecondsAt,
   resolveSpan,
-  TempoWithEndDate,
+  type TempoWithEndDate,
 } from '../../src/transformers/tempo/tempoCalculations.js';
 
 const QUARTER = 720;

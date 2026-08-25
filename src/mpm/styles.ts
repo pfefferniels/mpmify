@@ -12,11 +12,11 @@ import { Attribute, collectionNameOfKind, Element, Mpm, type AnyStyle } from 'es
 import { headerOf, requireMap, mapOf, scopesOf } from './document.js';
 import {
   DEFAULT_STYLE_NAME,
-  DefOf,
-  DefinitionType,
-  InstructionType,
-  Scope,
-  Style,
+  type DefOf,
+  type DefinitionType,
+  type InstructionType,
+  type Scope,
+  type Style,
   styleKinds,
 } from './types.js';
 import { v4 } from 'uuid';

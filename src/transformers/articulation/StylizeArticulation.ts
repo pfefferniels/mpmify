@@ -5,20 +5,20 @@ import {
   getDefinitions,
   getInstructions,
   getStyles,
-  Instruction,
+  type Instruction,
   insertDefinition,
   mapOf,
   Mpm,
   removeDefinition,
   removeInstruction,
-  Scope,
+  type Scope,
   scopesOf,
 } from '../../mpm/index.js';
-import { Alignment, AlignedNote } from '../../alignment/index.js';
-import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
-import { dbscan, IPoint } from '../../utils/dbscan.js';
+import { Alignment, type AlignedNote } from '../../alignment/index.js';
+import { AbstractTransformer, type TransformationOptions } from '../Transformer.js';
+import { dbscan, type IPoint } from '../../utils/dbscan.js';
 import { InsertArticulation, makeArticulationDef } from './InsertArticulation.js';
-import { deriveResidual, Residual } from '../../residual/index.js';
+import { deriveResidual, type Residual } from '../../residual/index.js';
 
 type Articulation = Instruction<'articulation'>;
 

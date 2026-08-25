@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { Mpm, createMpm } from '../../src/mpm/index.js';
-import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment/index.js';
+import { Alignment, type AlignedNote, type AlignedPedal } from '../../src/alignment/index.js';
 import { MakeChoice } from '../../src/transformers/choice/MakeChoice.js';
 
 /**

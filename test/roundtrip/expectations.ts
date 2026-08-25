@@ -1,5 +1,11 @@
 import { expect } from 'vitest';
-import { Bound, Case, describe as describeErrors, roundTrip, RoundTripResult } from './harness.js';
+import {
+  type Bound,
+  type Case,
+  describe as describeErrors,
+  roundTrip,
+  type RoundTripResult,
+} from './harness.js';
 import { assertWellFormed, findViolations } from './invariants.js';
 
 /**

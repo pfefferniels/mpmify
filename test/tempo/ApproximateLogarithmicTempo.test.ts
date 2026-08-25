@@ -1,13 +1,19 @@
 import { describe, test, expect } from 'vitest';
 import { Alignment } from '../../src/alignment/index.js';
-import { Instruction, Mpm, createMpm, getInstructions, requireMap } from '../../src/mpm/index.js';
+import {
+  type Instruction,
+  Mpm,
+  createMpm,
+  getInstructions,
+  requireMap,
+} from '../../src/mpm/index.js';
 import {
   ApproximateLogarithmicTempo,
-  SilentOnset,
+  type SilentOnset,
 } from '../../src/transformers/tempo/ApproximateLogarithmicTempo.js';
 import {
   computeMillisecondsAt,
-  TempoWithEndDate,
+  type TempoWithEndDate,
 } from '../../src/transformers/tempo/tempoCalculations.js';
 
 /** Call the protected `transform` method for testing */

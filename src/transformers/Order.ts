@@ -16,7 +16,7 @@ import { InsertPedal } from './pedal/InsertPedalInstructions.js';
 import { CombineAdjacentRubatos } from './rubato/CombineAdjacentRubatos.js';
 import { InsertRubato } from './rubato/InsertRubato.js';
 import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from './tempo/index.js';
-import { Transformer } from './Transformer.js';
+import type { Transformer } from './Transformer.js';
 import {
   getTransformerOrder,
   isRegistered,

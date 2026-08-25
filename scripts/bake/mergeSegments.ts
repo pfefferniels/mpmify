@@ -1,4 +1,4 @@
-import { getRange, Alignment, Segment, Transformer } from '../../src/index.js';
+import { getRange, Alignment, type Segment, type Transformer } from '../../src/index.js';
 import type { Residual } from '../../src/index.js';
 
 /**

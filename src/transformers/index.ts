@@ -6,7 +6,7 @@ export * from './ornamentation/index.js';
 export * from './tempo/index.js';
 export * from './rubato/InsertRubato.js';
 export * from './rubato/CombineAdjacentRubatos.js';
-export { TransformationOptions } from './Transformer.js';
+export type { TransformationOptions } from './Transformer.js';
 export * from './tempo/tempoCalculations.js';
 export * from './pedal/InsertPedalInstructions.js';
 export * from './Order.js';

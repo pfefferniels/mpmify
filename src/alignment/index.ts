@@ -1,4 +1,4 @@
-import { Scope } from '../mpm/index.js';
+import type { Scope } from '../mpm/index.js';
 import { Msm } from 'espressivo';
 import { isDefined } from '../utils/utils.js';
 import { PULSES_PER_QUARTER } from '../ppq.js';

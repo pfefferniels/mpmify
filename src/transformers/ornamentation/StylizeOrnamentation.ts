@@ -3,17 +3,17 @@ import {
   clearOrnamentDraft,
   ensureDefaultStyle,
   getInstructions,
-  Instruction,
+  type Instruction,
   insertDefinition,
   Mpm,
-  OrnamentDraft,
+  type OrnamentDraft,
   ornamentDraftOf,
   requireMap,
-  Scope,
+  type Scope,
   scopesOf,
 } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
-import { AbstractTransformer, TransformationOptions } from '../Transformer.js';
+import { AbstractTransformer, type TransformationOptions } from '../Transformer.js';
 import { v4 } from 'uuid';
 import { dbscan } from '../../utils/dbscan.js';
 import { InsertDynamicsGradient } from './InsertDynamicsGradient.js';
@@ -125,7 +125,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     });
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(_msm: Alignment, mpm: Mpm) {
     for (const scope of scopesOf(mpm)) {
       const ornaments: FittedOrnament[] = getInstructions(mpm, 'ornament', scope).map(
         (instruction) => ({ instruction, draft: ornamentDraftOf(instruction.element) }),

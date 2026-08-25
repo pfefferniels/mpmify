@@ -18,7 +18,7 @@
  */
 import { v4 } from 'uuid';
 import { MakeChoice, compareTransformers } from './transformers/index.js';
-import { TransformationOptions, Transformer } from './transformers/Transformer.js';
+import type { TransformationOptions, Transformer } from './transformers/Transformer.js';
 import { createTransformer } from './transformers/TransformerRegistry.js';
 
 export interface Work {
@@ -122,40 +122,40 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * them.
  */
 const readProvenance = (imported: Record<string, unknown>): Call[] => {
-  const provenance = imported.provenance;
+  const provenance = imported['provenance'];
   if (!Array.isArray(provenance)) {
     throw new Error('Not a work file: "provenance" is missing or not a list');
   }
 
   return provenance.map((call, index) => {
-    if (!isRecord(call) || typeof call.name !== 'string') {
+    if (!isRecord(call) || typeof call['name'] !== 'string') {
       throw new Error(`Work file call ${String(index)} has no name`);
     }
     return {
-      id: typeof call.id === 'string' ? call.id : v4(),
-      name: call.name,
-      options: isRecord(call.options) ? (call.options as TransformationOptions) : {},
+      id: typeof call['id'] === 'string' ? call['id'] : v4(),
+      name: call['name'],
+      options: isRecord(call['options']) ? (call['options'] as TransformationOptions) : {},
     };
   });
 };
 
 const readSegments = (imported: Record<string, unknown>): Segment[] => {
-  const segments = imported.segments;
+  const segments = imported['segments'];
   if (segments === undefined) return [];
   if (!Array.isArray(segments)) {
     throw new Error('Not a work file: "segments" is not a list');
   }
 
   return segments.map((segment, index) => {
-    if (!isRecord(segment) || !Array.isArray(segment.calls)) {
+    if (!isRecord(segment) || !Array.isArray(segment['calls'])) {
       throw new Error(`Work file segment ${String(index)} has no "calls" list`);
     }
     return {
-      id: typeof segment.id === 'string' ? segment.id : v4(),
-      ...(typeof segment.note === 'string' && segment.note ? { note: segment.note } : {}),
-      calls: segment.calls.filter((id): id is string => typeof id === 'string'),
-      elements: Array.isArray(segment.elements)
-        ? segment.elements.filter((id): id is string => typeof id === 'string')
+      id: typeof segment['id'] === 'string' ? segment['id'] : v4(),
+      ...(typeof segment['note'] === 'string' && segment['note'] ? { note: segment['note'] } : {}),
+      calls: segment['calls'].filter((id): id is string => typeof id === 'string'),
+      elements: Array.isArray(segment['elements'])
+        ? segment['elements'].filter((id): id is string => typeof id === 'string')
         : [],
     };
   });
@@ -192,8 +192,8 @@ export function importWork(json: string): ImportResult {
   return {
     transformers: transformers.sort(compareTransformers),
     segments: readSegments(imported),
-    ...(imported.secondary !== undefined && {
-      secondary: imported.secondary as Record<string, unknown>,
+    ...(imported['secondary'] !== undefined && {
+      secondary: imported['secondary'] as Record<string, unknown>,
     }),
   };
 }

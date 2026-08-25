@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { Mpm, createMpm, getInstructions } from '../../src/mpm/index.js';
-import { Alignment, AlignedNote } from '../../src/alignment/index.js';
+import { Alignment, type AlignedNote } from '../../src/alignment/index.js';
 import { InsertAsynchrony } from '../../src/transformers/asynchrony/InsertAsynchrony.js';
 import { PULSES_PER_QUARTER } from '../../src/ppq.js';
 

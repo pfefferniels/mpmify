@@ -1,4 +1,4 @@
-import { Alignment, AlignedNote, AlignedPedal } from '../../src/index.js';
+import { Alignment, type AlignedNote, type AlignedPedal } from '../../src/index.js';
 import { v4 } from 'uuid';
 
 /**

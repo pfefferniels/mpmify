@@ -9,7 +9,7 @@ import {
   unwrap,
 } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
-import { AbstractTransformer, ScopedTransformationOptions } from '../Transformer.js';
+import { AbstractTransformer, type ScopedTransformationOptions } from '../Transformer.js';
 import { InsertMetricalAccentuation } from './InsertMetricalAccentuation.js';
 
 interface MergeMetricalAccentuationsOptions extends ScopedTransformationOptions {

@@ -13,7 +13,7 @@ import {
   getDefinitions,
   getInstructions,
   getStyles,
-  InstructionOptions,
+  type InstructionOptions,
   insertDefinition,
   insertStyle,
   mapOf,
