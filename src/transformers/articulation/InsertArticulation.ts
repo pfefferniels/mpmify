@@ -142,8 +142,8 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // which is why nothing but a render ever noticed.
         //
         // The id is minted immediately before each insertion, not for the batch up front:
-        // `generateId` numbers by how many instructions the map already holds at that date, so
-        // a batch that no longer has one entry per date has to let it see each one land.
+        // `generateId` picks the first suffix the map does not already use at that date, so a
+        // batch that no longer has one entry per date has to let it see each one land.
         for (const articulation of articulations) {
             aspects.forEach(aspect => articulation[aspect] = undefined)
             articulation['name.ref'] = name

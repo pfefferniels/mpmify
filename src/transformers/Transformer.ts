@@ -125,11 +125,28 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
 
 export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
 
+/**
+ * An `xml:id` for a new instruction of `type` at `date` that nothing in `mpm` already uses.
+ *
+ * The suffix is the first free index, not the count of instructions at the date. Counting is
+ * only the same thing while nothing has ever been removed: once `tempo_0` is gone and
+ * `tempo_0_1`, `tempo_0_2` remain, the count is 2 and `tempo_0_2` is taken (issue #30).
+ * `ApproximateLogarithmicTempo` removes and re-inserts its instructions on every refit, so that
+ * is ordinary operation rather than a corner case — and a duplicate id is not a cosmetic
+ * problem: `MPMRecording.created` records ids and `AbstractTransformer.insertMetadata` resolves
+ * them back through `findInstructionById` to write `@corresp`, so a collision attributes an
+ * argumentation to the wrong element without saying anything.
+ *
+ * The scan is over every instruction of the type rather than only those at the date, because an
+ * id is only unique if it is unique in the document.
+ */
 export const generateId = (type: InstructionType, date: number, mpm: MPM) => {
-    const instructions = mpm.getInstructions(type)
-    const n = instructions.filter(i => i.date === date).length
-    if (n === 0) return `${type}_${date}`
-    return `${type}_${date}_${n}`
+    const taken = new Set(mpm.getInstructions(type).map(instruction => instruction['xml:id']))
+    let candidate = `${type}_${date}`
+    for (let n = 1; taken.has(candidate); n++) {
+        candidate = `${type}_${date}_${n}`
+    }
+    return candidate
 }
 
 export const isRangeBased = (transformer: TransformationOptions): transformer is TransformationOptions & { from: number; to: number } => {
