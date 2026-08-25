@@ -130,7 +130,9 @@ is visible one transformer at a time.
   from constructor options rather than fitting it, so a round trip would only measure the option
   values this suite itself chose. `pedal.test.ts` asserts what is left: the movements land on the
   pedal, the document is sound, and the renderer produces an actual sustain stream from it.
-- **Asynchrony.** `InsertAsynchrony` assumes a two-part score and is not registered (#31, #45).
+- **Asynchrony.** `InsertAsynchrony` is registered and unit-tested now (#31, #45), but it has
+  no round-trip case: every score here puts its voices in one part, so there is no second
+  part for it to measure against. A two-part case is what it waits on.
 - **Multi-part scores.** `buildScore` can put voices in separate parts, but no case does; every
   chord here sits in one part. Nothing in the harness assumes that, so a two-part case is a
   matter of writing one.
