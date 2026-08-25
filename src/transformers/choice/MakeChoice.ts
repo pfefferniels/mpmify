@@ -69,6 +69,13 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
         const pedallingPreference = 'prefer' in this.options ? this.options.prefer : this.options.pedalling;
 
         const equivalents = Map.groupBy(affected, note => `${note.date}-${note.duration}-${note["midi.pitch"]}`)
+
+        // The removals are collected and applied in one pass. Splicing each variant out
+        // individually was a `indexOf` scan plus a shift of the tail per note — quadratic in the
+        // score, and every note of every chosen group paid it.
+        const discarded = new Set<MsmNote>()
+        const chosen: MsmNote[] = []
+
         for (const [_, notes] of equivalents) {
             const prototype = notes.find(note => note.source === timingPreference)
             if (!prototype) continue;
@@ -82,33 +89,30 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
 
             // keep only the prototype note and remove all source variants
             for (const note of notes) {
-                msm.allNotes.splice(msm.allNotes.indexOf(note), 1);
+                discarded.add(note)
             }
-            msm.allNotes.push({ ...prototype });
+            chosen.push({ ...prototype })
+        }
+
+        if (discarded.size > 0) {
+            // Group order is iteration order, so the kept notes land at the end in the same
+            // order the splice-and-push loop left them in.
+            msm.allNotes = msm.allNotes.filter(note => !discarded.has(note)).concat(chosen)
         }
 
         if (pedallingPreference) {
-            if ('from' in this.options && 'to' in this.options) {
-                const { from, to } = this.options as RangeChoice
-
-                // The range is not applied to pedals, and never has been. This compared
-                // `pedal.date` against it, but nothing has ever written a symbolic date onto a
-                // pedal — the field was declared optional and left unset by every producer — so
-                // the comparison was `undefined < number`, false, and every pedal fell through
-                // to the source test regardless of the range. Saying that plainly is the same
-                // behaviour without the appearance of a bound being honoured. Giving pedals a
-                // symbolic position is a change of its own; they carry `midi.onset` only.
-                void from; void to;
-
-                for (const pedal of msm.pedals) {
-                    if (pedal.source !== pedallingPreference) {
-                        msm.pedals.splice(msm.pedals.indexOf(pedal), 1)
-                    }
-                }
-            }
-            else {
-                msm.pedals = msm.pedals.filter(pedal => pedal.source === pedallingPreference)
-            }
+            // The range is not applied to pedals, and never has been. The range branch compared
+            // `pedal.date` against it, but nothing has ever written a symbolic date onto a
+            // pedal — the field was declared optional and left unset by every producer — so the
+            // comparison was `undefined < number`, false, and every pedal fell through to the
+            // source test regardless of the range. Once that is said plainly the two branches
+            // are the same filter, so there is one. Giving pedals a symbolic position is a
+            // change of its own; they carry `midi.onset` only.
+            //
+            // The range branch also spliced out of the array it was iterating, which skips the
+            // element after each removal — two adjacent pedals from the rejected source left the
+            // second one in.
+            msm.pedals = msm.pedals.filter(pedal => pedal.source === pedallingPreference)
         }
     }
 }

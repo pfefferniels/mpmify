@@ -91,7 +91,17 @@ export interface PlacedTempo {
  */
 export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => {
     const tempos = mpm.getInstructions('tempo', scope)
-    const notes = msm.notesInPart(scope)
+
+    // The anchoring rule, in one place. `notesInPart(scope)` and not `allNotes`: the tempo being
+    // walked governs this scope, so the note that dates its boundary must be one it governs.
+    //
+    // Indexed by date once rather than scanned per segment, which made placing a map O(tempos x
+    // notes) — and every consumer of a tick position places the map first. The first note on a
+    // date wins, which is the note `find` used to answer with.
+    const anchorByDate = new Map<number, MsmNote>()
+    for (const note of msm.notesInPart(scope)) {
+        if (!anchorByDate.has(note.date)) anchorByDate.set(note.date, note)
+    }
 
     const segments: PlacedTempo[] = []
     let startMs = 0
@@ -104,10 +114,7 @@ export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => 
         const resolved = resolveSpan(tempo)
         const modelledMs = millisecondsAt(endDate, resolved)
 
-        // The anchoring rule, in one place. `notesInPart(scope)` and not `allNotes`: the tempo
-        // being walked governs this scope, so the note that dates its boundary must be one it
-        // governs.
-        const anchor = notes.find(n => n.date === endDate)
+        const anchor = anchorByDate.get(endDate)
         const measuredMs = anchor ? anchor["midi.onset"] * 1000 - startMs : modelledMs
 
         segments.push({ tempo, resolved, nextDate, startMs, modelledMs, anchor, measuredMs })

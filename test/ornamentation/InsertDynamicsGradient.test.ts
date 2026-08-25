@@ -86,3 +86,36 @@ test('a chord whose notes are equally loud gets no gradient', () => {
 
     expect(mpm.getInstructions('ornament', 'global')).toHaveLength(0)
 })
+
+test('a single explicit gradient is fitted to the chord on its date', () => {
+    const msm = msmFixture()
+    const mpm = new MPM()
+
+    // The chord is looked up in the map `transform` builds once, rather than by regrouping the
+    // whole score inside `applyGradient`. See issue #49.
+    callTransform(new InsertDynamicsGradient({
+        scope: 'global',
+        date: 0,
+        gradient: { from: 0, to: 1 },
+        sortVelocities: false,
+    }), msm, mpm)
+
+    const ornaments = mpm.getInstructions('ornament', 'global')
+    expect(ornaments).toHaveLength(1)
+    expect(ornaments[0].date).toBe(0)
+    expect(ornaments[0].scale).toBe(50)
+})
+
+test('a single gradient on a date with no chord does nothing', () => {
+    const msm = msmFixture()
+    const mpm = new MPM()
+
+    callTransform(new InsertDynamicsGradient({
+        scope: 'global',
+        date: 2880,
+        gradient: { from: 0, to: 1 },
+        sortVelocities: false,
+    }), msm, mpm)
+
+    expect(mpm.getInstructions('ornament', 'global')).toHaveLength(0)
+})
