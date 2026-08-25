@@ -3,9 +3,17 @@
 Moved here from `mpm-desk/scripts/` on 2026-08-21, when mpm-desk dropped `mpm-ts` and `mpmify`
 and went espressivo-only. This is the only place mpmify's transformer pipeline still runs.
 
-**Runnable, not automated.** No npm script runs them, and the inputs still live in the mpm-desk
-repo (pass them with `--mei` / `--info`). `vite-node` resolves the `mpmify` imports through the
-alias in `vite.config.ts`, so the bake runs against the working tree.
+**Runnable, not automated.** No npm script runs them, and the full inputs still live in the
+mpm-desk repo (pass them with `--mei` / `--info`). `vite-node` resolves the `mpmify` imports
+through the alias in `vite.config.ts`, so the bake runs against the working tree.
+
+An excerpt of those inputs *is* in this repo now — `test/fixtures/roundtrip`, four bars and the
+84 calls that reconstruct them — and two test files run this code over it on every commit:
+`test/roundtrip/aligned.test.ts` renders `runPipeline`'s MPM back and compares it against the
+recording, and `test/roundtrip/bake.test.ts` asserts what `bakeSegments.ts` checks before it
+writes. The first thing they found was that the bake did not run at all: `getRange` needs a
+residual to place a pedal, neither `derive` nor `mergeArgumentations` passed one, and every real
+`info.json` has `InsertPedal` calls in it.
 
 ## What it does
 
@@ -30,7 +38,7 @@ node_modules/.bin/vite-node scripts/bake/verifySegments.ts                      
 | File | Role |
 |---|---|
 | `bakeSegments.ts` | CLI wrapper: sets up jsdom globals, runs `derive`, writes `public/` |
-| `deriveSegments.ts` | The bake itself — runs the transformers, groups argumentations into segments |
+| `deriveSegments.ts` | The bake itself — `runPipeline` runs the transformers, `derive` groups the argumentations into segments |
 | `verifySegments.ts` | Re-derives and diffs against what was written |
 | `asMSM.ts` | Enriches a converted MSM with the performance data encoded in the MEI |
 | `mergeArgumentations.ts` | Folds argumentations covering the same ticks into one |
@@ -44,13 +52,14 @@ copy of the code does not use.
 
 ## What is missing
 
-- **The inputs.** Both scripts default to `public/transcription.mei` and `data/info.json`
+- **The full inputs.** Both scripts default to `public/transcription.mei` and `data/info.json`
   relative to the cwd, and `verifySegments.ts` additionally reads
   `public/{score.msm,performance.mpm,segments.json}`. Those files live in the mpm-desk repo and
   were not copied (~650 kB). `bakeSegments.ts` takes `--mei` and `--info`; `verifySegments.ts`
-  still hardcodes its paths.
-- **An npm script.** Nothing runs the bake automatically, and with the inputs outside the repo
-  it cannot be part of `npm test`.
+  still hardcodes its paths. What is here is the four-bar excerpt, which the tests use directly
+  through `derive` rather than through either script.
+- **An npm script.** Nothing runs the two scripts automatically, and with the full inputs
+  outside the repo they cannot be part of `npm test`.
 
 ## Why the bake exists at all
 

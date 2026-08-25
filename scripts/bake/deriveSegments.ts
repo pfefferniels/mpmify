@@ -8,6 +8,7 @@
  */
 import {
     compareTransformers,
+    deriveResidual,
     getRange,
     exportMPM,
     importWork,
@@ -114,9 +115,15 @@ export const runPipeline = (mei: string, info: string): Pipeline => {
 export const derive = (mei: string, info: string): Derived => {
     const { scoreMsm, msm, mpm, mpmXml, transformers: ran, title, author } = runPipeline(mei, info)
 
+    // Where the chain's MPM puts each note and pedal on the tick grid. Only the pedal
+    // transformers need it — a pedal has no symbolic date of its own — but `getRange` cannot
+    // know that before it looks, so it is derived once here and handed to every call below.
+    // `without: ['movement']` is the probe `InsertPedal` itself uses.
+    const residual = deriveResidual(msm, mpm, { without: ['movement'] })
+
     // The viewer ran this on every pipeline result, so it is part of what the
     // segments are: argumentations covering the exact same ticks are one.
-    const transformers = mergeOverlappingArgumentations(ran, msm)
+    const transformers = mergeOverlappingArgumentations(ran, msm, residual)
 
     const instructions = mpm.getInstructions() as { 'xml:id': string; type: string }[]
     const typeById = new Map(instructions.map(i => [i['xml:id'], i.type]))
@@ -126,7 +133,7 @@ export const derive = (mei: string, info: string): Derived => {
     let droppedElements = 0
 
     for (const [argumentation, group] of Map.groupBy(transformers, t => t.argumentation)) {
-        const range = getRange(group, msm)
+        const range = getRange(group, msm, residual)
         if (!range) continue
         const from = range.from
         const to = range.to ?? range.from
@@ -141,7 +148,7 @@ export const derive = (mei: string, info: string): Derived => {
 
             // Transformers that act on the whole piece (InsertDynamicsGradient)
             // resolve to no range of their own and take the segment's.
-            const spanRange = getRange(transformer.options, msm)
+            const spanRange = getRange(transformer.options, msm, residual)
             const span: Span = {
                 id: elements[0],
                 type: typeById.get(elements[0])!,

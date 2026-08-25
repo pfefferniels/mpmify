@@ -1,4 +1,5 @@
 import { Argumentation, getRange, MSM, Transformer } from "mpmify";
+import type { Residual } from "mpmify";
 
 const cloneTransformerWithArgumentation = (transformer: Transformer, argumentation: Argumentation): Transformer => {
     const clone = Object.create(Object.getPrototypeOf(transformer)) as Transformer;
@@ -30,14 +31,22 @@ function reconcileArgumentation(winner: Argumentation, absorbed: Argumentation):
  * array with all losers' transformers cloned to the winner's argumentation.
  *
  * Returns the same array reference if nothing needs merging (idempotent).
+ *
+ * @param residual how the chain's MPM places the score on the tick grid. A pedal carries no
+ * symbolic date, so `getRange` derives one — and throws without this. Every real `info.json`
+ * has `InsertPedal` calls in it, so omitting it did not degrade the merge, it stopped the bake.
  */
-export function mergeOverlappingArgumentations(transformers: Transformer[], msm: MSM): Transformer[] {
+export function mergeOverlappingArgumentations(
+    transformers: Transformer[],
+    msm: MSM,
+    residual: Residual
+): Transformer[] {
     const grouped = Map.groupBy(transformers, t => t.argumentation);
 
     // Compute each argumentation's composite range
     const rangeByArg = new Map<Argumentation, { from: number; to: number }>();
     for (const [arg, ts] of grouped) {
-        const range = getRange(ts, msm);
+        const range = getRange(ts, msm, residual);
         if (range) {
             rangeByArg.set(arg, { from: range.from, to: range.to ?? range.from });
         }
