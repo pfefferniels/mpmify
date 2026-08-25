@@ -1,17 +1,18 @@
 import { MPM, Rubato } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
-import { clamp, DefinedProperty } from "../../utils/utils"
+import { clamp } from "../../utils/utils"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
 import { removeRubatoDistortion } from "./rubatoMath"
+import { deriveResidual, Residual } from "../../residual"
 
 // Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
 // moved, and mpm-desk's rubato desk imports it from "mpmify".
 export { calculateRubatoOnDate } from "./rubatoMath"
 
-const avarageTickDate = (notes: DefinedProperty<MsmNote, 'tickDate'>[]) => {
-    return notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
+const avarageTickDate = (notes: MsmNote[], residual: Residual) => {
+    return notes.reduce((prev, curr) => prev + residual.of(curr)!.tickDate!, 0) / notes.length
 }
 
 export interface InsertRubatoOptions extends ScopedTransformationOptions {
@@ -38,6 +39,11 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     }
 
     protected transform(msm: MSM, mpm: MPM) {
+        // Where the notes fell under the tempo, with rubato held out — this is what fits it.
+        // Holding it out also means a second call over a looping frame reads the same raw
+        // positions the first one did, rather than positions the first call has compensated.
+        const residual = deriveResidual(msm, mpm, { without: ['rubato'] })
+
         const frame = { date: this.options.date, length: this.options.length }
         const chords = [...msm.asChords(this.options.scope).entries()]
             .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
@@ -48,7 +54,8 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         // after a tempo interpolation. Make sure that 
         // all notes have a tick date and a tick duration.
         if (chords.some(([_, notes]) =>
-            notes.some(note => note.tickDate === undefined || note.tickDuration === undefined))
+            notes.some(note => residual.of(note)?.tickDate === undefined
+                || residual.of(note)?.tickDuration === undefined))
         ) {
             console.warn('InsertRubato: some note has no tick date or duration — run a tempo interpolation first.')
             return
@@ -58,7 +65,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
         // average tick date to determine a late start. Otherwise, 
         // there is no late start.
         const startDate = chords[0][0] === this.options.date
-            ? avarageTickDate(chords[0][1] as DefinedProperty<MsmNote, 'tickDate'>[])
+            ? avarageTickDate(chords[0][1], residual)
             : this.options.date
         let lateStart =
             clamp(
@@ -72,7 +79,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
         const scaledDates = chords
             .map(([, notes]) => {
-                const realDate = notes.reduce((prev, curr) => prev + curr.tickDate, 0) / notes.length
+                const realDate = avarageTickDate(notes, residual)
                 return (realDate - startDate) / (endDate - startDate)
             })
 
