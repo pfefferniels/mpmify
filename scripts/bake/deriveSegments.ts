@@ -25,10 +25,29 @@ import type { Reconstruction, Segment, Span } from './Reconstruction'
 
 registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' })
 
-interface Derived {
+/**
+ * The pipeline half of the bake: the MEI, the chain, and the MPM the chain writes.
+ *
+ * Split out of `derive` for `test/roundtrip/aligned.ts`, which renders this MPM back and
+ * compares it against the recording it was fitted to. That check is about the pipeline, so it
+ * has no use for the segments — and no reason to fail when the segment half does.
+ */
+interface Pipeline {
     /** The MEI as MSM — what a render performs. */
     scoreMsm: string
-    /** The pipeline's MPM, serialized. */
+    /** The recording on the score, as the chain left it. */
+    msm: MSM
+    mpm: MPM
+    /** The chain's MPM, serialized. */
+    mpmXml: string
+    /** The chain as it ran: the file's calls, metadata substituted, in registry order. */
+    transformers: Transformer[]
+    title: string
+    author: string
+}
+
+interface Derived {
+    scoreMsm: string
     mpmXml: string
     reconstruction: Reconstruction
     /** The run itself, for `verifySegments.ts` to compare the segments against. */
@@ -53,7 +72,7 @@ const quiet = <T>(fn: () => T): T => {
     try { return fn() } finally { console.log = log }
 }
 
-export const derive = (mei: string, info: string): Derived => {
+export const runPipeline = (mei: string, info: string): Pipeline => {
     const movements = convertMeiToMsm(mei)
     if (!movements.length) throw new Error('MEI holds no convertible movement')
     const scoreMsm = movements[0].msm
@@ -88,6 +107,12 @@ export const derive = (mei: string, info: string): Derived => {
 
     const mpm = new MPM()
     quiet(() => ran.forEach(transformer => transformer.run(msm, mpm)))
+
+    return { scoreMsm, msm, mpm, mpmXml: exportMPM(mpm), transformers: ran, title, author }
+}
+
+export const derive = (mei: string, info: string): Derived => {
+    const { scoreMsm, msm, mpm, mpmXml, transformers: ran, title, author } = runPipeline(mei, info)
 
     // The viewer ran this on every pipeline result, so it is part of what the
     // segments are: argumentations covering the exact same ticks are one.
@@ -152,7 +177,7 @@ export const derive = (mei: string, info: string): Derived => {
 
     return {
         scoreMsm,
-        mpmXml: exportMPM(mpm),
+        mpmXml,
         reconstruction: { title, author, segments },
         pipeline: { transformers, msm, mpm },
         stats: {

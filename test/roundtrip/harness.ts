@@ -95,7 +95,7 @@ export interface Case {
 // ── Running one case ──────────────────────────────────────────────
 
 /** An MPM that says nothing, for the baseline render below. */
-const EMPTY_MPM = '<?xml version="1.0" encoding="UTF-8"?>'
+export const EMPTY_MPM = '<?xml version="1.0" encoding="UTF-8"?>'
     + '<mpm xmlns="http://www.cemfi.de/mpm/ns/1.0">'
     + '<performance name="empty" pulsesPerQuarter="720">'
     + '<global><header/><dated/></global></performance></mpm>'
@@ -405,7 +405,7 @@ const fittingWindows = (dates: number[], end: number) => {
 
 // ── Comparison ────────────────────────────────────────────────────
 
-const statistics = (values: number[]): AspectError => {
+export const statistics = (values: number[]): AspectError => {
     if (values.length === 0) return { mean: 0, median: 0, max: 0 }
     const sorted = [...values].sort((a, b) => a - b)
     return {

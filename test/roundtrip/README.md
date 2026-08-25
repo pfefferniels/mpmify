@@ -45,6 +45,7 @@ is a statement about the *pipeline*, not about a particular invocation of it.
 | `tier1-parameters.test.ts` | fitted MPM parameters vs. the truth's | *which* fitter is wrong |
 | `tier2-render.test.ts` | one aspect, boundaries given, rendered back | renderer-semantics bugs |
 | `tier3-endtoend.test.ts` | several aspects, boundaries sometimes withheld | interaction bugs |
+| `aligned.test.ts` | a real recording and the chain a person wrote for it | what synthesis cannot state |
 
 Tier 0 is not only its own file: `expectCase` runs `assertWellFormed` on **every** fitted MPM in
 tiers 2 and 3. Those checks cost one parse, need no ground truth, and between them cover a
@@ -64,8 +65,11 @@ and requires the truth to differ from it.
 
 Every case's truth *is* an MPM document, so it is exactly representable and a correct chain
 would round-trip it to zero. **Whatever a bound admits above zero is a measured gap in mpmify**,
-and the case's `note` says what causes it. Tightening a bound is what "fixed" means for the
-issue it names; loosening one without a reason is the regression this directory exists to catch.
+and the case's `note` says what causes it. `aligned.test.ts` is the exception and reads its own
+bounds differently: its truth is a piano roll, which no MPM need be able to state exactly, so
+zero is not the target there and its bounds carry a share-explained figure alongside them.
+Tightening a bound is what "fixed" means for the issue it names; loosening one without a reason
+is the regression this directory exists to catch.
 
 The bounds carry roughly 25–50% headroom over the measured value. Both fitters anneal, and
 `src/utils/random.ts` seeds them, so the numbers are stable run to run — the headroom is for
@@ -88,6 +92,7 @@ npm run test:roundtrip:report
 | `expectations.ts` | What every render-tier case asserts |
 | `cases.ts` | The coverage matrix and its recorded bounds |
 | `pedal.test.ts` | Pedalling, which is deliberately not a round trip — see the file |
+| `aligned.ts` | The same round trip on `test/fixtures/roundtrip` — an aligned MEI, no truth MPM |
 | `report.test.ts` | Opt-in: print what every case currently measures |
 
 `truth.ts` deliberately does **not** use mpmify's own `MPM` class. If the truth went through the
@@ -129,6 +134,10 @@ is visible one transformer at a time.
 - **Multi-part scores.** `buildScore` can put voices in separate parts, but no case does; every
   chord here sits in one part. Nothing in the harness assumes that, so a two-part case is a
   matter of writing one.
-- **Real performance data.** Every case here is synthetic, which is what makes the ground truth
-  exact. #51 asks for an in-repo aligned MEI as well; that measures something different — how
-  the chain does on a performance no MPM produced — and does not replace this.
+- **Real performance data** is covered now, by `aligned.test.ts`, and it measures something
+  different from the rest of this directory rather than replacing it. Its truth is a Welte roll
+  and its chain is the one a person wrote for that passage, so nothing guarantees a perfect fit
+  is available at all — what it holds is that the pipeline still reproduces a performance it has
+  been used on. It found one defect on the day it was written: an `<articulation>` covering more
+  than one note renders as nothing, because espressivo reads `@noteid` as a single reference
+  while `InsertArticulation` writes a space-separated list into it.
