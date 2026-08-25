@@ -122,11 +122,19 @@ export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => 
  * Whether `date` falls in the stretch of *score* this segment governs.
  *
  * The tick windows tile `[tempos[0].date, ∞)` exactly, so a note has one segment or none, and
- * none means the tempo map does not reach back as far as the note. That case is deliberately not
- * folded into the first segment the way {@link segmentAtMs} folds the millisecond one: before its
- * first `<tempo>` the renderer does not extrapolate backwards either — it falls back on MPM's
- * default of 100 quarter-bpm (`TempoMap.renderTempoToMap`) — so a tick position invented from the
- * first instruction's tempo would be one the performance will not agree with.
+ * none means the tempo map does not reach back as far as the note's *score date* — a partial fit,
+ * where the map starts later than the piece does.
+ *
+ * That is a different question from the one {@link segmentAtMs} folds into its first window, and
+ * the two do not conflict. There, an event's recorded time falls before the first segment's
+ * cursor, which starts at zero — so only a negative onset reaches it, and the instruction
+ * governing that event is still the first one. Here the tempo map does not claim the note at all,
+ * and what the right answer would be is genuinely unsettled: the renderer performs such a note at
+ * MPM's default of 100 quarter-bpm (`TempoMap.renderTempoToMap`), while the ornament path
+ * deliberately extrapolates at the first instruction's tempo instead rather than bake one
+ * renderer's fallback into the document — see the note on the 'ornamentation: rolled chords'
+ * round-trip case. Leaving the position unknown is what this has always done, and answering it
+ * either way is a decision about partial fits, not about issue #27.
  */
 export const coversDate = (segment: PlacedTempo, date: number): boolean =>
     date >= segment.tempo.date && (segment.nextDate === undefined || date < segment.nextDate)

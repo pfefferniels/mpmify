@@ -368,7 +368,19 @@ export const tierThreeCases: Case[] = [
             ],
             rubato: [{ date: 0, frameLength: 4 * QUARTER, intensity: 0.65, loop: true }],
         },
-        note: 'issue #27 — a frame boundary leaves notes without a tick date',
+        // This used to be recorded as issue #27, and it is not. Fixing #27 left every figure in
+        // this row unchanged to the last digit, which says two things: the residual here is the
+        // same tempo-runs-first-over-warped-onsets ordering as the rubato-only case above,
+        // amplified because the tempo moves as well — and the round trip cannot see #27 at all.
+        //
+        // It cannot, by construction. Every performance in this suite is rendered from its own
+        // truth MPM, so a note lands exactly where the tempo predicts and no note sounds ahead of
+        // its predecessor. `measuredMs` therefore tracks `modelledMs` closely enough that no
+        // event crosses a window boundary, and nothing is released past the final modelled
+        // moment. Both #26 and #27 need a recording that disagrees with its notation, which is
+        // what an alignment is and what a render is not. They are covered in test/tempo instead.
+        note: 'the tempo fitter runs first, over onsets the rubato has already warped, and a '
+            + 'moving tempo gives it more room to explain them away than the steady one above',
         bounds: { onset: { mean: 195, max: 430 }, duration: { mean: 130, max: 600 }, velocity: { max: 0.5 } },
     },
     {
