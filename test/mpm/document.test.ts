@@ -9,6 +9,7 @@ import {
     createMpm,
     ensureDefaultStyle,
     exportMPM,
+    fillInAt,
     FrameDomain,
     getDefinition,
     getDefinitions,
@@ -18,6 +19,7 @@ import {
     insertDefinition,
     insertStyle,
     mapOf,
+    Mpm,
     NoteOffShift,
     ornamentDraftOf,
     OrnamentDef,
@@ -91,6 +93,71 @@ describe("instructions", () => {
 
         expect(getInstructions(mpm, 'tempo', 'global').map(t => t.date)).toEqual([720])
         expect(exportMPM(mpm)).not.toContain('bpm="60"')
+    })
+})
+
+/**
+ * The one merge contract in the layer: two transformers describing one element, the second
+ * landing inside the first's rather than beside it.
+ */
+describe("filling in at a date", () => {
+    const fillIn = (mpm: Mpm, options: InstructionOptions<'dynamics'>) => {
+        const map = requireMap(mpm, 'dynamics', 'global')
+        return fillInAt(map, options, {
+            localName: 'dynamics',
+            add: o => map.addDynamics(o),
+            read: i => map.getDynamicsOptionsOf(i),
+            update: (i, patch) => map.updateDynamicsAt(i, patch),
+        })
+    }
+
+    test("a second instruction at the same date fills the first in", () => {
+        const mpm = createMpm()
+        fillIn(mpm, { id: 'dynamics_720', date: 720, volume: 30 })
+        fillIn(mpm, { id: 'dynamics_720_1', date: 720, volume: 60, transitionTo: 90 })
+
+        const written = getInstructions(mpm, 'dynamics', 'global')
+        expect(written).toHaveLength(1)
+        expect(written[0].volume).toBe(30)
+        expect(written[0].transitionTo).toBe(90)
+    })
+
+    test("a value already there wins even when it is 0", () => {
+        // "Already has a value" and "already has a truthy value" are different rules, and only
+        // the first is the one this mechanism needs. A volume of 0 is not an exotic value here:
+        // it is what `InsertDynamicsInstructions.closeTransition` writes to end a diminuendo al
+        // niente, so under the truthy rule the next segment's fit silently replaced the point
+        // the previous one had been fitted to reach (issue #46).
+        const mpm = createMpm()
+        fillIn(mpm, { id: 'dynamics_720', date: 720, volume: 0 })
+        fillIn(mpm, { id: 'dynamics_720_1', date: 720, volume: 60, curvature: 0.4 })
+
+        const written = getInstructions(mpm, 'dynamics', 'global')
+        expect(written).toHaveLength(1)
+        expect(written[0].volume).toBe(0)
+        expect(written[0].curvature).toBe(0.4)
+    })
+
+    test("a date the map does not hold does not merge into the next instruction", () => {
+        const mpm = createMpm()
+        fillIn(mpm, { id: 'dynamics_720', date: 720, volume: 90 })
+        fillIn(mpm, { id: 'dynamics_0', date: 0, volume: 60 })
+
+        expect(getInstructions(mpm, 'dynamics', 'global').map(d => d.volume)).toEqual([60, 90])
+    })
+
+    test("a <style> switch sharing the date is not filled in", () => {
+        const mpm = createMpm()
+        insertStyle(
+            mpm,
+            { 'xml:id': 'style_0', date: 0, 'name.ref': 'performance_style' },
+            'dynamics',
+            'global'
+        )
+        fillIn(mpm, { id: 'dynamics_0', date: 0, volume: 60 })
+
+        expect(getInstructions(mpm, 'dynamics', 'global')).toHaveLength(1)
+        expect(getStyles(mpm, 'dynamics', 'global')).toHaveLength(1)
     })
 })
 

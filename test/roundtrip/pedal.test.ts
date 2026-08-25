@@ -46,7 +46,7 @@ const pedalledScore = () => {
     return score
 }
 
-const fitPedals = (score: ReturnType<typeof pedalledScore>) => {
+const fitPedals = (score: ReturnType<typeof pedalledScore>, depth = SUSTAIN_DEPTH) => {
     const mpm = createMpm()
     const chain = [
         new ApproximateLogarithmicTempo({
@@ -56,7 +56,7 @@ const fitPedals = (score: ReturnType<typeof pedalledScore>) => {
             translatePhysicalModifiers: true, translatePedalling: true,
         }),
         new InsertPedal({
-            start: 0, duration: RAMP_TICKS, direction: 'down', depth: SUSTAIN_DEPTH,
+            start: 0, duration: RAMP_TICKS, direction: 'down', depth,
         }),
     ].sort(compareTransformers)
     for (const transformer of chain) transformer.run(score, mpm)
@@ -117,6 +117,19 @@ describe('pedalling reaches the renderer', () => {
         // 0 to 127: the ramp starts released and arrives fully down.
         expect(stream!.points[0].value).toBe(0)
         expect(Math.max(...stream!.points.map(point => point.value))).toBe(127)
+    })
+
+    /**
+     * `depth` is optional and defaults to a fully depressed pedal, and `|| 1` read a depth of
+     * `0` as "not given" — so a caller asking for no depression got the opposite of what they
+     * asked for, silently (issue #46).
+     */
+    test('a depth of 0 is a depth, not an absent option', () => {
+        const movements = getInstructions(fitPedals(pedalledScore(), 0), 'movement', 'global')
+            .sort((a, b) => a.date - b.date)
+
+        expect(movements[0].transitionTo).toBe(0)
+        expect(movements[1].position).toBe(0)
     })
 
     test('and the pedal comes from the MPM, not from the score alone', () => {

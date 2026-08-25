@@ -33,6 +33,34 @@ describe("TransformerRegistry", () => {
             expect(order.indexOf("MakeChoice")).toBeLessThan(order.indexOf("ApproximateLogarithmicTempo"))
             expect(order.indexOf("ApproximateLogarithmicTempo")).toBeLessThan(order.indexOf("InsertPedal"))
         })
+
+        // Two transformers the package exports were never registered, so `createTransformer`
+        // answered null for them — a saved work file naming one lost it on import — and
+        // `compareTransformers` ranked the name last, which is where an unknown one goes
+        // (issue #31).
+        test("the transformers the package exports are all registered", () => {
+            expect(isRegistered("InsertAsynchrony")).toBe(true)
+            expect(isRegistered("CompressOrnamentation")).toBe(true)
+        })
+
+        test("InsertAsynchrony runs before the physical time it edits is converted", () => {
+            const order = getTransformerOrder()
+            // Its own doc comment: it only modifies physical attributes, so it has to come
+            // before TranslatePhysicalTimeToTicks. Sorted last, it ran after.
+            expect(order.indexOf("InsertAsynchrony"))
+                .toBeLessThan(order.indexOf("TranslatePhysicalTimeToTicks"))
+        })
+
+        test("CompressOrnamentation runs after the defs it rounds are written", () => {
+            const order = getTransformerOrder()
+            expect(order.indexOf("StylizeOrnamentation"))
+                .toBeLessThan(order.indexOf("CompressOrnamentation"))
+        })
+
+        test("both can be rebuilt by name, which is what a saved work file needs", () => {
+            expect(createTransformer("InsertAsynchrony")?.name).toBe("InsertAsynchrony")
+            expect(createTransformer("CompressOrnamentation")?.name).toBe("CompressOrnamentation")
+        })
     })
 
     describe("createTransformer", () => {

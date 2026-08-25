@@ -101,15 +101,19 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         for (const [date, notes] of chords) {
             const notesWithVolume = notes
                 .filter(n => n.velocity !== undefined)
-            const velocity = notesWithVolume
+
+            // A phantom velocity is what the caller says the curve should pass through at this
+            // date, and it stands in for the chord's own mean whether or not it happens to be
+            // `0` — `||` read a phantom of 0 as no phantom at all (issue #46). Where there is
+            // neither, the mean is `0 / 0`: no chord to measure is not a velocity of NaN, and a
+            // point with no velocity is not a point.
+            const phantomVelocity = this.options.phantomVelocities.get(date)
+            if (phantomVelocity === undefined && notesWithVolume.length === 0) continue
+
+            const velocity = phantomVelocity ?? notesWithVolume
                 .reduce((sum, curr) => sum + curr.velocity, 0) / notesWithVolume.length
 
-            const phantomVelocity = this.options.phantomVelocities.get(date)
-
-            points.push({
-                date,
-                velocity: phantomVelocity || velocity
-            })
+            points.push({ date, velocity })
         }
 
         return points

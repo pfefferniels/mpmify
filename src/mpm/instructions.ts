@@ -8,7 +8,7 @@
  * another. Writing needs no such table: a transformer inserting a `<tempo>` holds a `TempoMap`
  * and calls `addTempo` on it.
  */
-import { Mpm } from 'espressivo'
+import { Element, Mpm } from 'espressivo'
 import { mapOf, scopesOf } from './document'
 import { getDefinition } from './styles'
 import {
@@ -187,16 +187,45 @@ export const fingerprintInstructions = (mpm: Mpm): Map<string, string> =>
 /**
  * The instructions in force at a date: those exactly at it, plus the last one before it where
  * that instruction is still running.
+ *
+ * A **set**, in the sense that no instruction is named twice. It used to be a list that could
+ * name one three times: an instruction exactly at the date was pushed by the filter and again as
+ * `ongoing`, and a looping rubato covering the date matched both of two separate `if`s. Every
+ * caller took `[0]`, so nothing was wrong — but "the instructions in force at a date" is a set to
+ * anyone reading the name (issue #47).
+ *
+ * Deduplicated by `element`, not by the snapshot: {@link getInstructions} builds a fresh object
+ * per call, so two readings of one instruction are equal in every field and identical in none.
+ * The element is what survives a snapshot, and it is the identity here.
+ *
+ * `articulation`, `ornament` and `asynchrony` have no branch: they are instantaneous, so being in
+ * force at a date and being *at* it are the same thing, and the filter has already answered. That
+ * is a statement about MPM, not an omission.
+ *
+ * @param beatDenominator the note value one beat of an `<accentuationPatternDef>` is worth, as a
+ * time-signature denominator. An MPM document does not carry the metre — the score does — so a
+ * caller that knows it has to say, and 4 is the assumption rather than the truth. It used to be
+ * spelled `* 720 * 4 / 4`, with the denominator's place left in the arithmetic as the cancelling
+ * `4 / 4` (issue #42).
  */
 export const instructionsEffectiveAtDate = <K extends InstructionType>(
-    mpm: Mpm, date: number, type: K, scope?: Scope,
+    mpm: Mpm, date: number, type: K, scope?: Scope, beatDenominator = 4,
 ): Instruction<K>[] => {
     const scopes: Scope[] = scope !== undefined ? [scope] : scopesOf(mpm)
 
+    const seen = new Set<Element>()
     const result: Instruction<K>[] = []
+    const take = (instruction: Instruction<K>) => {
+        if (seen.has(instruction.element)) return
+        seen.add(instruction.element)
+        result.push(instruction)
+    }
+
     for (const one of scopes) {
         const instructions = getInstructions(mpm, type, one)
-        result.push(...instructions.filter(instruction => instruction.date === date))
+        for (const instruction of instructions) {
+            if (instruction.date === date) take(instruction)
+        }
 
         const ongoing = instructions.slice().reverse().find(i => i.date <= date)
         if (!ongoing) continue
@@ -206,22 +235,21 @@ export const instructionsEffectiveAtDate = <K extends InstructionType>(
         const running = ongoing as AnyInstruction
 
         if (running.type === 'tempo' || running.type === 'dynamics' || running.type === 'movement') {
-            result.push(ongoing)
+            take(ongoing)
         }
         else if (running.type === 'rubato') {
-            if (running.loop) result.push(ongoing)
             // `@frameLength` is optional on the instruction — absent, the `rubatoDef` it names
             // supplies one. Reading that would mean resolving the def here; treating absence as
             // a zero-length frame keeps the old reading, which computed `NaN` and so fell
             // through the same way.
-            if (date < running.date + (running.frameLength ?? 0)) result.push(ongoing)
+            if (running.loop || date < running.date + (running.frameLength ?? 0)) take(ongoing)
         }
         else if (running.type === 'accentuationPattern') {
             const def = getDefinition(mpm, 'accentuationPatternDef', running.accentuationPatternDefName)
-            // `@length` is in bars; this reads them as whole notes, which is the 4/4 the
-            // expression's `* 4 / 4` was spelling out. Unchanged, just named.
-            if (def && date < running.date + def.getLength() * PULSES_PER_WHOLE / 4) {
-                result.push(ongoing)
+            // `@length` is in beats, and a beat is `4 * ppq / denominator` ticks — the same
+            // conversion espressivo's `MetricalAccentuationMap` makes when it renders the pattern.
+            if (def && date < running.date + def.getLength() * PULSES_PER_WHOLE / beatDenominator) {
+                take(ongoing)
             }
         }
     }

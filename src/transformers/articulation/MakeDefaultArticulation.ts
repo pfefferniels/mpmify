@@ -24,7 +24,12 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
 
     protected transform(msm: Alignment, mpm: Mpm) {
         // collect notes that have no articulation
-        const notes: AlignedNote[] = [...msm.allNotes]
+        //
+        // From this transformer's own scope. The articulations below are read per-scope and the
+        // definition it writes is inserted per-scope, but the candidate notes were taken from
+        // the whole score — so a part-scoped call averaged the other parts' notes into this
+        // part's `relativeDuration`, and then published that as the part's default (issue #44).
+        const notes: AlignedNote[] = msm.notesInPart(this.options.scope)
         for (const articulation of getInstructions(mpm, 'articulation', this.options.scope)) {
             if (articulation.noteid) {
                 // One reference, the way the renderer reads it. This walked a space-separated

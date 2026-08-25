@@ -189,8 +189,8 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // which is why nothing but a render ever noticed.
         //
         // The id is minted immediately before each insertion, not for the batch up front:
-        // `generateId` numbers by how many instructions the map already holds at that date, so
-        // a batch that no longer has one entry per date has to let it see each one land.
+        // `generateId` picks the first suffix the map does not already use at that date, so a
+        // batch that no longer has one entry per date has to let it see each one land.
         const map = requireMap(mpm, 'articulation', this.options.scope)
         for (const { date, noteid } of articulations) {
             map.addArticulation({

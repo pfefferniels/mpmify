@@ -1,11 +1,12 @@
 import { InsertMetricalAccentuation, MergeMetricalAccentuations } from "./accentuation";
 import { InsertArticulation, MakeDefaultArticulation } from "./articulation";
 import { StylizeArticulation } from "./articulation/StylizeArticulation";
+import { InsertAsynchrony } from "./asynchrony/InsertAsynchrony";
 import { MakeChoice } from "./choice/MakeChoice";
 import { InsertDynamicsInstructions } from "./dynamics";
 import { InsertMetadata } from "./metadata";
 import { Modify } from "./modification/Modify";
-import { InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
+import { CompressOrnamentation, InsertTemporalSpread, InsertDynamicsGradient, StylizeOrnamentation } from "./ornamentation";
 import { InsertPedal } from "./pedal/InsertPedalInstructions";
 import { CombineAdjacentRubatos } from "./rubato/CombineAdjacentRubatos";
 import { InsertRubato } from "./rubato/InsertRubato";
@@ -22,11 +23,27 @@ registerTransformer(Modify);
 // round, the direction is read off onsets that no longer differ and every arpeggio's ramp comes
 // back reversed — a truth of 39/51.5/64 refitting as 64/51.5/39. `InsertDynamicsGradient`'s own
 // doc comment has said so all along; the registry disagreed with it. See issue #32.
+//
+// The order carries a second weight the two transformers do not state. They share one
+// `<ornament>` through `fillInAt`, which leaves a field the element already has alone — and
+// espressivo's `addOrnamentV3` always writes `@scale`, at the spec's default of 0. So an
+// `<ornament>` the spread wrote already has a scale, and the gradient's fitted one would be
+// dropped into it silently. Gradient first, and the question does not arise.
 registerTransformer(InsertDynamicsGradient);
 registerTransformer(InsertTemporalSpread);
 registerTransformer(ApproximateLogarithmicTempo);
+// Before `TranslatePhysicalTimeToTicks`, because it edits `milliseconds.date` and that transformer
+// reads the physical domain to convert it. Unregistered, it sorted *after* everything known —
+// `compareTransformers` ranks an unknown name last — so it ran on onsets the conversion had
+// already been done against, and `requires: []` meant `validate` said nothing either. `requires`
+// still cannot carry this: it asserts that a name appears *earlier* in the chain, which is the
+// opposite relation. See issue #31.
+registerTransformer(InsertAsynchrony);
 registerTransformer(TranslatePhysicalTimeToTicks);
 registerTransformer(StylizeOrnamentation);
+// After `StylizeOrnamentation`, which is also what its `requires` says: it rounds the frames of
+// the `<ornamentDef>`s that transformer writes, so there is nothing for it to round before.
+registerTransformer(CompressOrnamentation);
 registerTransformer(InsertRubato);
 registerTransformer(CombineAdjacentRubatos);
 registerTransformer(InsertDynamicsInstructions);

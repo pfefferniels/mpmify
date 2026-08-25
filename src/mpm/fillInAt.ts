@@ -45,7 +45,10 @@ export const fillInAt = <O extends { date: number; noteid?: string }>(
     const current = ops.read(index) as Record<string, unknown> | null
     const patch: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(options)) {
-        if (current?.[key]) continue
+        // `!== undefined`, not truthiness: a field the earlier transformer deliberately set to
+        // `0` is set, and `0` is not exotic here — a diminuendo al niente is a `<dynamics>` whose
+        // `volume` is exactly that, and the next segment's fit lands on it (issue #46).
+        if (current?.[key] !== undefined) continue
         patch[key] = value
     }
     ops.update(index, patch as Partial<O>)

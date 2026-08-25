@@ -82,11 +82,18 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     name = 'StylizeOrnamentation'
     requires = [InsertDynamicsGradient, InsertTemporalSpread]
 
-    constructor(options?: StylizeOrnamentationOptions) {
+    /**
+     * All three tolerances are read, and read with `??`. Two of them were hardcoded here and the
+     * caller's values discarded, so `new StylizeOrnamentation({ intensityTolerance: 0.9 })`
+     * clustered at 0.3 (issue #33). `??` rather than `||` for the same reason as in
+     * `StylizeArticulation`: `0` means "exact matches only", which is what the `noteoff.shift`
+     * dimension of `generateClusters` already asks for.
+     */
+    constructor(options?: Partial<StylizeOrnamentationOptions>) {
         super({
-            tickTolerance: options?.tickTolerance || 10,
-            intensityTolerance: 0.3,
-            gradientTolerance: 0.1
+            tickTolerance: options?.tickTolerance ?? 10,
+            intensityTolerance: options?.intensityTolerance ?? 0.3,
+            gradientTolerance: options?.gradientTolerance ?? 0.1
         })
     }
 

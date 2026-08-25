@@ -246,3 +246,59 @@ describe('the closing neutral marks the end of the last accepted cell', () => {
         expect(nextDesk.scale).toBe(7)
     })
 })
+
+/**
+ * Beats are counted as integers and converted to ticks once, rather than accumulated.
+ *
+ * `for (let beat = 0; …; beat += beatLength)` is exact for a binary basis like 0.25 and drifts
+ * for anything else. A triplet basis is the ordinary case that is not: adding 1/6 three times
+ * gives 0.49999999999999994, so the date it asks about is 1439.9999999999998 — and `notesAtDate`
+ * compares dates with `===`, so the beat silently matched no note and dropped out of the pattern
+ * (issue #42).
+ */
+describe('a beat grid that is not a power of two', () => {
+    const TRIPLET = 1 / 6
+    const TRIPLET_TICKS = 4 * PULSES_PER_QUARTER * TRIPLET
+    const TRIPLET_SHAPE = [0.3, 1, 0.5, 0.9, 0.4, 0.6, 0.2]
+
+    const tripletFixture = () => {
+        const notes = TRIPLET_SHAPE.map((shape, index) => ({
+            ...note(0, VOLUME + shape * 10),
+            'xml:id': `t_${index}`,
+            date: index * TRIPLET_TICKS,
+        } as AlignedNote))
+
+        const msm = new Alignment(notes, { numerator: 4, denominator: 4 })
+        const mpm = createMpm()
+        requireMap(mpm, 'tempo', 'global')
+            .addTempo({ id: 't1', date: 0, bpm: 120, beatLength: 0.25 })
+        requireMap(mpm, 'dynamics', 'global')
+            .addDynamics({ id: 'd1', date: 0, volume: VOLUME })
+        return { msm, mpm }
+    }
+
+    test('every beat of the cell reaches the pattern', () => {
+        const { msm, mpm } = tripletFixture()
+
+        const transformer = new InsertMetricalAccentuation({
+            scope: 'global',
+            name: 'triplets',
+            from: 0,
+            to: 6 * TRIPLET_TICKS,
+            beatLength: TRIPLET,
+            scaleTolerance: 0,
+        })
+        type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
+        ;(transformer as unknown as Transformable).transform(msm, mpm)
+
+        const def = getDefinitions(mpm, 'accentuationPatternDef', 'global')
+            .find(d => d.getName() === 'triplets')!
+
+        // Seven samples, and an accentuation for every one but the last — which only names where
+        // the one before it transitions to. The accumulating loop lost the samples at 3 and 6
+        // beats, which is where the drift first shows.
+        const beats = def.getAllAccentuations().map(({ key: [beat] }) => beat)
+        expect(beats).toHaveLength(6)
+        expect(beats).toEqual([0, 1, 2, 3, 4, 5].map(index => 4 * index * TRIPLET + 1))
+    })
+})
