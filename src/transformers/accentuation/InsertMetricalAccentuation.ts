@@ -144,6 +144,16 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         let scale = prototypeScale
         let cellsInMean = 1
 
+        // Where the run of accepted repetitions stopped, and the date the closing neutral
+        // belongs on. It cannot be read off `currentCell` afterwards, because the two exit
+        // paths leave that in different states: the body advances the cell *before* judging
+        // it, so on a `break` the cell is the rejected one — its start being the end of the
+        // last accepted repeat by coincidence — while on the `while` condition going false
+        // the last repeat was accepted and the cell is still that one, a whole cell short.
+        // Inferring from `currentCell.start` put the neutral on top of a repetition that had
+        // just been validated and cancelled it. See issue #43.
+        let acceptedThrough = cell.end
+
         // try to loop until we cannot fit the data into the 
         // pattern anymore or we reach the next cell
         const currentCell = { ...cell }
@@ -180,6 +190,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
             scale = (scale * cellsInMean + currentScale) / (cellsInMean + 1)
             cellsInMean++;
+            acceptedThrough = currentCell.end
         }
 
         const accentuationPatternDef: AccentuationPatternDef = {
@@ -191,7 +202,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
         mpm.insertDefinition(accentuationPatternDef, this.options.scope)
 
-        const loop = currentCell.start > cell.end
+        const loop = acceptedThrough > cell.end
         const newPattern: AccentuationPattern = {
             type: 'accentuationPattern',
             'name.ref': accentuationPatternDef.name,
@@ -206,8 +217,8 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             mpm.insertInstruction({
                 type: 'accentuationPattern',
                 'name.ref': 'neutral',
-                date: currentCell.start,
-                "xml:id": generateId('accentuationPattern', currentCell.start, mpm),
+                date: acceptedThrough,
+                "xml:id": generateId('accentuationPattern', acceptedThrough, mpm),
                 scale: 0,
                 loop: undefined
             }, this.options.scope)
