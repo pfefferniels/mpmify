@@ -66,8 +66,14 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
             ? note["midi.velocity"] / prescribed
             : undefined
 
+        // Both are absent where the recording did not place the note, and saying nothing is what
+        // an absent measurement means: a `<articulation>` without them still articulates. The
+        // cast is what let the subtraction typecheck against `undefined`, and `NaN - duration`
+        // is `NaN`, which reached the document (issue #27) — `relativeDuration` above already
+        // declined to guess in exactly this case.
         const absoluteDuration = tickDuration
-        const absoluteDurationChange = (tickDuration as number) - note.duration
+        const absoluteDurationChange =
+            tickDuration === undefined ? undefined : tickDuration - note.duration
 
         return {
             type: 'articulation',

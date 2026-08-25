@@ -1,9 +1,8 @@
 import { MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { AbstractTransformer, TransformationOptions } from "../Transformer";
-import { millisecondsAt, ticksForConstantTempo } from "./tempoCalculations";
-import { placeTempos, PlacedTempo } from "./placedTempos";
-import { approximateDate } from "./tickTimes";
+import { dateAtMilliseconds, millisecondsAt } from "./tempoCalculations";
+import { placeTempos, PlacedTempo, segmentAtMs } from "./placedTempos";
 
 export interface TranslatePhysicalTimeToTicksOptions extends TransformationOptions {
     /**
@@ -58,38 +57,28 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
      * `NaN` into the frame and marking the ornament converted. A roll that begins before its beat
      * is what an arpeggio *is*, so that was every piece-initial ornament.
      *
-     * Outside the covered span the answer is an extrapolation at the boundary tempo rather than
-     * nothing: exact wherever that boundary segment is constant, and the right limit approaching
-     * the boundary where it is not.
+     * The two extrapolations that answered them are gone from here, and not because they were
+     * wrong: they were a third and fourth hand-copy of a rule `segmentAtMs` and
+     * `dateAtMilliseconds` now state once. The first-segment copy measured from `ms` where the
+     * cursor starts at `startMs`, and the last-segment copy read `@transition.to` straight off
+     * the record — which is not the tempo the span arrives at when `@meanTempoAt` resolves the
+     * transition away. Both now come out of the same two functions the note walk uses, so an
+     * ornament and the notes it ornaments cannot be placed by different arithmetic.
      */
     private msToTicks(ms: number, segments: PlacedTempo[]): number | undefined {
-        if (segments.length === 0) return undefined
-
-        const first = segments[0].tempo
-        if (ms < 0) {
-            return first.date + ticksForConstantTempo(ms, first)
-        }
-
-        for (const { tempo, startMs, modelledMs } of segments) {
-            if (ms >= startMs && ms < startMs + modelledMs) {
-                return approximateDate(ms - startMs, tempo)
-            }
-        }
-
-        // Past the final segment: extrapolate at the tempo it arrives at.
-        const last = segments[segments.length - 1]
-        const elapsed = last.startMs + last.measuredMs
-        return last.tempo.endDate + ticksForConstantTempo(ms - elapsed, {
-            bpm: last.tempo["transition.to"] ?? last.tempo.bpm,
-            beatLength: last.tempo.beatLength,
-        })
+        const segment = segmentAtMs(segments, ms)
+        if (!segment) return undefined
+        const ticks = dateAtMilliseconds(ms - segment.startMs, segment.resolved)
+        // `dateAtMilliseconds` answers `NaN` for a time it was not given — the caller subtracts
+        // this to build a frame, and a `NaN` frame is the shape issue #26 was reported as.
+        return Number.isFinite(ticks) ? ticks : undefined
     }
 
     private ticksToMs(ticks: number, segments: PlacedTempo[]) {
         for (const { tempo, resolved, startMs } of segments) {
             // The tick window is the instruction's own span, and for the last segment that ends
             // at the end of the score rather than running open — so this is deliberately not
-            // `coversDate`, which lets the last segment take everything after it.
+            // `coversDate`, which lets the last segment take everything after the score ends.
             if (ticks >= tempo.date && ticks < tempo.endDate) {
                 return startMs + millisecondsAt(ticks, resolved)
             }

@@ -21,9 +21,10 @@
  * answer is the one that decides whether a fit is right, so matching it is correctness and not
  * precision.
  *
- * What is genuinely mpmify's stays here: {@link ticksForConstantTempo} (espressivo has no
- * inverse), and the two fitting helpers the desks drive, which now measure with the renderer's
- * quadrature instead of their own.
+ * What is genuinely mpmify's stays here: the inverse direction — {@link ticksForConstantTempo}
+ * and {@link dateAtMilliseconds}, which answer "which tick is this millisecond" and have no
+ * counterpart in espressivo because a renderer never needs one — and the two fitting helpers the
+ * desks drive, which now measure with the renderer's quadrature instead of their own.
  */
 import { TempoMap, resolveTempo, tempoAt, type Tempo as ResolvedTempo } from 'espressivo'
 import { Tempo } from "../../mpm";
@@ -45,9 +46,10 @@ export type TempoWithEndDate = Tempo & WithEndDate
  * absent. Three of those normalisations are the ones the hand-written version got wrong (see the
  * module header), and they are made here, once, rather than at each evaluation.
  *
- * Exported because it is worth calling once per segment and then evaluating many times —
- * {@link approximateDate} runs up to a thousand iterations over one instruction. `tempoAt` and
- * {@link millisecondsAt} take the result.
+ * Exported because it is worth calling once per segment and then evaluating many times: it
+ * parses `@bpm` and `@transition.to` out of text, and a walk over a score asks about the same
+ * span once per note. `tempoAt`, {@link millisecondsAt} and {@link dateAtMilliseconds} all take
+ * the result rather than the record.
  *
  * `@bpm` and `@transition.to` go across as text because that is what espressivo resolves from:
  * a style-relative name (`"Allegro"`) is as legal an `@bpm` as a number, and with no style in
@@ -69,34 +71,78 @@ export const resolveSpan = (tempo: TempoWithEndDate): ResolvedTempo => resolveTe
 )
 
 /**
- * Elapsed milliseconds from the start of an already-resolved span to `date`.
+ * The instantaneous tempo of an already-resolved span at `date`, clamped to the span's own ends.
  *
- * ## Past the end of the span
+ * Both ends need clamping and for different reasons. Below `startDate` the progress term goes
+ * negative and `Math.pow(negative, non-integer)` is `NaN`, which then propagates silently through
+ * every comparison that reads it — `Math.abs(NaN - x) > 1` is `false`, so a loop testing for
+ * convergence exits as though it had converged (issue #26). meico's `TempoMap.renderTempoToMap`
+ * has the same hole and the same fix (`bugs.md` #7), so clamping here keeps the two in step.
+ * Above `endDate` there is no `NaN` — the curve simply runs away from *both* of its endpoints,
+ * which is worse than wrong because it looks like an answer.
  *
- * espressivo never evaluates a `<tempo>` beyond its own `endDate` — the next instruction takes
- * over there — so `tempoAt` past the end keeps raising the progress term above 1 and the curve
- * runs away from both of its endpoints. mpmify *does* ask: {@link approximateDate} inverts this
- * function by walking a guess, and {@link ticksForConstantTempo}'s callers ask about times that
- * reach past the last instruction on purpose.
+ * The clamped value is the honest reading either way: the next instruction takes over at
+ * `endDate`, and the previous one was in force before `startDate`.
+ */
+const tempoAtClamped = (tempo: ResolvedTempo, date: number): number =>
+    tempoAt(tempo, Math.min(Math.max(date, tempo.startDate), tempo.endDate))
+
+/**
+ * Milliseconds elapsed across `ticks` at a constant `bpm` — meico's own constant-tempo formula,
+ * and the exact inverse of {@link ticksForConstantTempo}. The two are written next to each
+ * other's constants deliberately: an extrapolation and its inversion that disagree would show up
+ * as a fit that will not round-trip, which is expensive to trace back to a divisor.
+ */
+const msForConstantTempo = (
+    ticks: number,
+    bpm: number,
+    tempo: Pick<ResolvedTempo, 'beatLength'>
+): number => (15000.0 * ticks) / (bpm * tempo.beatLength * PULSES_PER_QUARTER)
+
+/**
+ * Elapsed milliseconds from the start of an already-resolved span to `date`, for **any** `date`.
  *
- * So beyond the span the answer is a continuation at the tempo the transition arrives at, which
- * is both the honest reading — the next instruction starts there, or the piece goes on at that
- * tempo — and the same extrapolation `TranslatePhysicalTimeToTicks` already makes at the end of
- * the piece. This is mpmify's own semantics layered on espressivo's arithmetic, not a second
- * copy of it: everything inside the span is `computeDiffTiming`, and the continuation is the
+ * ## Outside the span
+ *
+ * espressivo never evaluates a `<tempo>` outside its own span — the neighbouring instructions
+ * take over there — so neither end of `tempoAt` is defined beyond it: past `endDate` the progress
+ * term rises above 1 and the curve runs away from both of its endpoints, and before `startDate`
+ * it goes negative and the power is `NaN`. mpmify *does* ask, at both ends.
+ * {@link dateAtMilliseconds} inverts this function and has to be able to walk a guess outside
+ * the span to get back into it; an ornament's frame reaches backwards from its anchor, so a roll
+ * on the first beat asks about a negative time; and a note released after the last modelled
+ * moment of the piece asks about one past the end.
+ *
+ * So outside the span the answer is a continuation at the boundary tempo — the one the transition
+ * arrives at, or the one it departs from. That is the honest reading (the neighbouring
+ * instruction starts there, or the piece goes on at that tempo), it is exact wherever the
+ * boundary segment is constant, and it is the right limit approaching the boundary where it is
+ * not. This is mpmify's own semantics layered on espressivo's arithmetic, not a second copy of
+ * it: everything inside the span is `computeDiffTiming`, and the continuations are the
  * constant-tempo formula that {@link ticksForConstantTempo} inverts.
  *
- * A constant tempo is unaffected either way — its formula is already linear in `date`, so the
- * split changes nothing. Only transitions reach the second branch.
+ * The result is total, continuous and strictly increasing in `date` — which is what makes
+ * inverting it a well-posed problem rather than a search that can silently fail.
+ *
+ * A constant tempo is unaffected — its formula is already linear in `date` over the whole real
+ * line, so the split changes nothing. Only transitions reach the outer branches.
  */
 export const millisecondsAt = (date: number, tempo: ResolvedTempo): number => {
-    if (date <= tempo.endDate || tempo.kind === 'constant') {
+    // Already linear in `date` over the whole real line, and espressivo's own formula for it.
+    if (tempo.kind === 'constant') {
         return TempoMap.computeDiffTiming(date, PULSES_PER_QUARTER, tempo)
     }
 
-    const toEnd = TempoMap.computeDiffTiming(tempo.endDate, PULSES_PER_QUARTER, tempo)
-    const arrivedAt = tempoAt(tempo, tempo.endDate)
-    return toEnd + (15000.0 * (date - tempo.endDate)) / (arrivedAt * tempo.beatLength * PULSES_PER_QUARTER)
+    if (date < tempo.startDate) {
+        return msForConstantTempo(date - tempo.startDate, tempoAtClamped(tempo, tempo.startDate), tempo)
+    }
+
+    if (date > tempo.endDate) {
+        const toEnd = TempoMap.computeDiffTiming(tempo.endDate, PULSES_PER_QUARTER, tempo)
+        return toEnd + msForConstantTempo(date - tempo.endDate, tempoAtClamped(tempo, tempo.endDate), tempo)
+    }
+
+    return TempoMap.computeDiffTiming(date, PULSES_PER_QUARTER, tempo)
 }
 
 // ── Curve shape fitting ───────────────────────────────────────────
@@ -293,13 +339,121 @@ export const ticksForConstantTempo = (
     tempo: Pick<Tempo, 'bpm' | 'beatLength'>
 ): number => (milliseconds * Number(tempo.bpm) * tempo.beatLength * PULSES_PER_QUARTER) / 15000.0
 
+/** How close {@link dateAtMilliseconds} gets, where the iteration it replaces stopped at 1 ms. */
+const INVERSE_TOLERANCE_MS = 1e-6
+
+/**
+ * ... and how narrow it lets the bracket get before it stops, which is the exit that actually
+ * fires. Simpson's sub-interval count steps with the date (`2 * floor(span / (ppq / 4))`), so
+ * what is being inverted has hairline discontinuities at every sixteenth note and the
+ * millisecond test alone is not guaranteed to be reachable. A millionth of a tick is a
+ * nanosecond at any tempo anyone plays.
+ */
+const INVERSE_TOLERANCE_TICKS = 1e-6
+
+/**
+ * A backstop, not a working limit: bisection alone halves the bracket every step, so
+ * {@link INVERSE_TOLERANCE_TICKS} is reached from any real span within about fifty. Newton
+ * normally arrives in four or five.
+ */
+const MAX_INVERSE_STEPS = 100
+
+/**
+ * The tick date at which `targetMilliseconds` have elapsed since the start of `tempo`'s span —
+ * the exact inverse of {@link millisecondsAt}, over the same unbounded domain.
+ *
+ * This was `approximateDate`, and issue #26 is the record of what it was approximating:
+ *
+ * - **It could not leave the span.** The guess started at `startDate`, and a target before it —
+ *   which is what a note sounding ahead of its predecessor produces, so every arpeggio and every
+ *   asynchrony — walked the guess backwards into the region where `millisecondsAt` was undefined.
+ *   With a non-integer exponent that is `NaN`, and `Math.abs(NaN - target) > 1` is `false`, so
+ *   the loop exited *reporting convergence* on its first step. With an integer one it was worse:
+ *   the sign of Simpson's `resultConst` flips below `startDate`, so the elapsed time came back
+ *   positive, the step kept pushing the same way, and a target of −200 ms landed 20 000 ticks
+ *   from the answer. Both are fixed at the source — {@link millisecondsAt} is total now — and
+ *   both ends of it invert in closed form, so the walk never has to leave the span at all.
+ *
+ * - **The step had the wrong units.** `guess += 0.1 * (targetMs - guessedMs)` adds milliseconds
+ *   to a tick count. The constant 0.1 converges for ordinary tempi and diverges below about
+ *   4 bpm per beat unit — at 2 bpm a 1 s target returned a tick 55 000 out. The step is now the
+ *   Newton one, which is {@link ticksForConstantTempo} of the millisecond shortfall at the tempo
+ *   holding where the guess stands: dimensionally right by construction, exact wherever the span
+ *   is constant, and quadratic where it is not.
+ *
+ * - **It could not fail.** There was no convergence check and no bracket, so a thousand steps of
+ *   a diverging iteration returned a plausible-looking tick number. `millisecondsAt` is strictly
+ *   increasing, so the span's own ends bracket any target inside it; the bracket is kept and a
+ *   Newton step that would leave it is replaced by bisection. That is `rtsafe`, and it cannot run
+ *   away: every step either converges or at least halves the bracket. The only way out with a
+ *   non-answer is a non-finite target, and that comes back as `NaN` rather than as a number.
+ *
+ * Which arm is taken is decided by {@link resolveSpan} rather than by a truthiness test on
+ * `@transition.to` and `@meanTempoAt` here, and that is not a tidying-up: `meanTempoAt="0"`
+ * resolves to a constant at `@transition.to`, and reading `0` as falsy inverted it at `@bpm`
+ * instead — 1 000 ms came back as the tick where 667 ms had elapsed. A `@transition.to` with no
+ * `@meanTempoAt` resolves to a *linear ramp*, and the closed form inverted that at `@bpm` too.
+ * Both were wrong against the renderer, which is the only thing that decides whether a fit is
+ * right.
+ */
+export const dateAtMilliseconds = (targetMilliseconds: number, tempo: ResolvedTempo): number => {
+    // A caller that does not know the time it is asking about is not owed a tick that looks like
+    // an answer. `NaN` is what the arithmetic downstream already refuses to write.
+    if (!Number.isFinite(targetMilliseconds)) return NaN
+
+    const { startDate, endDate } = tempo
+
+    if (tempo.kind === 'constant') {
+        return startDate + ticksForConstantTempo(targetMilliseconds, tempo)
+    }
+
+    // Outside the span {@link millisecondsAt} continues at the boundary tempo, so the inverse is
+    // closed-form there too — and exactly the extrapolation the ornament frames rely on.
+    if (targetMilliseconds <= 0) {
+        return startDate + ticksForConstantTempo(targetMilliseconds, {
+            bpm: tempoAtClamped(tempo, startDate), beatLength: tempo.beatLength,
+        })
+    }
+
+    const spanMilliseconds = millisecondsAt(endDate, tempo)
+    if (targetMilliseconds >= spanMilliseconds) {
+        return endDate + ticksForConstantTempo(targetMilliseconds - spanMilliseconds, {
+            bpm: tempoAtClamped(tempo, endDate), beatLength: tempo.beatLength,
+        })
+    }
+
+    // Inside the curve, where there is no closed form. The target lies strictly between 0 and
+    // the span's own elapsed time, so `[startDate, endDate]` brackets it.
+    let low = startDate
+    let high = endDate
+    let guess = startDate + ticksForConstantTempo(targetMilliseconds, {
+        bpm: tempoAtClamped(tempo, startDate), beatLength: tempo.beatLength,
+    })
+    if (!(guess > low && guess < high)) guess = (low + high) / 2
+
+    for (let step = 0; step < MAX_INVERSE_STEPS; step++) {
+        const elapsed = millisecondsAt(guess, tempo)
+        if (Math.abs(elapsed - targetMilliseconds) <= INVERSE_TOLERANCE_MS) return guess
+
+        if (elapsed < targetMilliseconds) low = guess
+        else high = guess
+        if (high - low <= INVERSE_TOLERANCE_TICKS) return guess
+
+        const newton = guess + ticksForConstantTempo(targetMilliseconds - elapsed, {
+            bpm: tempoAtClamped(tempo, guess), beatLength: tempo.beatLength,
+        })
+        guess = newton > low && newton < high ? newton : (low + high) / 2
+    }
+
+    return guess
+}
+
 /**
  * The instantaneous tempo, in bpm, that `tempo` calls for at `date`.
  *
- * Past the end of the span the answer is the tempo the transition arrives at — see
- * {@link millisecondsAt} for why mpmify asks at all and why the curve is not continued.
+ * Outside the span the answer is the tempo at the nearer boundary — see {@link tempoAtClamped}
+ * for why the curve is not continued past either end, and {@link millisecondsAt} for why mpmify
+ * asks outside the span at all.
  */
-export const getTempoAt = (date: number, tempo: TempoWithEndDate): number => {
-    const resolved = resolveSpan(tempo)
-    return tempoAt(resolved, Math.min(date, resolved.endDate))
-}
+export const getTempoAt = (date: number, tempo: TempoWithEndDate): number =>
+    tempoAtClamped(resolveSpan(tempo), date)

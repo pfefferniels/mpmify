@@ -29,8 +29,13 @@
  * The cursor always advances by the measured length, which is the anchoring rule stated as
  * arithmetic: `startMs + measuredMs` is the anchor's own onset wherever there is an anchor.
  *
- * The callers do *not* agree about which length bounds the segment as a window, and that
- * disagreement is preserved here rather than quietly resolved — see the note on `measuredMs`.
+ * The callers used to disagree about which of the two bounds a segment *as a window*, and the
+ * disagreement was left standing here on the grounds that resolving it changes which segment a
+ * pedal is measured in. Issue #27 is what that cost: windows built from `modelledMs` while the
+ * cursor advanced by `measuredMs` are neither contiguous nor exhaustive, so a note or a pedal
+ * falling in a gap between two of them was assigned no tick position at all, and one falling in
+ * an overlap could take its onset from one segment and its duration from the next. The windows
+ * are a partition now, and {@link segmentAtMs} is where that is stated — see its note.
  */
 import { MPM, Scope } from "../../mpm"
 import { MSM, MsmNote } from "../../msm"
@@ -43,8 +48,9 @@ export interface PlacedTempo {
 
     /**
      * The instruction as the renderer resolves it. Resolved once per segment because the
-     * consumers evaluate it many times — {@link approximateDate} runs up to a thousand
-     * iterations over one of these.
+     * consumers evaluate it many times, and resolving parses `@bpm` out of text: a walk over a
+     * score asks about the same span once per note, and `dateAtMilliseconds` several times per
+     * ask.
      */
     readonly resolved: ResolvedTempo
 
@@ -70,14 +76,9 @@ export interface PlacedTempo {
      * What the *recording* says the segment lasts: the anchor's onset less {@link startMs}, or
      * {@link modelledMs} where no note lands on the boundary.
      *
-     * `startMs + measuredMs` is therefore the next segment's `startMs`, always.
-     *
-     * **A standing discrepancy.** `addTickDurations` bounds its frame with this; `addTickOnsets`
-     * bounds its *pedal* window with {@link modelledMs} while advancing its cursor by this. Where
-     * a recording runs ahead of or behind its notation the two disagree, so a pedal near a tempo
-     * boundary can fall into both windows or neither. That is pre-existing behaviour and is left
-     * as it was found; fixing it changes which segment a pedal is measured in, which is a
-     * question for a test that measures pedals rather than for a refactor.
+     * `startMs + measuredMs` is therefore the next segment's `startMs`, always — which is why
+     * this and not {@link modelledMs} is what bounds a segment as a window on the recording.
+     * {@link segmentAtMs} is the only place that division is made.
      */
     readonly measuredMs: number
 }
@@ -117,6 +118,42 @@ export const placeTempos = (msm: MSM, mpm: MPM, scope: Scope): PlacedTempo[] => 
     return segments
 }
 
-/** Whether `date` falls in the stretch of score this segment governs. */
+/**
+ * Whether `date` falls in the stretch of *score* this segment governs.
+ *
+ * The tick windows tile `[tempos[0].date, ∞)` exactly, so a note has one segment or none, and
+ * none means the tempo map does not reach back as far as the note. That case is deliberately not
+ * folded into the first segment the way {@link segmentAtMs} folds the millisecond one: before its
+ * first `<tempo>` the renderer does not extrapolate backwards either — it falls back on MPM's
+ * default of 100 quarter-bpm (`TempoMap.renderTempoToMap`) — so a tick position invented from the
+ * first instruction's tempo would be one the performance will not agree with.
+ */
 export const coversDate = (segment: PlacedTempo, date: number): boolean =>
     date >= segment.tempo.date && (segment.nextDate === undefined || date < segment.nextDate)
+
+/**
+ * The segment governing a millisecond time on the *recording*'s timeline.
+ *
+ * The windows are `[startMs, startMs + measuredMs)`, and because the cursor advances by exactly
+ * `measuredMs` that makes each one's end the next one's start: contiguous by construction rather
+ * than by two expressions happening to agree. The first window opens at −∞ and the last closes at
+ * +∞, so **every** finite time has exactly one segment and no caller has to decide what to do
+ * with one that has none.
+ *
+ * Both open ends earn their place. A recording is aligned to the score, not generated from it, so
+ * an onset can land before the first modelled moment; and a note or pedal released after the last
+ * one is ordinary rather than exceptional — the final `<tempo>` runs to the end of the *score*,
+ * and a performer's hand comes off the key after that. Issue #27 is what closing them cost: the
+ * last note of the run had no `tickDuration`, `InsertRubato` saw it and abandoned the whole
+ * frame, and `InsertArticulation` did not see it and wrote `NaN` into the document.
+ *
+ * Searching from the end rather than the start is what makes the fold-in work, and it also
+ * decides the degenerate case: where a recording is so far out of order that the cursor goes
+ * backwards, the later segment wins.
+ */
+export const segmentAtMs = (segments: PlacedTempo[], ms: number): PlacedTempo | undefined => {
+    for (let i = segments.length - 1; i > 0; i--) {
+        if (ms >= segments[i].startMs) return segments[i]
+    }
+    return segments[0]
+}

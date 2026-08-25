@@ -22,8 +22,8 @@
  */
 import { MPM } from "../../mpm";
 import { MSM } from "../../msm";
-import { millisecondsAt, resolveSpan, ticksForConstantTempo, TempoWithEndDate } from "./tempoCalculations";
-import { coversDate, placeTempos } from "./placedTempos";
+import { dateAtMilliseconds } from "./tempoCalculations";
+import { coversDate, placeTempos, PlacedTempo, segmentAtMs } from "./placedTempos";
 import { removeRubatoDistortion } from "../rubato/rubatoMath";
 
 /** Where one note or pedal fell on the score grid. Absent fields mean "no tempo covered it". */
@@ -60,118 +60,98 @@ const at = (table: Map<string, TickTime>, id: string): TickTime => {
 }
 
 /**
- * Translates MIDI onset times into tempo-dependent ticks using the newly interpolated tempo
- * curves, writing `tickDate` for every note and pedal a segment covers.
+ * Where a recorded time falls on the tick grid, under whichever segment governs it.
+ *
+ * The one place a millisecond time becomes a tick date, so that "which segment" and "measured
+ * from that segment's own start" cannot come apart. Returns `undefined` only when the scope has
+ * no `<tempo>` at all, or when the recording says nothing about this event — a note the
+ * alignment left unperformed has no time to convert, and inventing one for it would be worse
+ * than leaving the position unknown.
+ */
+const tickAtMs = (segments: PlacedTempo[], ms: number): number | undefined => {
+    const segment = segmentAtMs(segments, ms)
+    if (!segment) return undefined
+    const ticks = dateAtMilliseconds(ms - segment.startMs, segment.resolved)
+    return Number.isFinite(ticks) ? ticks : undefined
+}
+
+/** The recorded onset of a note or pedal in milliseconds, or `NaN` where it was not performed. */
+const onsetMs = (event: { 'midi.onset': number }) => event['midi.onset'] * 1000
+
+/** The recorded release of a note or pedal in milliseconds, or `NaN` where either end is absent. */
+const offsetMs = (event: { 'midi.onset': number, 'midi.duration': number }) =>
+    (event['midi.onset'] + event['midi.duration']) * 1000
+
+/**
+ * Translates recorded onsets into tick dates, writing `tickDate` for every note and pedal a
+ * segment covers.
+ *
+ * Notes and pedals are placed by different keys, and the asymmetry is forced rather than
+ * historical: a note carries a score `@date`, so the instruction governing it is the one covering
+ * that date, and its recorded onset is then measured under that instruction — which is the
+ * anchoring rule. A pedal carries no score date at all (see `MsmPedal`), so the only question
+ * that can be asked of it is which segment its *recording* falls in.
+ *
+ * And `msm.pedals` is not scoped, so with a part-scoped tempo map in the document every scope
+ * would place every pedal. The first one to reach it keeps it — `scopes()` puts `global` first,
+ * which is the map a sustain pedal belongs under.
  */
 const addTickOnsets = (msm: MSM, mpm: MPM, times: TickTimes) => {
     for (const scope of mpm.scopes()) {
-        for (const segment of placeTempos(msm, mpm, scope)) {
-            const { tempo, startMs, modelledMs } = segment
+        const segments = placeTempos(msm, mpm, scope)
+        if (segments.length === 0) continue
 
-            msm.notesInPart(scope)
-                .filter(n => coversDate(segment, n.date))
-                .forEach(n => {
-                    const onsetMilliseconds = n["midi.onset"] * 1000
-                    at(times.notes, n["xml:id"]).tickDate =
-                        approximateDate(onsetMilliseconds - startMs, tempo)
-                })
+        for (const note of msm.notesInPart(scope)) {
+            const segment = segments.find(s => coversDate(s, note.date))
+            if (!segment) continue
+            const tickDate = dateAtMilliseconds(onsetMs(note) - segment.startMs, segment.resolved)
+            if (!Number.isFinite(tickDate)) continue
+            at(times.notes, note['xml:id']).tickDate = tickDate
+        }
 
-            // The pedal window is bounded by the *modelled* length while the cursor advances by
-            // the measured one — see `PlacedTempo.measuredMs`. Pre-existing, preserved.
-            msm.pedals
-                .filter(p => at(times.pedals, p["xml:id"]).tickDate === undefined) // not yet processed
-                .filter(p => {
-                    const onsetMs = p['midi.onset'] * 1000
-                    return onsetMs >= startMs && onsetMs < startMs + modelledMs
-                })
-                .forEach(p => {
-                    const onsetMs = p['midi.onset'] * 1000
-                    at(times.pedals, p["xml:id"]).tickDate = approximateDate(onsetMs - startMs, tempo)
-                })
+        for (const pedal of msm.pedals) {
+            if (times.pedals.get(pedal['xml:id'])?.tickDate !== undefined) continue
+            const tickDate = tickAtMs(segments, onsetMs(pedal))
+            if (tickDate === undefined) continue
+            at(times.pedals, pedal['xml:id']).tickDate = tickDate
         }
     }
 }
 
 /**
- * Translates MIDI durations into tick durations using the new `<tempo>` instructions.
+ * Translates recorded releases into tick durations, measured from the onsets
+ * {@link addTickOnsets} has already placed — so it must run after it.
  *
- * Measured from the onsets `addTickOnsets` has already placed, so it must run after it.
+ * A release is placed by the segment governing the *release*, which need not be the one that
+ * placed the onset: a note held across a tempo boundary is released under the instruction in
+ * force where the hand comes off the key, and both ends are absolute tick positions, so
+ * subtracting them across a boundary is exactly right.
+ *
+ * Where the onset was never placed there is nothing to measure from, and the duration stays
+ * unknown rather than becoming the difference between a tick and `undefined`.
  */
 const addTickDurations = (msm: MSM, mpm: MPM, times: TickTimes) => {
     for (const scope of mpm.scopes()) {
-        for (const segment of placeTempos(msm, mpm, scope)) {
-            const { tempo, startMs, measuredMs } = segment
+        const segments = placeTempos(msm, mpm, scope)
+        if (segments.length === 0) continue
 
-            msm.notesInPart(scope)
-                .filter(n => n["midi.duration"])
-                .forEach(n => {
-                    const offsetMs = (n['midi.onset'] + n["midi.duration"]) * 1000
-                    if (offsetMs < startMs) return
+        for (const note of msm.notesInPart(scope)) {
+            const time = times.notes.get(note['xml:id'])
+            if (time?.tickDate === undefined) continue
+            const release = tickAtMs(segments, offsetMs(note))
+            if (release === undefined) continue
+            time.tickDuration = release - time.tickDate
+        }
 
-                    const relativeOffsetMs = offsetMs - startMs
-                    if (relativeOffsetMs > measuredMs) return
-
-                    at(times.notes, n["xml:id"]).tickDuration =
-                        approximateDate(relativeOffsetMs, tempo) - at(times.notes, n["xml:id"]).tickDate!
-                })
-
-            msm.pedals
-                .filter(p => at(times.pedals, p["xml:id"]).tickDuration === undefined) // not yet processed
-                .filter(p => {
-                    const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
-                    return offsetMs >= startMs && offsetMs < startMs + measuredMs
-                })
-                .forEach(p => {
-                    const offsetMs = (p['midi.onset'] + p['midi.duration']) * 1000
-                    at(times.pedals, p["xml:id"]).tickDuration =
-                        approximateDate(offsetMs - startMs, tempo) - at(times.pedals, p["xml:id"]).tickDate!
-                })
+        // Same first-wins rule as the onsets, and for the same reason.
+        for (const pedal of msm.pedals) {
+            const time = times.pedals.get(pedal['xml:id'])
+            if (time?.tickDate === undefined || time.tickDuration !== undefined) continue
+            const release = tickAtMs(segments, offsetMs(pedal))
+            if (release === undefined) continue
+            time.tickDuration = release - time.tickDate
         }
     }
-}
-
-/**
- * The tick date at which `targetMilliseconds` have elapsed since the start of the instruction.
- *
- * A constant tempo inverts in closed form; a transition has none, so it is walked by a damped
- * fixed-point iteration on the guess. The span is resolved once, before the loop, rather than at
- * each of its up-to-a-thousand steps.
- */
-export const approximateDate = (
-    targetMilliseconds: number,
-    effectiveTempoInstruction: TempoWithEndDate,
-    initialGuess: number = effectiveTempoInstruction.date,
-    tolerance: number = 1
-): number => {
-    if (!isTransition(effectiveTempoInstruction)) {
-        return (
-            +effectiveTempoInstruction.date +
-            ticksForConstantTempo(targetMilliseconds, effectiveTempoInstruction)
-        )
-    }
-
-    const resolved = resolveSpan(effectiveTempoInstruction)
-
-    let guess = initialGuess;
-    let guessedMilliseconds = millisecondsAt(guess, resolved);
-    for (let i = 0; i < 1000 && Math.abs(guessedMilliseconds - targetMilliseconds) > tolerance; i++) {
-        guess += 0.1 * (targetMilliseconds - guessedMilliseconds)
-        guessedMilliseconds = millisecondsAt(guess, resolved);
-    }
-
-    return Math.round(guess);
-}
-
-/**
- * Whether the instruction ramps.
- *
- * Deliberately *not* `resolveSpan(...).kind === 'transitioning'`: this test decides whether the
- * closed-form inverse above applies, and the closed form is exact for any instruction whose
- * `@meanTempoAt` is absent — which resolution reads as a linear ramp rather than as a constant.
- * The two questions differ, so they are asked separately.
- */
-const isTransition = (tempo: TempoWithEndDate) => {
-    return tempo["transition.to"] && tempo.meanTempoAt
 }
 
 /**
