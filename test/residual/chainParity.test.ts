@@ -5,6 +5,7 @@ import { deriveResidual } from "../../src/residual"
 import { TranslatePhysicalTimeToTicks } from "../../src/transformers/tempo/TranslatePhysicalTimeToTicks"
 import { InsertRubato } from "../../src/transformers/rubato/InsertRubato"
 import { removeRubatoDistortion } from "../../src/transformers/rubato/rubatoMath"
+import { addTickDurations, addTickOnsets } from "../../src/transformers/tempo/tickTimes"
 
 const QUARTER = 720
 
@@ -37,27 +38,33 @@ const withTempo = () => {
 }
 
 /**
- * The whole point of Stage 2: what the chain leaves on the notes, and what `deriveResidual`
- * computes from the MPM the chain produced, have to be the same numbers. If they part, every
- * fit downstream of rubato is measuring something different than it used to.
+ * `deriveResidual` wires the tick domain together in the right order.
+ *
+ * The two halves are the tempo walk and the rubato compensation, and both live in modules of
+ * their own so the transformers and the residual share one implementation. What is left to get
+ * wrong is the wiring: running them in the wrong order, or forgetting the rubato step, would
+ * still typecheck and would still produce plausible numbers. This pins that.
+ *
+ * It used to compare against what the chain left on the notes. The chain leaves nothing now.
  */
-test('deriveResidual reproduces the chain state after tempo and rubato', () => {
-    const accumulated = fixture()
+test('deriveResidual applies the tempo walk and then the rubato compensation', () => {
+    const expected = fixture()
     const mpm = withTempo()
 
-    new TranslatePhysicalTimeToTicks({ translatePhysicalModifiers: false }).run(accumulated, mpm)
-    new InsertRubato({ date: 0, length: 4 * QUARTER, scope: 'global' }).run(accumulated, mpm)
-
-    // The rubato is what makes this test worth having: without it both paths are just the
-    // tempo walk.
+    new TranslatePhysicalTimeToTicks({ translatePhysicalModifiers: false }).run(expected, mpm)
+    new InsertRubato({ date: 0, length: 4 * QUARTER, scope: 'global' }).run(expected, mpm)
     expect(mpm.getInstructions('rubato')).toHaveLength(1)
+
+    addTickOnsets(expected, mpm)
+    addTickDurations(expected, mpm)
+    removeRubatoDistortion(expected, mpm, 'global', () => true)
 
     const derived = deriveResidual(fixture(), mpm)
 
     expect(derived.notes.map(n => n.tickDate))
-        .toEqual(accumulated.allNotes.map(n => n.tickDate))
+        .toEqual(expected.allNotes.map(n => n.tickDate))
     expect(derived.notes.map(n => n.tickDuration))
-        .toEqual(accumulated.allNotes.map(n => n.tickDuration))
+        .toEqual(expected.allNotes.map(n => n.tickDuration))
 })
 
 /**

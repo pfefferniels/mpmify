@@ -1,6 +1,7 @@
 import { InstructionType, MPM, Scope } from "../mpm";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
+import { Residual } from "../residual";
 import { v4 } from "uuid";
 type WithId = { id: string };
 type WithActor = { actor?: { name: string; sameAs: string[]; role?: string } };
@@ -133,11 +134,24 @@ type Range = {
     to?: number;
 }
 
-export const getRange = (transformer: TransformationOptions | Transformer[], msm: MSM): Range | undefined => {
+/**
+ * The span of score a transformer acts on.
+ *
+ * @param residual required only for a pedal-based transformer, whose span is measured in ticks
+ * off the score grid and so has to be derived. Every other kind answers from its own options.
+ * Omitting it where it is needed throws rather than returning `undefined`: the pedal branch used
+ * to drop any pedal it could not place and then report no range at all, which reads exactly like
+ * a chain that happens not to touch a pedal.
+ */
+export const getRange = (
+    transformer: TransformationOptions | Transformer[],
+    msm: MSM,
+    residual?: Residual
+): Range | undefined => {
     if (Array.isArray(transformer)) {
         const ranges = transformer
             .map(t => {
-                return getRange(t.options, msm)
+                return getRange(t.options, msm, residual)
             })
             .filter(d => !!d)
 
@@ -180,10 +194,17 @@ export const getRange = (transformer: TransformationOptions | Transformer[], msm
         const start = 'start' in transformer ? (transformer as TransformationOptions & { start?: number }).start ?? 0 : 0
         const duration = 'duration' in transformer ? (transformer as TransformationOptions & { duration?: number }).duration ?? 0 : 0
 
+        if (!residual) {
+            throw new Error(
+                'getRange needs a residual to place a pedal: its position on the score grid is '
+                + 'derived from the MPM, not carried on the pedal. Pass deriveResidual(msm, mpm).')
+        }
+
         const ranges = pedals
             .map(p => {
-                if (p.tickDate === undefined || p.tickDuration === undefined) return undefined
-                const base = direction === 'up' ? p.tickDate + p.tickDuration : p.tickDate
+                const placed = residual.ofPedal(p)
+                if (placed?.tickDate === undefined || placed.tickDuration === undefined) return undefined
+                const base = direction === 'up' ? placed.tickDate + placed.tickDuration : placed.tickDate
                 return { from: base + start, to: base + start + duration }
             })
             .filter((r): r is { from: number; to: number } => r !== undefined)

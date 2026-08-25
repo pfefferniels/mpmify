@@ -1,4 +1,4 @@
-import { Accentuation, AccentuationPattern, AccentuationPatternDef, DEFAULT_STYLE_NAME, MPM, Scope } from "../../mpm";
+import { Accentuation, AccentuationPattern, AccentuationPatternDef, DEFAULT_STYLE_NAME, MPM } from "../../mpm";
 import { MSM } from "../../msm";
 import { deriveResidual, Residual } from "../../residual";
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer";
@@ -201,7 +201,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
             }, this.options.scope)
         }
 
-        this.removeAccentuationDistortion(newPattern, msm, mpm, this.options.scope)
 
         if (mpm.getStyles('accentuationPattern', this.options.scope).length === 0) {
             mpm.insertStyle({
@@ -213,45 +212,6 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
         }
     }
 
-    removeAccentuationDistortion(pattern: AccentuationPattern, msm: MSM, mpm: MPM, scope: Scope) {
-        const ppq = 720
-
-        for (const [date, chord] of msm.asChords(scope)) {
-            if (date < pattern.date) continue
-
-            const between = mpm.getInstructions<AccentuationPattern>('accentuationPattern', scope).find(p => p.date > pattern.date && p.date <= date)
-            if (between) continue
-
-            const def = mpm.getDefinition('accentuationPatternDef', pattern["name.ref"]) as AccentuationPatternDef | null
-            if (!def) {
-                continue
-            }
-
-            const tickLength = (def.length * 4 * ppq) / msm.timeSignature.denominator
-
-            if (date >= pattern.date + tickLength && !pattern.loop) {
-                continue
-            }
-
-            // TODO
-            const timeSignatureDate = 0
-            const beat = 1 + ((date - pattern.date - timeSignatureDate) % tickLength) / ppq;
-
-            const accentuation = def.children.slice().reverse().find(a => a.beat <= beat)
-            if (!accentuation) {
-                continue
-            }
-
-            const accentuationValue = this.accentuationAt(beat, def)
-            const velocityChange = accentuationValue * pattern.scale
-
-            chord
-                .filter(note => note.absoluteVelocityChange !== undefined)
-                .forEach(note => {
-                    note.absoluteVelocityChange -= velocityChange
-                })
-        }
-    }
 
     private accentuationAt(beat: number, def: AccentuationPatternDef): number {
         // Read once. Every `def.children` access re-reads the child elements and hands back a

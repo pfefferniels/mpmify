@@ -4,6 +4,7 @@ import { expect, test } from "vitest"
 import { MSM } from "../../src/msm"
 import { Dynamics, MPM } from "../../src/mpm"
 import { InsertDynamicsInstructions } from "../../src/transformers"
+import { deriveResidual } from "../../src/residual"
 
 /**
  * Quickly generates a simple MSM note
@@ -71,23 +72,22 @@ test('it fits one <dynamics> across the range, from the first velocity to the la
 // round-trip suite produces, rather than on this one fixture: see the 'every transition is
 // closed' invariant in test/roundtrip/invariants.ts.
 
-test('it leaves the residual velocity the curve does not explain on every note', () => {
+test('the fitted curve explains the notes at both ends of its span exactly', () => {
     const msm = msmFixture()
     const mpm = new MPM()
 
     run(msm, mpm)
 
-    // The reduction: recorded minus explained, left on the note for the next transformer.
-    for (const note of msm.allNotes) {
-        expect(note.absoluteVelocityChange).toBeDefined()
-    }
+    // The reduction: recorded minus explained. Asked of the document rather than read off the
+    // notes — the fit no longer leaves anything behind for the next step to find.
+    const residual = deriveResidual(msm, mpm)
 
     // The curve starts at the instruction's own volume, so the note under it is fully
     // explained. What the curve misses in between is exactly what survives. The tail no longer
     // does: closing the transition makes the span the residual is measured over the same span
     // the curve was fitted over (see old-bugs.md §1, and issue #24).
-    expect(msm.allNotes[0].absoluteVelocityChange).toBeCloseTo(0, 5)
-    expect(msm.allNotes[msm.allNotes.length - 1].absoluteVelocityChange).toBeCloseTo(0, 5)
+    expect(residual.of(msm.allNotes[0])!.velocity).toBeCloseTo(0, 5)
+    expect(residual.of(msm.allNotes[msm.allNotes.length - 1])!.velocity).toBeCloseTo(0, 5)
 })
 
 test('the fitting window is not written into the document', () => {

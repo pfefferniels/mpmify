@@ -4,7 +4,6 @@ import { AbstractTransformer, generateId, ScopedTransformationOptions } from "..
 import { clamp } from "../../utils/utils"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
 import { determineIntensity } from "../ornamentation"
-import { removeRubatoDistortion } from "./rubatoMath"
 import { deriveResidual, Residual } from "../../residual"
 
 // Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
@@ -102,21 +101,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
             lateStart,
         }
 
-        // The inserted view, not the record: `removeRubatoDistortionFrom` recognises "its own"
-        // rubato by identity against what `instructionsEffectiveAtDate` hands back, which is
-        // the view over the element.
-        const inserted = mpm.insertInstruction(rubato, this.options.scope)
-        this.removeRubatoDistortionFrom([inserted], msm, mpm)
+        mpm.insertInstruction(rubato, this.options.scope)
     }
 
-    /**
-     * Takes the distortion of `selectedRubatos` back off the notes they cover.
-     *
-     * The identity test is the point: `instructionsEffectiveAtDate` answers with the view over
-     * the element, and `selectedRubatos` holds the views this run inserted, so a rubato some
-     * earlier run wrote is left alone.
-     */
-    removeRubatoDistortionFrom(selectedRubatos: Rubato[], msm: MSM, mpm: MPM) {
-        removeRubatoDistortion(msm, mpm, this.options.scope, r => selectedRubatos.includes(r))
-    }
 }

@@ -84,30 +84,6 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         }
     }
 
-    private undoEffectOf(def: ArticulationDef, onNotes: MsmNote[]) {
-        for (const note of onNotes) {
-            if (def.relativeDuration !== undefined) {
-                note.tickDuration /= def.relativeDuration
-            }
-            if (def.relativeVelocity !== undefined) {
-                // What the document now says this note's velocity is: the curve's value scaled
-                // by the def. The residual left for whatever runs next is measured against that,
-                // so it moves by the part of the curve the def has taken over. Zeroing it — what
-                // this used to do — claimed the def explained the note exactly, which it does
-                // not: the def carries the *average* ratio of its group.
-                note.absoluteVelocityChange =
-                    (note.absoluteVelocityChange ?? 0)
-                    - (note["midi.velocity"] - (note.absoluteVelocityChange ?? 0)) * (def.relativeVelocity - 1)
-            }
-            if (def.absoluteDuration !== undefined) {
-                note.tickDuration = note.duration
-            }
-            if (def.absoluteDurationChange !== undefined) {
-                note.tickDuration -= def.absoluteDurationChange
-            }
-        }
-    }
-
     protected transform(msm: MSM, mpm: MPM) {
         const { noteIDs, aspects, name } = this.options
         const affectedNotes = noteIDs
@@ -158,8 +134,6 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
                 'name.ref': DEFAULT_STYLE_NAME,
             }, 'articulation', this.options.scope)
         }
-
-        this.undoEffectOf(def, affectedNotes)
 
         articulations = articulations.reduce((acc, curr) => {
             aspects.forEach(aspect => curr[aspect] = undefined)

@@ -1,7 +1,7 @@
 import { Dynamics, MPM, Scope } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
-import { approximateDynamics, computeInnerControlPointsXPositions, DynamicsPoints, volumeAtDate } from "./Approximation"
+import { approximateDynamics, DynamicsPoints } from "./Approximation"
 import { WithEndDate } from "../tempo/tempoCalculations"
 
 export type DynamicsWithEndDate = Dynamics & WithEndDate
@@ -47,7 +47,6 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         // closed actually says.
         const inserted = mpm.insertInstruction(instruction, this.options?.scope)
         this.closeTransition(mpm, inserted, fittingWindow)
-        this.setRelativeVolume(msm, mpm)
     }
 
     /**
@@ -56,9 +55,10 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
      * A `transition.to` with no successor is not a curve stretched to the end of the piece —
      * the renderer drops the transition and holds `volume`, so a fit that nothing happens to
      * follow describes nothing at all. Closing the span at the last point the curve was fitted
-     * over is what makes the transition render, and it makes the rendered span the fitted one:
-     * `setRelativeVolume` below then measures the residual against the curve that was actually
-     * fitted, which is the span mismatch old-bugs.md §1 left open.
+     * over is what makes the transition render, and it makes the rendered span the fitted one —
+     * the span mismatch old-bugs.md §1 left open. That mattered doubly while this transformer
+     * also measured the residual; now that the residual is derived from the document, closing
+     * the span is what the renderer needs rather than what a later fitter needs.
      *
      * An instruction already at that date already closes the span — in a chain each segment is
      * closed by the next — and is left alone.
@@ -98,32 +98,4 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
         return points
     }
 
-    private setRelativeVolume(msm: MSM, mpm: MPM) {
-        const instructions = mpm.getInstructions<Dynamics>('dynamics', this.options.scope)
-        const instructionsWithEndDate = []
-        for (let i = 0; i < instructions.length; i++) {
-            const endDate = instructions[i + 1]?.date ?? msm.end
-            instructionsWithEndDate.push({
-                ...instructions[i],
-                endDate,
-                ...computeInnerControlPointsXPositions(
-                    instructions[i].curvature,
-                    instructions[i].protraction)
-            })
-        }
-
-        const chords = msm.asChords(this.options.scope)
-
-        for (const [date, notes] of chords) {
-            const corresp = instructionsWithEndDate.find(i => date >= i.date && date < i.endDate)
-            if (!corresp) continue
-
-            for (const note of notes) {
-                if (!note["midi.velocity"]) continue
-
-                const should = volumeAtDate(corresp, note.date)
-                note.absoluteVelocityChange = note["midi.velocity"] - should
-            }
-        }
-    }
 }

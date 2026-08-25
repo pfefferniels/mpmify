@@ -72,10 +72,6 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         }
         mpm.insertDefinition(def, this.options.scope)
 
-        for (const note of notes) {
-            note.tickDuration /= def.relativeDuration
-        }
-
         mpm.insertStyle({
             type: 'style',
             'xml:id': v4(),

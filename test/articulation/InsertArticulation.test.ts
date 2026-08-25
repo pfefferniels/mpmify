@@ -82,12 +82,10 @@ test('the definition holds the mean of the measured aspect', () => {
 // the 'a map that references definitions switches to a style' invariant in
 // test/roundtrip/invariants.ts.
 
-test('it takes the definition back out of the notes, leaving the residual duration', () => {
-    const msm = msmFixture()
-    const mpm = new MPM()
-
-    run(msm, mpm)
-
-    // Recorded divided by explained: what a later step still has to account for.
-    expect(msm.allNotes.map(n => n.tickDuration)).toEqual([360 / 1.25, 1440 / 1.25])
-})
+// Removed with the accumulated residual: this asserted that the fit divided its own definition
+// back out of every note it covered, so the next step would measure against what the document
+// now said. Nothing is written back any more — a later step derives the residual from the
+// document itself — so there is no intermediate value left to assert. What the mechanism was
+// for is covered by test/roundtrip's tier-1 case 'a uniform legato comes back as one def at
+// that relativeDuration', which renders the fit and compares it against the performance it was
+// fitted to.
