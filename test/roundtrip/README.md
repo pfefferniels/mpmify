@@ -138,6 +138,7 @@ is visible one transformer at a time.
   different from the rest of this directory rather than replacing it. Its truth is a Welte roll
   and its chain is the one a person wrote for that passage, so nothing guarantees a perfect fit
   is available at all — what it holds is that the pipeline still reproduces a performance it has
-  been used on. It found one defect on the day it was written: an `<articulation>` covering more
-  than one note renders as nothing, because espressivo reads `@noteid` as a single reference
-  while `InsertArticulation` writes a space-separated list into it.
+  been used on. It found a defect on the day it was written — an `<articulation>` covering more
+  than one note rendered as nothing, because espressivo reads `@noteid` as a single reference
+  while `InsertArticulation` wrote a space-separated list into it (#53, fixed; the case
+  *articulation: a chord, every note the same shortening* now pins it in tier 2 as well).

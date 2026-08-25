@@ -39,11 +39,11 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
             const date = articulation.date
             let targetNotes = withinNotes.filter(n => n.date === date)
             if (articulation.noteid) {
-                // `@noteid` is a space-separated list of references — `InsertArticulation`
-                // folds a chord's notes into one instruction. Matching the whole attribute
-                // against a single id found nothing as soon as there were two. See old-bugs.md.
-                const ids = articulation.noteid.split(' ').map(ref => ref.replace(/^#/, ''))
-                targetNotes = targetNotes.filter(n => ids.includes(n["xml:id"]))
+                // `@noteid` names one note, which is what the renderer reads it as. It was
+                // read as a space-separated list here for as long as `InsertArticulation`
+                // wrote one; that spelling articulated nothing at all (issue #53).
+                const id = articulation.noteid.replace(/^#/, '')
+                targetNotes = targetNotes.filter(n => n["xml:id"] === id)
             }
 
             for (const note of targetNotes) {

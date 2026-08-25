@@ -79,18 +79,23 @@ const run = (msm: MSM, mpm: MPM) => callTransform(new InsertArticulation({
     name: 'my-articulation',
 }), msm, mpm)
 
-test('it folds the notes at one date into a single <articulation> naming the definition', () => {
+test('it writes one <articulation> per note, each naming the definition', () => {
+    // The two notes share a date, and used to share an instruction: `noteid="#note0 #note1"`.
+    // `@noteid` is a single reference — espressivo strips the `#` and looks the rest up as an
+    // id — so that instruction named no note and articulated none of them (issue #53).
     const msm = msmFixture()
     const mpm = atSixtyBpm()
 
     run(msm, mpm)
 
     const articulations = mpm.getInstructions('articulation', 'global')
-    expect(articulations).toHaveLength(1)
-    expect(articulations[0].noteid).toBe('#note0 #note1')
-    expect(articulations[0]['name.ref']).toBe('my-articulation')
-    // The measured value moved into the definition; the instruction only refers to it.
-    expect(articulations[0].relativeDuration).toBeUndefined()
+    expect(articulations).toHaveLength(2)
+    expect(articulations.map(a => a.noteid).sort()).toEqual(['#note0', '#note1'])
+    expect(articulations.map(a => a['name.ref'])).toEqual(['my-articulation', 'my-articulation'])
+    // One id each: they share a date, and `generateId` numbers by what the map already holds.
+    expect(new Set(articulations.map(a => a['xml:id'])).size).toBe(2)
+    // The measured values moved into the definition; the instructions only refer to it.
+    expect(articulations.map(a => a.relativeDuration)).toEqual([undefined, undefined])
 })
 
 test('the definition holds the mean of the measured aspect', () => {

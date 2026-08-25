@@ -121,6 +121,24 @@ export const tierTwoCases: Case[] = [
         bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { max: 0.5 } },
     },
     {
+        name: 'articulation: a chord, every note the same shortening',
+        // The case #53 needed and no other case here provides: notes that share a date *and* an
+        // articulation unit. `InsertArticulation` used to fold those into one instruction
+        // carrying `noteid="#a #b #c"`, which names no note at all — so every articulation on a
+        // chord was inert, and the whole chord rendered at its written length. Every other
+        // articulation case is monophonic, which is why 78 green tests never saw it.
+        score: { beats: 8, pitches: [60, 64, 67] },
+        truth: {
+            tempo: STEADY_TEMPO,
+            dynamics: [{ date: 0, volume: 64 }],
+            articulation: {
+                defs: [{ name: 'staccato', relativeDuration: 0.5 }],
+                defaultArticulation: 'staccato',
+            },
+        },
+        bounds: { onset: { max: 0.5 }, duration: { max: 0.5 }, velocity: { max: 0.5 } },
+    },
+    {
         name: 'articulation: alternating relativeVelocity 1.4 / 0.7',
         score: EIGHT_BEATS,
         truth: {

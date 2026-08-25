@@ -26,11 +26,12 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
         const notes: MsmNote[] = [...msm.allNotes]
         for (const articulation of mpm.getInstructions('articulation', this.options.scope)) {
             if (articulation.noteid) {
-                for (const noteId of articulation.noteid.split(' ')) {
-                    const toDelete = notes.findIndex(n => n['xml:id'] === noteId.slice(1))
-                    if (toDelete !== -1) {
-                        notes.splice(toDelete, 1)
-                    }
+                // One reference, the way the renderer reads it. This walked a space-separated
+                // list for as long as `InsertArticulation` wrote one — see issue #53.
+                const noteId = articulation.noteid.slice(1)
+                const toDelete = notes.findIndex(n => n['xml:id'] === noteId)
+                if (toDelete !== -1) {
+                    notes.splice(toDelete, 1)
                 }
             }
             else {

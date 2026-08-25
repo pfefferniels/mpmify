@@ -68,11 +68,12 @@ test('MakeDefaultArticulation excludes the notes a date-scoped <articulation> al
     expect(def.relativeDuration).toBeCloseTo(1, 10)
 })
 
-test('StylizeArticulation sees every note a multi-note @noteid names', () => {
-    // The articulation covers a chord; stretching it to the cluster mean would run over the
-    // repeated c at date 720, so it is a conflict and must keep its own values. Matching the
-    // whole `#n0 #n1` attribute against one id found no target note at all, so the conflict
-    // went unnoticed. See old-bugs.md.
+test('StylizeArticulation tells the notes of a chord apart', () => {
+    // Two notes of a chord, one articulation each — the spelling issue #53 replaced the folded
+    // `noteid="#n0 #n1"` with. They are not interchangeable: stretching the lower one to the
+    // cluster mean would run over the repeated c at date 720, so it is a conflict and has to
+    // keep its own values, while the upper one has nothing in its way and joins the cluster.
+    // The folded instruction could not express that difference even once it was read correctly.
     const msm = new MSM([
         note('n0', 0, 60, 1440),
         note('n1', 0, 67, 1440),
@@ -82,7 +83,11 @@ test('StylizeArticulation sees every note a multi-note @noteid names', () => {
     const mpm = atSixtyBpm()
     mpm.insertInstructions([
         {
-            type: 'articulation', 'xml:id': 'articulation_0', date: 0, noteid: '#n0 #n1',
+            type: 'articulation', 'xml:id': 'articulation_0', date: 0, noteid: '#n0',
+            relativeDuration: 2, relativeVelocity: 1,
+        },
+        {
+            type: 'articulation', 'xml:id': 'articulation_0_1', date: 0, noteid: '#n1',
             relativeDuration: 2, relativeVelocity: 1,
         },
         {
@@ -93,13 +98,19 @@ test('StylizeArticulation sees every note a multi-note @noteid names', () => {
 
     callTransform(new StylizeArticulation({ volumeTolerance: 0.01, relativeDurationTolerance: 0.2 }), msm, mpm)
 
-    const conflicting = mpm
+    const byNote = (id: string) => mpm
         .getInstructions('articulation', 'global')
-        .find(a => a.noteid === '#n0 #n1')
+        .find(a => a.noteid === id)
 
-    expect(conflicting).toBeDefined()
-    expect(conflicting!['name.ref']).toBeUndefined()
-    expect(conflicting!.relativeDuration).toBe(2)
+    // The lower note is the conflict, and keeps what it measured.
+    expect(byNote('#n0')).toBeDefined()
+    expect(byNote('#n0')!['name.ref']).toBeUndefined()
+    expect(byNote('#n0')!.relativeDuration).toBe(2)
+
+    // The upper one joined the cluster that became the default, and the style now says so on
+    // its behalf — which is why its instruction is gone from the map.
+    expect(byNote('#n1')).toBeUndefined()
+    expect(mpm.getStyles('articulation', 'global')[0].defaultArticulation).toBeDefined()
 })
 
 test('a chain running both transformers leaves exactly one <style> in the articulationMap', () => {

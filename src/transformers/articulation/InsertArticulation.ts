@@ -98,7 +98,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // earlier transformer subtracted what.
         const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
 
-        let articulations: Articulation[] = affectedNotes
+        const articulations: Articulation[] = affectedNotes
             .map(note => this.noteToArticulation(aspects, note, residual.of(note)))
 
         const avgs: Record<string, number> = {}
@@ -131,21 +131,24 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
         // neither produced definitions no renderer could reach. See old-bugs.md.
         mpm.ensureDefaultStyle('articulation', this.options.scope)
 
-        articulations = articulations.reduce((acc, curr) => {
-            aspects.forEach(aspect => curr[aspect] = undefined)
-
-            const existing = acc.find(a => a.date === curr.date && a['name.ref'] === name)
-            if (existing) {
-                existing.noteid += ' ' + curr.noteid
-                return acc
-            }
-
-            curr['name.ref'] = name
-            return [...acc, curr]
-        }, [] as Articulation[])
-
-        articulations.forEach(a => a['xml:id'] = generateId('articulation', a.date, mpm))
-
-        mpm.insertInstructions(articulations, this.options.scope)
+        // One `<articulation>` per note, and no measured values on it: what the note is
+        // articulated as now comes from the definition it refers to.
+        //
+        // The notes at one date used to be folded into a single instruction carrying
+        // `noteid="#a #b"`. `@noteid` is one reference, not a list — espressivo's
+        // `ArticulationMap` strips the `#` and looks the remainder up as an id — so a folded
+        // instruction named nothing and articulated nothing, and every articulation on a chord
+        // was inert (issue #53). mpmify read its own spelling back apart wherever it needed to,
+        // which is why nothing but a render ever noticed.
+        //
+        // The id is minted immediately before each insertion, not for the batch up front:
+        // `generateId` numbers by how many instructions the map already holds at that date, so
+        // a batch that no longer has one entry per date has to let it see each one land.
+        for (const articulation of articulations) {
+            aspects.forEach(aspect => articulation[aspect] = undefined)
+            articulation['name.ref'] = name
+            articulation['xml:id'] = generateId('articulation', articulation.date, mpm)
+            mpm.insertInstruction(articulation, this.options.scope)
+        }
     }
 }

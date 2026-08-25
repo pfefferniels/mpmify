@@ -21,7 +21,7 @@ import { assertWellFormed } from "./invariants"
  */
 
 /**
- * Measured at e059ca7, then given headroom for platforms whose floats anneal differently.
+ * Measured after the #53 fix, then given headroom for platforms whose floats anneal differently.
  * `ROUNDTRIP_REPORT=1 npm run test:roundtrip:report` prints what they currently are.
  */
 const BOUNDS = {
@@ -31,14 +31,18 @@ const BOUNDS = {
      */
     onset: { mean: 45, max: 160 },
     /**
-     * Sounding duration. Measured mean 289 ms, max 2425 — by far the worst aspect, and most of
-     * it is one defect: `InsertArticulation` writes every note it covers into a single
-     * `<articulation noteid="#a #b">`, and espressivo reads `@noteid` as one reference
-     * (`ArticulationMap` strips the `#` and looks the rest up as an id), so an articulation
-     * covering more than one note articulates nothing. Three of this chain's fifteen do.
-     * Splitting them into one element per note takes the mean to 160 ms and the max to 780.
+     * Sounding duration. Measured mean 162.6 ms, max 778.5 — still the worst aspect, and still
+     * the one to work on. It was mean 289 / max 2425 until #53: `InsertArticulation` wrote the
+     * notes of a chord into a single `<articulation noteid="#a #b">`, which names no note,
+     * so every articulation on a chord was inert.
+     *
+     * What is left is mostly not a defect. The 20 notes an `<articulation>` covers are 83 ms out
+     * on average; the 36 the reconstruction never articulated are 207 ms out and hold all six
+     * worst notes, because nothing in the chain was ever asked to shorten them. Tightening this
+     * bound means fitting articulation the editor did not place — a different kind of work from
+     * the rest of the list.
      */
-    duration: { mean: 400, max: 3400 },
+    duration: { mean: 230, max: 1100 },
     /** Velocity. Measured mean 1.64, max 8.5, against a bare-score departure of 63. */
     velocity: { mean: 2.3, max: 12 },
 }
@@ -48,9 +52,9 @@ const BOUNDS = {
  *
  * The absolute bounds above cannot say this on their own: 400 ms of duration error would be a
  * catastrophe on a passage that only departs by 450, and unremarkable on one that departs by
- * ten seconds. Measured 0.99 / 0.36 / 0.97.
+ * ten seconds. Measured 0.99 / 0.64 / 0.97.
  */
-const EXPLAINED = { onset: 0.97, duration: 0.25, velocity: 0.95 }
+const EXPLAINED = { onset: 0.97, duration: 0.5, velocity: 0.95 }
 
 /** What `asMSM` finds in the fixture: 58 aligned notes, less two the MSM conversion doubles. */
 const NOTES = 56
