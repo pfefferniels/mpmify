@@ -4,6 +4,7 @@ import { AbstractTransformer, TransformationOptions } from "../Transformer";
 import { v4 } from "uuid";
 import { dbscan } from "../../utils/dbscan";
 import { InsertArticulation } from "./InsertArticulation";
+import { deriveResidual, Residual } from "../../residual";
 
 interface StylizeArticulationOptions extends TransformationOptions {
     volumeTolerance: number
@@ -23,7 +24,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
         }
     }
 
-    private findConflicts(withinNotes: MsmNote[], clusteredArticulations: Articulation[]) {
+    private findConflicts(withinNotes: MsmNote[], clusteredArticulations: Articulation[], residual: Residual) {
         const meanRelativeDuration = clusteredArticulations.reduce((acc, a) => acc + a.relativeDuration, 0) / clusteredArticulations.length
 
         const conflictList: Set<Articulation> = new Set()
@@ -41,14 +42,14 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
             for (const note of targetNotes) {
                 const newDuration = note.duration * meanRelativeDuration
-                const newEnd = note.tickDate + newDuration
+                const newEnd = residual.of(note)?.tickDate + newDuration
                 const conflicts = withinNotes.filter(n => {
                     // find notes on the same pitch, where the articulated 
                     // note starts before the current note and ends after it
                     return (
                         n["midi.pitch"] === note["midi.pitch"]
-                        && note.tickDate < n.tickDate
-                        && newEnd > n.tickDate
+                        && residual.of(note)?.tickDate < residual.of(n)?.tickDate
+                        && newEnd > residual.of(n)?.tickDate
                     )
                 })
                 if (conflicts.length > 0) {
@@ -68,6 +69,11 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
     }
 
     protected transform(msm: MSM, mpm: MPM) {
+        // Where each note actually fell, under everything the MPM explains apart from
+        // articulation — which is what this step is deciding. Derived once: it does not vary by
+        // scope, and each call renders the document.
+        const residual = deriveResidual(msm, mpm, { without: ['articulation'] })
+
         for (const scope of mpm.scopes()) {
             // Find clusters
             const articulations = mpm.getInstructions<Articulation>('articulation', scope)
@@ -100,7 +106,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
 
             const conflictList = []
             for (const [, cluster] of Object.entries(labeledArticulations)) {
-                conflictList.push(...this.findConflicts(msm.allNotes, cluster))
+                conflictList.push(...this.findConflicts(msm.allNotes, cluster, residual))
             }
 
             for (let i = 0; i < points.length; i++) {
