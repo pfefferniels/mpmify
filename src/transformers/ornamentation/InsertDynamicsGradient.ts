@@ -62,10 +62,15 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
 
     /**
      * @note If gradient is undefined, it will be estimated.
+     *
+     * @note The chord is passed in rather than looked up. This used to open with
+     * `msm.asChords(scope).get(date)` — a full walk-and-group of every note in the score — while
+     * its only bulk caller was already iterating exactly that map, so the whole score was
+     * regrouped once per chord in it.
      */
-    private applyGradient = (msm: MSM, mpm: MPM, date: number, gradient?: GradientRange) => {
-        let arpeggioNotes = msm.asChords(this.options.scope).get(date)
-        if (!arpeggioNotes || arpeggioNotes.length === 0) return
+    private applyGradient = (mpm: MPM, date: number, chord: MsmNote[], gradient?: GradientRange) => {
+        let arpeggioNotes = chord
+        if (arpeggioNotes.length === 0) return
 
         // Which of the two default gradients the chord calls for is a property of the chord,
         // not of whether the velocities are also being rewritten. Reading it inside the
@@ -120,15 +125,18 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
     }
 
     protected transform(msm: MSM, mpm: MPM) {
+        const chords = msm.asChords(this.options?.scope)
+
         if (isSingleGradient(this.options)) {
-            this.applyGradient(msm, mpm, this.options.date, this.options.gradient)
+            const chord = chords.get(this.options.date)
+            if (!chord) return
+            this.applyGradient(mpm, this.options.date, chord, this.options.gradient)
         }
         else {
-            const chords = msm.asChords(this.options?.scope)
             for (const [date, arpeggioNotes] of chords) {
                 if (arpeggioNotes.length === 1) continue
 
-                this.applyGradient(msm, mpm, date)
+                this.applyGradient(mpm, date, arpeggioNotes)
             }
         }
     }

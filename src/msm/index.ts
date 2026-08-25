@@ -129,7 +129,12 @@ export class MSM {
      */
     public shiftToFirstOnset() {
         const notesWithOnset = this.allNotes.filter(n => isDefined(n['midi.onset']))
-        const min = Math.min(...notesWithOnset.map(n => n['midi.onset']))
+        // `Math.min()` of nothing is `Infinity`, and only the note shift at the bottom was
+        // guarded against it: the pedal loop subtracted it unconditionally and left every pedal
+        // onset at `-Infinity`. A score with no recorded onset has no first onset to shift to.
+        if (notesWithOnset.length === 0) return
+        // Folded rather than spread, for the reason given on `lastDate`.
+        const min = notesWithOnset.reduce((acc, n) => Math.min(acc, n['midi.onset']), Infinity)
 
         this.pedals.forEach(p => {
             if (p["midi.onset"] < min) {
@@ -333,12 +338,25 @@ export class MSM {
         // `Math.max()` of nothing is -Infinity, which every comparison downstream reads as a
         // date before the start of the piece. An empty score ends where it begins.
         if (this.allNotes.length === 0) return 0
-        return Math.max(...this.allNotes.map(note => note.date))
+
+        // Folded rather than spread: `Math.max(...dates)` passes one argument per note, which
+        // past roughly 100k of them is a `RangeError` rather than a slowdown, and it allocates
+        // a throwaway array of every date to get there.
+        let last = -Infinity
+        for (const note of this.allNotes) {
+            if (note.date > last) last = note.date
+        }
+        return last
     }
 
     public get end(): number {
         if (this.allNotes.length === 0) return 0
-        return Math.max(...this.allNotes.map(note => note.date + note.duration))
+        let end = -Infinity
+        for (const note of this.allNotes) {
+            const noteEnd = note.date + note.duration
+            if (noteEnd > end) end = noteEnd
+        }
+        return end
     }
 
     /**
@@ -346,7 +364,11 @@ export class MSM {
      * @returns MSM note
      */
     public lastNote(): MsmNote | undefined {
-        return this.allNotes.find(n => n.date === this.lastDate())
+        // Hoisted out of the predicate. `lastDate()` is itself a walk over every note, and
+        // calling it from inside `find` ran that walk once per note the `find` visited — so
+        // reading the last note of a 450-note score cost 200k comparisons.
+        const lastDate = this.lastDate()
+        return this.allNotes.find(n => n.date === lastDate)
     }
 
     public parts() {
