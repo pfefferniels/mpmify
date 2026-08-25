@@ -7,7 +7,7 @@ and went espressivo-only. This is the only place mpmify's transformer pipeline s
 mpm-desk repo (pass them with `--mei` / `--info`). `vite-node` resolves the `mpmify` imports
 through the alias in `vite.config.ts`, so the bake runs against the working tree.
 
-An excerpt of those inputs *is* in this repo now — `test/fixtures/roundtrip`, four bars and the
+An excerpt of those inputs _is_ in this repo now — `test/fixtures/roundtrip`, four bars and the
 84 calls that reconstruct them — and two test files run this code over it on every commit:
 `test/roundtrip/aligned.test.ts` renders `runPipeline`'s MPM back and compares it against the
 recording, and `test/roundtrip/bake.test.ts` asserts what `bakeSegments.ts` checks before it
@@ -19,11 +19,11 @@ residual to place a pedal, neither `derive` nor the segment merge passed one, an
 
 MEI + `info.json` ⇒ three files the viewer reads:
 
-| Output | What it is |
-|---|---|
-| `score.msm` | The MEI converted by espressivo — what a render performs |
-| `performance.mpm` | The transformer pipeline's MPM |
-| `segments.json` | The intensity segments, each naming its MPM element ids |
+| Output            | What it is                                               |
+| ----------------- | -------------------------------------------------------- |
+| `score.msm`       | The MEI converted by espressivo — what a render performs |
+| `performance.mpm` | The transformer pipeline's MPM                           |
+| `segments.json`   | The intensity segments, each naming its MPM element ids  |
 
 ```sh
 MPMDESK=../mpm-desk
@@ -35,16 +35,16 @@ node_modules/.bin/vite-node scripts/bake/verifySegments.ts                      
 
 ## Files
 
-| File | Role |
-|---|---|
-| `bakeSegments.ts` | CLI wrapper: sets up jsdom globals, runs `derive`, writes `public/` |
+| File                | Role                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `bakeSegments.ts`   | CLI wrapper: sets up jsdom globals, runs `derive`, writes `public/`                            |
 | `deriveSegments.ts` | The bake itself — `runPipeline` runs the transformers, `derive` groups the calls into segments |
-| `verifySegments.ts` | Re-derives and diffs against what was written |
-| `asMSM.ts` | Enriches a converted MSM with the performance data encoded in the MEI |
-| `mergeSegments.ts` | Folds segments covering the same ticks into one |
-| `InsertTempo.ts` | A custom transformer, registered after `ApproximateLogarithmicTempo` |
-| `Reconstruction.ts` | Copy of mpm-desk's `src/model/Reconstruction.ts` — the output shape |
-| `intensityCurve.ts` | Copy of mpm-desk's `src/utils/intensityCurve.ts` — `verifySegments` check 4 needs it |
+| `verifySegments.ts` | Re-derives and diffs against what was written                                                  |
+| `asMSM.ts`          | Enriches a converted MSM with the performance data encoded in the MEI                          |
+| `mergeSegments.ts`  | Folds segments covering the same ticks into one                                                |
+| `InsertTempo.ts`    | A custom transformer, registered after `ApproximateLogarithmicTempo`                           |
+| `Reconstruction.ts` | Copy of mpm-desk's `src/model/Reconstruction.ts` — the output shape                            |
+| `intensityCurve.ts` | Copy of mpm-desk's `src/utils/intensityCurve.ts` — `verifySegments` check 4 needs it           |
 
 The last two are copies rather than imports so the set stands on its own. If mpm-desk's versions
 change, these do not follow — and `knip.json` ignores them, since a copy carries exports its

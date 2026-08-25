@@ -13,10 +13,10 @@
  * was issue #40: the offset used to be `note.date + note.tickDuration`, a symbolic position plus
  * a performed one.
  */
-import { resolveRubato, type AddRubatoOptions, type Rubato as ResolvedRubato } from "espressivo"
-import { instructionsEffectiveAtDate, Mpm, Scope } from "../../mpm"
-import { Alignment } from "../../alignment"
-import { TickTimes } from "../tempo/tickTimes"
+import { resolveRubato, type AddRubatoOptions, type Rubato as ResolvedRubato } from 'espressivo';
+import { instructionsEffectiveAtDate, Mpm, Scope } from '../../mpm';
+import { Alignment } from '../../alignment';
+import { TickTimes } from '../tempo/tickTimes';
 
 /**
  * What this module needs a `<rubato>` to say: where its first frame begins, and the five
@@ -27,9 +27,9 @@ import { TickTimes } from "../tempo/tickTimes"
  * anything shaped like a frame, which is what the tests do.
  */
 export type RubatoFrame = Pick<
-    AddRubatoOptions,
-    'date' | 'frameLength' | 'intensity' | 'lateStart' | 'earlyEnd' | 'loop'
->
+  AddRubatoOptions,
+  'date' | 'frameLength' | 'intensity' | 'lateStart' | 'earlyEnd' | 'loop'
+>;
 
 /**
  * `@frameLength` as the arithmetic below needs it.
@@ -41,7 +41,7 @@ export type RubatoFrame = Pick<
  * keeps exactly that rather than inventing a frame — {@link resolve} is where absence is actually
  * answered, and it answers with the identity.
  */
-const frameLengthOf = (rubato: RubatoFrame) => rubato.frameLength as number
+const frameLengthOf = (rubato: RubatoFrame) => rubato.frameLength as number;
 
 /**
  * One `<rubato>` record with its parameters defaulted and clamped the way the renderer does it.
@@ -69,20 +69,20 @@ const frameLengthOf = (rubato: RubatoFrame) => rubato.frameLength as number
  * argument explicitly is what keeps that a one-line change rather than a rewrite.
  */
 const resolve = (rubato: RubatoFrame): ResolvedRubato | null => {
-    if (rubato.frameLength === undefined) return null
+  if (rubato.frameLength === undefined) return null;
 
-    return resolveRubato(
-        { startDate: rubato.date, endDate: rubato.date + rubato.frameLength },
-        {
-            frameLength: rubato.frameLength,
-            intensity: rubato.intensity,
-            lateStart: rubato.lateStart,
-            earlyEnd: rubato.earlyEnd,
-            loop: rubato.loop,
-        },
-        null,
-    )
-}
+  return resolveRubato(
+    { startDate: rubato.date, endDate: rubato.date + rubato.frameLength },
+    {
+      frameLength: rubato.frameLength,
+      intensity: rubato.intensity,
+      lateStart: rubato.lateStart,
+      earlyEnd: rubato.earlyEnd,
+      loop: rubato.loop,
+    },
+    null,
+  );
+};
 
 /**
  * Where a symbolic date lands once the rubato has warped its frame.
@@ -97,14 +97,17 @@ const resolve = (rubato: RubatoFrame): ResolvedRubato | null => {
  * An unresolvable rubato leaves the date where it was, which is what an identity warp means.
  */
 export const calculateRubatoOnDate = (date: number, rubato: RubatoFrame) => {
-    const rd = resolve(rubato)
-    if (rd === null) return date
+  const rd = resolve(rubato);
+  if (rd === null) return date;
 
-    // compute the position of the map element within the rubato frame
-    const localDate = (date - rd.startDate) % rd.frameLength;
-    const d = (Math.pow(localDate / rd.frameLength, rd.intensity) * (rd.earlyEnd - rd.lateStart) + rd.lateStart) * rd.frameLength;
-    return date + d - localDate
-}
+  // compute the position of the map element within the rubato frame
+  const localDate = (date - rd.startDate) % rd.frameLength;
+  const d =
+    (Math.pow(localDate / rd.frameLength, rd.intensity) * (rd.earlyEnd - rd.lateStart) +
+      rd.lateStart) *
+    rd.frameLength;
+  return date + d - localDate;
+};
 
 /**
  * This function does the opposite of `calculateRubatoDate`:
@@ -112,25 +115,25 @@ export const calculateRubatoOnDate = (date: number, rubato: RubatoFrame) => {
  * TODO: find a numerical, non-iterative solution.
  */
 const removeRubatoFromDate = (newDate: number, rubato: RubatoFrame) => {
-    const frameLength = frameLengthOf(rubato)
-    const target = rubato.date + ((newDate - rubato.date) % frameLength);
-    let lowerBound = rubato.date;
-    let upperBound = rubato.date + frameLength;
+  const frameLength = frameLengthOf(rubato);
+  const target = rubato.date + ((newDate - rubato.date) % frameLength);
+  let lowerBound = rubato.date;
+  let upperBound = rubato.date + frameLength;
 
-    while (upperBound - lowerBound > 1e-6) {
-        const middle = (upperBound + lowerBound) / 2;
-        const middleNewDate = calculateRubatoOnDate(middle, rubato);
+  while (upperBound - lowerBound > 1e-6) {
+    const middle = (upperBound + lowerBound) / 2;
+    const middleNewDate = calculateRubatoOnDate(middle, rubato);
 
-        if (Math.abs(target - middleNewDate) < 1) {
-            return middle - rubato.date;
-        } else if (middleNewDate < target) {
-            lowerBound = middle;
-        } else {
-            upperBound = middle;
-        }
+    if (Math.abs(target - middleNewDate) < 1) {
+      return middle - rubato.date;
+    } else if (middleNewDate < target) {
+      lowerBound = middle;
+    } else {
+      upperBound = middle;
     }
+  }
 
-    return lowerBound - rubato.date;
+  return lowerBound - rubato.date;
 };
 
 /**
@@ -143,48 +146,47 @@ const removeRubatoFromDate = (newDate: number, rubato: RubatoFrame) => {
  * @todo remove the distortion from pedals as well.
  */
 export const removeRubatoDistortion = (
-    msm: Alignment,
-    mpm: Mpm,
-    scope: Scope,
-    times: TickTimes
+  msm: Alignment,
+  mpm: Mpm,
+  scope: Scope,
+  times: TickTimes,
 ) => {
-    const affectedNotes =
-        scope === 'global' ?
-            msm.allNotes :
-            msm.allNotes.filter(n => n.part - 1 === scope)
+  const affectedNotes =
+    scope === 'global' ? msm.allNotes : msm.allNotes.filter((n) => n.part - 1 === scope);
 
-    for (const note of affectedNotes) {
-        const time = times.notes.get(note['xml:id'])
-        if (!time?.tickDuration) continue
+  for (const note of affectedNotes) {
+    const time = times.notes.get(note['xml:id']);
+    if (!time?.tickDuration) continue;
 
-        const onsetRubato = instructionsEffectiveAtDate(mpm, note.date, 'rubato', scope)[0];
-        if (!onsetRubato) continue
+    const onsetRubato = instructionsEffectiveAtDate(mpm, note.date, 'rubato', scope)[0];
+    if (!onsetRubato) continue;
 
-        const onsetInTicks = onsetRubato
-            ? calculateRubatoOnDate(note.date, onsetRubato)
-            : note.date
+    const onsetInTicks = onsetRubato ? calculateRubatoOnDate(note.date, onsetRubato) : note.date;
 
-        const onsetDiff = onsetInTicks - note.date
-        if (time.tickDate) {
-            time.tickDate -= onsetDiff
-        }
-        time.tickDuration -= onsetDiff
-
-        // Where the note ends, on the score grid. Both terms are symbolic, which is the domain
-        // the rubato frames below are addressed in. This used to read
-        // `note.date + note.tickDuration` — a symbolic position plus a performed one, so the
-        // position handed to the frame lookup was neither. See issue #40.
-        const offset = note.date + note.duration
-
-        const rubatos = instructionsEffectiveAtDate(mpm, offset, 'rubato', scope)
-        const effectiveRubato = rubatos[0]
-        if (!effectiveRubato) continue
-
-        const rubatoStart = offset - ((offset - effectiveRubato.date) % frameLengthOf(effectiveRubato))
-        const remainder = offset - rubatoStart
-        time.tickDuration -= remainder
-
-        const remainderWithoutRubato = removeRubatoFromDate(effectiveRubato.date + remainder, effectiveRubato)
-        time.tickDuration += remainderWithoutRubato
+    const onsetDiff = onsetInTicks - note.date;
+    if (time.tickDate) {
+      time.tickDate -= onsetDiff;
     }
-}
+    time.tickDuration -= onsetDiff;
+
+    // Where the note ends, on the score grid. Both terms are symbolic, which is the domain
+    // the rubato frames below are addressed in. This used to read
+    // `note.date + note.tickDuration` — a symbolic position plus a performed one, so the
+    // position handed to the frame lookup was neither. See issue #40.
+    const offset = note.date + note.duration;
+
+    const rubatos = instructionsEffectiveAtDate(mpm, offset, 'rubato', scope);
+    const effectiveRubato = rubatos[0];
+    if (!effectiveRubato) continue;
+
+    const rubatoStart = offset - ((offset - effectiveRubato.date) % frameLengthOf(effectiveRubato));
+    const remainder = offset - rubatoStart;
+    time.tickDuration -= remainder;
+
+    const remainderWithoutRubato = removeRubatoFromDate(
+      effectiveRubato.date + remainder,
+      effectiveRubato,
+    );
+    time.tickDuration += remainderWithoutRubato;
+  }
+};

@@ -22,61 +22,67 @@
  * `OrnamentDef.setTemporalSpreadValues` and `setDynamicsGradientValues`, and matching those
  * spellings is what keeps the hand-off from needing a translation step of its own.
  */
-import { Attribute, Element, FrameDomain, NoteOffShift } from 'espressivo'
+import { Attribute, Element, FrameDomain, NoteOffShift } from 'espressivo';
 
 export interface OrnamentDraft {
-    /** `<dynamicsGradient>`'s `@transition.from`. */
-    transitionFrom?: number
-    /** `<dynamicsGradient>`'s `@transition.to`. */
-    transitionTo?: number
-    /** `<temporalSpread>`'s `@frame.start`. */
-    frameStart?: number
-    /** `<temporalSpread>`'s `@frameLength`. */
-    frameLength?: number
-    /** `<temporalSpread>`'s `@noteoff.shift`. */
-    noteOffShift?: NoteOffShift
-    /** `<temporalSpread>`'s `@time.unit`, as the domain the frame figures are in. */
-    frameDomain?: FrameDomain
-    /** `<temporalSpread>`'s `@intensity`. */
-    intensity?: number
+  /** `<dynamicsGradient>`'s `@transition.from`. */
+  transitionFrom?: number;
+  /** `<dynamicsGradient>`'s `@transition.to`. */
+  transitionTo?: number;
+  /** `<temporalSpread>`'s `@frame.start`. */
+  frameStart?: number;
+  /** `<temporalSpread>`'s `@frameLength`. */
+  frameLength?: number;
+  /** `<temporalSpread>`'s `@noteoff.shift`. */
+  noteOffShift?: NoteOffShift;
+  /** `<temporalSpread>`'s `@time.unit`, as the domain the frame figures are in. */
+  frameDomain?: FrameDomain;
+  /** `<temporalSpread>`'s `@intensity`. */
+  intensity?: number;
 }
 
 /** Where each field is parked. The attribute names are the def's, which is where they end up. */
 const ATTRIBUTES = {
-    transitionFrom: 'transition.from',
-    transitionTo: 'transition.to',
-    frameStart: 'frame.start',
-    frameLength: 'frameLength',
-    noteOffShift: 'noteoff.shift',
-    frameDomain: 'time.unit',
-    intensity: 'intensity',
-} as const satisfies Record<keyof OrnamentDraft, string>
+  transitionFrom: 'transition.from',
+  transitionTo: 'transition.to',
+  frameStart: 'frame.start',
+  frameLength: 'frameLength',
+  noteOffShift: 'noteoff.shift',
+  frameDomain: 'time.unit',
+  intensity: 'intensity',
+} as const satisfies Record<keyof OrnamentDraft, string>;
 
-const NUMERIC = ['transitionFrom', 'transitionTo', 'frameStart', 'frameLength', 'intensity'] as const
+const NUMERIC = [
+  'transitionFrom',
+  'transitionTo',
+  'frameStart',
+  'frameLength',
+  'intensity',
+] as const;
 
 const isNoteOffShift = (text: string): text is NoteOffShift =>
-    text === NoteOffShift.True || text === NoteOffShift.False || text === NoteOffShift.Monophonic
+  text === NoteOffShift.True || text === NoteOffShift.False || text === NoteOffShift.Monophonic;
 
 const isFrameDomain = (text: string): text is FrameDomain =>
-    text === FrameDomain.Ticks || text === FrameDomain.Milliseconds
+  text === FrameDomain.Ticks || text === FrameDomain.Milliseconds;
 
 /** What is parked on this `<ornament>`. Absent fields are fields nothing has fitted yet. */
 export const ornamentDraftOf = (element: Element): OrnamentDraft => {
-    const draft: OrnamentDraft = {}
+  const draft: OrnamentDraft = {};
 
-    for (const key of NUMERIC) {
-        const text = element.getAttributeValue(ATTRIBUTES[key])
-        if (text !== null) draft[key] = parseFloat(text)
-    }
+  for (const key of NUMERIC) {
+    const text = element.getAttributeValue(ATTRIBUTES[key]);
+    if (text !== null) draft[key] = parseFloat(text);
+  }
 
-    const shift = element.getAttributeValue(ATTRIBUTES.noteOffShift)
-    if (shift !== null && isNoteOffShift(shift)) draft.noteOffShift = shift
+  const shift = element.getAttributeValue(ATTRIBUTES.noteOffShift);
+  if (shift !== null && isNoteOffShift(shift)) draft.noteOffShift = shift;
 
-    const domain = element.getAttributeValue(ATTRIBUTES.frameDomain)
-    if (domain !== null && isFrameDomain(domain)) draft.frameDomain = domain
+  const domain = element.getAttributeValue(ATTRIBUTES.frameDomain);
+  if (domain !== null && isFrameDomain(domain)) draft.frameDomain = domain;
 
-    return draft
-}
+  return draft;
+};
 
 /**
  * Park these fields on the element. A field the draft omits is left alone; one it carries as
@@ -84,24 +90,24 @@ export const ornamentDraftOf = (element: Element): OrnamentDraft => {
  * halves of an `<ornament>` behave alike whichever one a caller is writing.
  */
 export const setOrnamentDraft = (element: Element, draft: OrnamentDraft): void => {
-    for (const [key, name] of Object.entries(ATTRIBUTES)) {
-        if (!(key in draft)) continue
-        const value = draft[key as keyof OrnamentDraft]
-        const existing = element.getAttribute(name)
+  for (const [key, name] of Object.entries(ATTRIBUTES)) {
+    if (!(key in draft)) continue;
+    const value = draft[key as keyof OrnamentDraft];
+    const existing = element.getAttribute(name);
 
-        if (value === undefined) {
-            if (existing) element.removeAttribute(existing)
-            continue
-        }
-        if (existing) existing.setValue(String(value))
-        else element.addAttribute(new Attribute(name, String(value)))
+    if (value === undefined) {
+      if (existing) element.removeAttribute(existing);
+      continue;
     }
-}
+    if (existing) existing.setValue(String(value));
+    else element.addAttribute(new Attribute(name, String(value)));
+  }
+};
 
 /** Take every parked field off, once a real `<ornamentDef>` holds them. */
 export const clearOrnamentDraft = (element: Element): void => {
-    for (const name of Object.values(ATTRIBUTES)) {
-        const attribute = element.getAttribute(name)
-        if (attribute) element.removeAttribute(attribute)
-    }
-}
+  for (const name of Object.values(ATTRIBUTES)) {
+    const attribute = element.getAttribute(name);
+    if (attribute) element.removeAttribute(attribute);
+  }
+};

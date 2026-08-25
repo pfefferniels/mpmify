@@ -1,5 +1,5 @@
-import { expect, test } from "vitest"
-import { calculateRubatoOnDate, RubatoFrame } from "../../src/transformers/rubato/rubatoMath"
+import { expect, test } from 'vitest';
+import { calculateRubatoOnDate, RubatoFrame } from '../../src/transformers/rubato/rubatoMath';
 
 /**
  * The warp has to agree with the renderer, and it did not.
@@ -15,45 +15,48 @@ import { calculateRubatoOnDate, RubatoFrame } from "../../src/transformers/rubat
  * a 720-tick frame with the identity intensity.
  */
 const rubato = (lateStart?: number, earlyEnd?: number): RubatoFrame => ({
-    date: 0,
-    frameLength: 720,
-    intensity: 1,
-    lateStart,
-    earlyEnd,
-})
+  date: 0,
+  frameLength: 720,
+  intensity: 1,
+  lateStart,
+  earlyEnd,
+});
 
 test.each([
-    // window                       at 360   why
-    ['the identity', undefined, undefined, 360],
-    ['a window meico leaves alone', 0.1, 0.9, 360],
-    ['a lateStart past the old 0.9 cap', 0.95, 1, 702],
-    ['an earlyEnd below the old 0.1 floor', 0, 0.05, 18],
-    ['an inverted window, widened to the frame', 0.5, 0.3, 360],
-    ['an empty window, widened to the frame', 0.4, 0.4, 360],
-    ['a negative lateStart, floored at 0', -0.2, 1, 360],
+  // window                       at 360   why
+  ['the identity', undefined, undefined, 360],
+  ['a window meico leaves alone', 0.1, 0.9, 360],
+  ['a lateStart past the old 0.9 cap', 0.95, 1, 702],
+  ['an earlyEnd below the old 0.1 floor', 0, 0.05, 18],
+  ['an inverted window, widened to the frame', 0.5, 0.3, 360],
+  ['an empty window, widened to the frame', 0.4, 0.4, 360],
+  ['a negative lateStart, floored at 0', -0.2, 1, 360],
 ])('%s', (_name, lateStart, earlyEnd, expected) => {
-    expect(calculateRubatoOnDate(360, rubato(lateStart, earlyEnd))).toBeCloseTo(expected, 6)
-})
+  expect(calculateRubatoOnDate(360, rubato(lateStart, earlyEnd))).toBeCloseTo(expected, 6);
+});
 
 test('an absent @intensity is the identity, not NaN', () => {
-    // `Math.pow(x, undefined)` is NaN, and the frames `CombineAdjacentRubatos` writes to close a
-    // loop carry no @intensity by design — so every date under one used to come back NaN.
-    const withoutIntensity: RubatoFrame = {
-        date: 0, frameLength: 720, lateStart: 0.25, earlyEnd: 1,
-    }
-    const answer = calculateRubatoOnDate(360, withoutIntensity)
-    expect(Number.isNaN(answer)).toBe(false)
-    expect(answer).toBeCloseTo(450, 6)
-})
+  // `Math.pow(x, undefined)` is NaN, and the frames `CombineAdjacentRubatos` writes to close a
+  // loop carry no @intensity by design — so every date under one used to come back NaN.
+  const withoutIntensity: RubatoFrame = {
+    date: 0,
+    frameLength: 720,
+    lateStart: 0.25,
+    earlyEnd: 1,
+  };
+  const answer = calculateRubatoOnDate(360, withoutIntensity);
+  expect(Number.isNaN(answer)).toBe(false);
+  expect(answer).toBeCloseTo(450, 6);
+});
 
 test('an absent @frameLength leaves the date alone rather than answering NaN', () => {
-    // `@frameLength` is the one rubato parameter with no default: espressivo's `resolveRubato`
-    // rejects the instruction outright. It used to divide by `undefined`.
-    //
-    // The fixture needs no cast any more. mpmify's own record declared `frameLength` as a
-    // required number while a parsed document handed back `undefined` for it, so stating this
-    // case at all meant lying to the compiler; espressivo types it optional, which is what a
-    // `<rubato>` that inherits its frame from a `rubatoDef` actually looks like.
-    const noFrame: RubatoFrame = { date: 0 }
-    expect(calculateRubatoOnDate(360, noFrame)).toBe(360)
-})
+  // `@frameLength` is the one rubato parameter with no default: espressivo's `resolveRubato`
+  // rejects the instruction outright. It used to divide by `undefined`.
+  //
+  // The fixture needs no cast any more. mpmify's own record declared `frameLength` as a
+  // required number while a parsed document handed back `undefined` for it, so stating this
+  // case at all meant lying to the compiler; espressivo types it optional, which is what a
+  // `<rubato>` that inherits its frame from a `rubatoDef` actually looks like.
+  const noFrame: RubatoFrame = { date: 0 };
+  expect(calculateRubatoOnDate(360, noFrame)).toBe(360);
+});

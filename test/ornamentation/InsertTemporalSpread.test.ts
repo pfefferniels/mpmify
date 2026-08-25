@@ -1,90 +1,99 @@
-import { expect, test } from 'vitest'
-import { Alignment } from '../../src/alignment'
-import { FrameDomain, Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm'
-import { InsertTemporalSpread } from '../../src/transformers'
+import { expect, test } from 'vitest';
+import { Alignment } from '../../src/alignment';
+import { FrameDomain, Mpm, createMpm, getInstructions, ornamentDraftOf } from '../../src/mpm';
+import { InsertTemporalSpread } from '../../src/transformers';
 
 /**
  * Quickly generates a simple aligned note
  * @note Example for duration and position: 0.25 = quarter note etc.
  */
 const generateNote = (position: number, duration: number, pitch: number, part: number = 1) => ({
-    'xml:id': `n_${part}_${pitch}`,
-    date: position * 4 * 720,
-    part: part,
-    pitchname: 'g',
-    octave: 4,
-    duration: duration * 4 * 720,
-    accidentals: 0,
-    'midi.pitch': pitch
-})
+  'xml:id': `n_${part}_${pitch}`,
+  date: position * 4 * 720,
+  part: part,
+  pitchname: 'g',
+  octave: 4,
+  duration: duration * 4 * 720,
+  accidentals: 0,
+  'midi.pitch': pitch,
+});
 
 /** Two notes of one chord, struck a second apart — a rolled chord, seen from the recording. */
-const msmFixture = () => new Alignment([
-    {
+const msmFixture = () =>
+  new Alignment(
+    [
+      {
         ...generateNote(0, 0.25, 60),
         'milliseconds.date': 500,
         'milliseconds.date.end': 1500,
-        velocity: 50
-    },
-    {
+        velocity: 50,
+      },
+      {
         ...generateNote(0, 0.25, 67),
         'milliseconds.date': 1500,
         'milliseconds.date.end': 2500,
-        velocity: 50
-    }],
-    { numerator: 1, denominator: 4 })
+        velocity: 50,
+      },
+    ],
+    { numerator: 1, denominator: 4 },
+  );
 
 /** Call the protected `transform` method for testing */
 const callTransform = (transformer: InsertTemporalSpread, msm: Alignment, mpm: Mpm) => {
-    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
-    ;(transformer as unknown as Transformable).transform(msm, mpm)
-}
+  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  (transformer as unknown as Transformable).transform(msm, mpm);
+};
 
-const run = (msm: Alignment, mpm: Mpm) => callTransform(new InsertTemporalSpread({
-    scope: 'global',
-    placement: 'estimate',
-    durationThreshold: 200,
-    noteOffShiftTolerance: 0.2,
-}), msm, mpm)
+const run = (msm: Alignment, mpm: Mpm) =>
+  callTransform(
+    new InsertTemporalSpread({
+      scope: 'global',
+      placement: 'estimate',
+      durationThreshold: 200,
+      noteOffShiftTolerance: 0.2,
+    }),
+    msm,
+    mpm,
+  );
 
 test('it describes the roll as an <ornament> in milliseconds around the estimated onset', () => {
-    const msm = msmFixture()
-    const mpm = createMpm()
+  const msm = msmFixture();
+  const mpm = createMpm();
 
-    run(msm, mpm)
+  run(msm, mpm);
 
-    const arpeggios = getInstructions(mpm, 'ornament', 'global')
-    expect(arpeggios).toHaveLength(1)
-    expect(arpeggios[0].noteOrder).toEqual('ascending pitch')
+  const arpeggios = getInstructions(mpm, 'ornament', 'global');
+  expect(arpeggios).toHaveLength(1);
+  expect(arpeggios[0].noteOrder).toEqual('ascending pitch');
 
-    // The frame belongs on the `<temporalSpread>` of a def that does not exist yet, so it is
-    // parked on the element rather than said by the instruction. `StylizeOrnamentation` is what
-    // eventually moves it.
-    const frame = ornamentDraftOf(arpeggios[0].element)
-    expect(frame.frameStart).toEqual(-500)
-    expect(frame.frameLength).toEqual(1000)
-    expect(frame.frameDomain).toEqual(FrameDomain.Milliseconds)
-})
+  // The frame belongs on the `<temporalSpread>` of a def that does not exist yet, so it is
+  // parked on the element rather than said by the instruction. `StylizeOrnamentation` is what
+  // eventually moves it.
+  const frame = ornamentDraftOf(arpeggios[0].element);
+  expect(frame.frameStart).toEqual(-500);
+  expect(frame.frameLength).toEqual(1000);
+  expect(frame.frameDomain).toEqual(FrameDomain.Milliseconds);
+});
 
 test('it collapses the rolled chord onto one onset, so a tempo can be read off it', () => {
-    const msm = msmFixture()
-    const mpm = createMpm()
+  const msm = msmFixture();
+  const mpm = createMpm();
 
-    run(msm, mpm)
+  run(msm, mpm);
 
-    // §0 of PORT-TO-ESPRESSIVO.md: the roll is explained, then removed, and only then is the
-    // onset clean enough to measure a tempo from.
-    expect(msm.allNotes.map(note => note['milliseconds.date'])).toEqual([1000, 1000])
-})
+  // §0 of PORT-TO-ESPRESSIVO.md: the roll is explained, then removed, and only then is the
+  // onset clean enough to measure a tempo from.
+  expect(msm.allNotes.map((note) => note['milliseconds.date'])).toEqual([1000, 1000]);
+});
 
 test('a roll shorter than the threshold is left alone', () => {
-    const msm = msmFixture()
-    // the same note, struck 10 ms after the first rather than a second after it
-    msm.allNotes[1]['milliseconds.date'] = 510
-    msm.allNotes[1]['milliseconds.date.end'] = 1510
-    const mpm = createMpm()
+  const msm = msmFixture();
+  // the same note, struck 10 ms after the first rather than a second after it
+  msm.allNotes[1]['milliseconds.date'] = 510;
+  msm.allNotes[1]['milliseconds.date.end'] = 1510;
+  const mpm = createMpm();
 
-    run(msm, mpm)
+  run(msm, mpm);
 
-    expect(getInstructions(mpm, 'ornament', 'global')).toHaveLength(0)
-})
+  expect(getInstructions(mpm, 'ornament', 'global')).toHaveLength(0);
+});

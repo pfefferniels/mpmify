@@ -1,11 +1,21 @@
-import { describe, expect, test } from "vitest"
-import { Alignment } from "../../src/alignment"
+import { describe, expect, test } from 'vitest';
+import { Alignment } from '../../src/alignment';
 import {
-    FrameDomain, InstructionOptions, Mpm, NoteOffShift, OrnamentDraft, createMpm,
-    fillInAt, findInstructionById, getDefinitions, getInstructions, ornamentDraftOf,
-    requireMap, setOrnamentDraft,
-} from "../../src/mpm"
-import { StylizeOrnamentation } from "../../src/transformers"
+  FrameDomain,
+  InstructionOptions,
+  Mpm,
+  NoteOffShift,
+  OrnamentDraft,
+  createMpm,
+  fillInAt,
+  findInstructionById,
+  getDefinitions,
+  getInstructions,
+  ornamentDraftOf,
+  requireMap,
+  setOrnamentDraft,
+} from '../../src/mpm';
+import { StylizeOrnamentation } from '../../src/transformers';
 
 /**
  * `StylizeOrnamentation` moves the def fields an ornament was fitted with into an
@@ -18,19 +28,25 @@ import { StylizeOrnamentation } from "../../src/transformers"
  */
 
 const callTransform = (transformer: StylizeOrnamentation, msm: Alignment, mpm: Mpm) => {
-    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
-    ;(transformer as unknown as Transformable).transform(msm, mpm)
-}
+  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  (transformer as unknown as Transformable).transform(msm, mpm);
+};
 
-const run = (mpm: Mpm) => callTransform(
-    new StylizeOrnamentation({ tickTolerance: 10, gradientTolerance: 0.1, intensityTolerance: 0.3 }),
+const run = (mpm: Mpm) =>
+  callTransform(
+    new StylizeOrnamentation({
+      tickTolerance: 10,
+      gradientTolerance: 0.1,
+      intensityTolerance: 0.3,
+    }),
     new Alignment([], { numerator: 4, denominator: 4 }),
-    mpm)
+    mpm,
+  );
 
 const defNames = (mpm: Mpm) =>
-    getDefinitions(mpm, 'ornamentDef', 'global').map(def => def.getName())
+  getDefinitions(mpm, 'ornamentDef', 'global').map((def) => def.getName());
 
-const ornaments = (mpm: Mpm) => getInstructions(mpm, 'ornament', 'global')
+const ornaments = (mpm: Mpm) => getInstructions(mpm, 'ornament', 'global');
 
 /**
  * An `<ornament>` as the fitters leave it — in the two goes it takes to write one.
@@ -42,20 +58,20 @@ const ornaments = (mpm: Mpm) => getInstructions(mpm, 'ornament', 'global')
  * ornament nothing had fitted.
  */
 const insertOrnament = (
-    mpm: Mpm,
-    options: InstructionOptions<'ornament'>,
-    draft: OrnamentDraft,
+  mpm: Mpm,
+  options: InstructionOptions<'ornament'>,
+  draft: OrnamentDraft,
 ) => {
-    const map = requireMap(mpm, 'ornament', 'global')
-    const element = fillInAt(map, options, {
-        localName: 'ornament',
-        add: o => map.addOrnamentV3(o),
-        read: i => map.getOrnamentOptionsOf(i),
-        update: (i, patch) => map.updateOrnamentAt(i, patch),
-    })
-    setOrnamentDraft(element, draft)
-    return element
-}
+  const map = requireMap(mpm, 'ornament', 'global');
+  const element = fillInAt(map, options, {
+    localName: 'ornament',
+    add: (o) => map.addOrnamentV3(o),
+    read: (i) => map.getOrnamentOptionsOf(i),
+    update: (i, patch) => map.updateOrnamentAt(i, patch),
+  });
+  setOrnamentDraft(element, draft);
+  return element;
+};
 
 /**
  * Give an ornament already in the document a frame of literal `NaN`.
@@ -73,123 +89,135 @@ const insertOrnament = (
  * these tests onto the ramp-only path instead.
  */
 const spoilFrame = (mpm: Mpm, id: string) => {
-    const instruction = findInstructionById(mpm, id)
-    if (!instruction) throw new Error(`no ornament #${id} to spoil`)
+  const instruction = findInstructionById(mpm, id);
+  if (!instruction) throw new Error(`no ornament #${id} to spoil`);
 
-    const fitted = ornamentDraftOf(instruction.element)
-    if (fitted.frameStart === undefined || fitted.frameLength === undefined) {
-        throw new Error(`ornament #${id} has no frame to spoil`)
-    }
-    setOrnamentDraft(instruction.element, { frameStart: NaN, frameLength: NaN })
-}
+  const fitted = ornamentDraftOf(instruction.element);
+  if (fitted.frameStart === undefined || fitted.frameLength === undefined) {
+    throw new Error(`ornament #${id} has no frame to spoil`);
+  }
+  setOrnamentDraft(instruction.element, { frameStart: NaN, frameLength: NaN });
+};
 
 describe('an ornament and its definition do not come apart (#28)', () => {
-    test('an unusable frame leaves the ornament untouched rather than half-processed', () => {
-        const mpm = createMpm()
-        insertOrnament(mpm,
-            { id: 'orn_broken', date: 0, nameRef: 'neutralArpeggio', scale: 25 },
-            {
-                frameStart: -360,
-                frameLength: 720,
-                frameDomain: FrameDomain.Ticks,
-                transitionFrom: -1,
-                transitionTo: 0,
-            })
-        spoilFrame(mpm, 'orn_broken')
+  test('an unusable frame leaves the ornament untouched rather than half-processed', () => {
+    const mpm = createMpm();
+    insertOrnament(
+      mpm,
+      { id: 'orn_broken', date: 0, nameRef: 'neutralArpeggio', scale: 25 },
+      {
+        frameStart: -360,
+        frameLength: 720,
+        frameDomain: FrameDomain.Ticks,
+        transitionFrom: -1,
+        transitionTo: 0,
+      },
+    );
+    spoilFrame(mpm, 'orn_broken');
 
-        run(mpm)
+    run(mpm);
 
-        // No definition, so no reference to it — and the fit it arrived with is still there to
-        // be read. Stripping those while writing no definition is what left the real corpus
-        // with three unresolvable @name.ref in one run.
-        expect(defNames(mpm)).toHaveLength(0)
-        expect(ornamentDraftOf(ornaments(mpm)[0].element).transitionFrom).toBe(-1)
-        expect(ornamentDraftOf(ornaments(mpm)[0].element).transitionTo).toBe(0)
-    })
+    // No definition, so no reference to it — and the fit it arrived with is still there to
+    // be read. Stripping those while writing no definition is what left the real corpus
+    // with three unresolvable @name.ref in one run.
+    expect(defNames(mpm)).toHaveLength(0);
+    expect(ornamentDraftOf(ornaments(mpm)[0].element).transitionFrom).toBe(-1);
+    expect(ornamentDraftOf(ornaments(mpm)[0].element).transitionTo).toBe(0);
+  });
 
-    test('an ornament with a ramp and no roll still gets a definition', () => {
-        const mpm = createMpm()
-        for (const date of [0, 1440]) {
-            insertOrnament(mpm,
-                { id: `orn_${date}`, date, nameRef: 'neutralArpeggio', scale: 25 },
-                { transitionFrom: -1, transitionTo: 0 })
-        }
+  test('an ornament with a ramp and no roll still gets a definition', () => {
+    const mpm = createMpm();
+    for (const date of [0, 1440]) {
+      insertOrnament(
+        mpm,
+        { id: `orn_${date}`, date, nameRef: 'neutralArpeggio', scale: 25 },
+        { transitionFrom: -1, transitionTo: 0 },
+      );
+    }
 
-        run(mpm)
+    run(mpm);
 
-        // `InsertDynamicsGradient` fits exactly this shape. Clustering keys on the frame, so
-        // these used to fall out of it and keep pointing at `neutralArpeggio`, a name no
-        // definition carries.
-        const defs = getDefinitions(mpm, 'ornamentDef', 'global')
-        expect(defs).toHaveLength(1)
-        expect(defs[0].getDynamicsGradient()).not.toBeNull()
-        expect(defs[0].getDynamicsGradient()!.transitionFrom).toBeCloseTo(-1, 10)
-        expect(defs[0].getDynamicsGradient()!.transitionTo).toBeCloseTo(0, 10)
-        expect(defs[0].getTemporalSpread()).toBeNull()
+    // `InsertDynamicsGradient` fits exactly this shape. Clustering keys on the frame, so
+    // these used to fall out of it and keep pointing at `neutralArpeggio`, a name no
+    // definition carries.
+    const defs = getDefinitions(mpm, 'ornamentDef', 'global');
+    expect(defs).toHaveLength(1);
+    expect(defs[0].getDynamicsGradient()).not.toBeNull();
+    expect(defs[0].getDynamicsGradient()!.transitionFrom).toBeCloseTo(-1, 10);
+    expect(defs[0].getDynamicsGradient()!.transitionTo).toBeCloseTo(0, 10);
+    expect(defs[0].getTemporalSpread()).toBeNull();
 
-        for (const ornament of ornaments(mpm)) {
-            expect(ornament.nameRef).toBe(defs[0].getName())
-        }
-    })
+    for (const ornament of ornaments(mpm)) {
+      expect(ornament.nameRef).toBe(defs[0].getName());
+    }
+  });
 
-    test('every @name.ref a run writes resolves to a definition it wrote', () => {
-        const mpm = createMpm()
-        // A mixture: two rolls that cluster, one ramp-only, and one that cannot be used.
-        for (const date of [0, 1440]) {
-            insertOrnament(mpm,
-                { id: `roll_${date}`, date, nameRef: 'neutralArpeggio', scale: 25 },
-                {
-                    frameStart: -360,
-                    frameLength: 720,
-                    frameDomain: FrameDomain.Ticks,
-                    intensity: 1,
-                    noteOffShift: NoteOffShift.False,
-                    transitionFrom: -1,
-                    transitionTo: 0,
-                })
-        }
-        insertOrnament(mpm,
-            { id: 'ramp_only', date: 2880, nameRef: 'neutralArpeggio', scale: 12 },
-            { transitionFrom: 0, transitionTo: -1 })
-        insertOrnament(mpm,
-            { id: 'unusable', date: 4320, nameRef: 'neutralArpeggio' },
-            { frameStart: -360, frameLength: 720, frameDomain: FrameDomain.Ticks })
-        spoilFrame(mpm, 'unusable')
+  test('every @name.ref a run writes resolves to a definition it wrote', () => {
+    const mpm = createMpm();
+    // A mixture: two rolls that cluster, one ramp-only, and one that cannot be used.
+    for (const date of [0, 1440]) {
+      insertOrnament(
+        mpm,
+        { id: `roll_${date}`, date, nameRef: 'neutralArpeggio', scale: 25 },
+        {
+          frameStart: -360,
+          frameLength: 720,
+          frameDomain: FrameDomain.Ticks,
+          intensity: 1,
+          noteOffShift: NoteOffShift.False,
+          transitionFrom: -1,
+          transitionTo: 0,
+        },
+      );
+    }
+    insertOrnament(
+      mpm,
+      { id: 'ramp_only', date: 2880, nameRef: 'neutralArpeggio', scale: 12 },
+      { transitionFrom: 0, transitionTo: -1 },
+    );
+    insertOrnament(
+      mpm,
+      { id: 'unusable', date: 4320, nameRef: 'neutralArpeggio' },
+      { frameStart: -360, frameLength: 720, frameDomain: FrameDomain.Ticks },
+    );
+    spoilFrame(mpm, 'unusable');
 
-        run(mpm)
+    run(mpm);
 
-        const written = new Set(defNames(mpm))
-        for (const ornament of ornaments(mpm)) {
-            const reference = ornament.nameRef
-            if (reference === 'neutralArpeggio') {
-                // Only the one that got no definition may still carry the fitter's placeholder.
-                expect(ornament.id).toBe('unusable')
-                continue
-            }
-            expect(written.has(reference), `${ornament.id} names ${reference}`).toBe(true)
-        }
-    })
+    const written = new Set(defNames(mpm));
+    for (const ornament of ornaments(mpm)) {
+      const reference = ornament.nameRef;
+      if (reference === 'neutralArpeggio') {
+        // Only the one that got no definition may still carry the fitter's placeholder.
+        expect(ornament.id).toBe('unusable');
+        continue;
+      }
+      expect(written.has(reference), `${ornament.id} names ${reference}`).toBe(true);
+    }
+  });
 
-    test('a gradient is kept when transition.to is 0, which is a legal end (#46)', () => {
-        const mpm = createMpm()
-        insertOrnament(mpm,
-            { id: 'crescendo', date: 0, nameRef: 'neutralArpeggio', scale: 25 },
-            {
-                frameStart: -360,
-                frameLength: 720,
-                frameDomain: FrameDomain.Ticks,
-                intensity: 1,
-                noteOffShift: NoteOffShift.False,
-                // The end of `InsertDynamicsGradient`'s own default crescendo.
-                transitionFrom: -1,
-                transitionTo: 0,
-            })
+  test('a gradient is kept when transition.to is 0, which is a legal end (#46)', () => {
+    const mpm = createMpm();
+    insertOrnament(
+      mpm,
+      { id: 'crescendo', date: 0, nameRef: 'neutralArpeggio', scale: 25 },
+      {
+        frameStart: -360,
+        frameLength: 720,
+        frameDomain: FrameDomain.Ticks,
+        intensity: 1,
+        noteOffShift: NoteOffShift.False,
+        // The end of `InsertDynamicsGradient`'s own default crescendo.
+        transitionFrom: -1,
+        transitionTo: 0,
+      },
+    );
 
-        run(mpm)
+    run(mpm);
 
-        const defs = getDefinitions(mpm, 'ornamentDef', 'global')
-        expect(defs).toHaveLength(1)
-        expect(defs[0].getDynamicsGradient()).not.toBeNull()
-        expect(defs[0].getDynamicsGradient()!.transitionTo).toBe(0)
-    })
-})
+    const defs = getDefinitions(mpm, 'ornamentDef', 'global');
+    expect(defs).toHaveLength(1);
+    expect(defs[0].getDynamicsGradient()).not.toBeNull();
+    expect(defs[0].getDynamicsGradient()!.transitionTo).toBe(0);
+  });
+});

@@ -16,22 +16,22 @@
  * ontology bought a vocabulary for claims mpmify does not make: it fits a performance and says
  * which call produced which element. That is what is here.
  */
-import { v4 } from "uuid";
-import { MakeChoice, compareTransformers } from "./transformers";
-import { TransformationOptions, Transformer } from "./transformers/Transformer";
-import { createTransformer } from "./transformers/TransformerRegistry";
+import { v4 } from 'uuid';
+import { MakeChoice, compareTransformers } from './transformers';
+import { TransformationOptions, Transformer } from './transformers/Transformer';
+import { createTransformer } from './transformers/TransformerRegistry';
 
 export interface Work {
-    name: string;
-    mei: string;
-    mpm: string;
+  name: string;
+  mei: string;
+  mpm: string;
 }
 
 /** One transformer call, as the file records it: enough to build it and run it again. */
 export interface Call {
-    id: string;
-    name: string;
-    options: TransformationOptions;
+  id: string;
+  name: string;
+  options: TransformationOptions;
 }
 
 /**
@@ -41,34 +41,38 @@ export interface Call {
  * recording it — and `calls` is not derivable from `elements` at all.
  */
 export interface Segment {
-    id: string;
-    /** Why this group of calls belongs together. */
-    note?: string;
-    /** The `id`s of the {@link Call}s in `provenance` that make it up. */
-    calls: string[];
-    /** The `xml:id`s of the MPM elements those calls wrote, as of the run this was saved from. */
-    elements: string[];
+  id: string;
+  /** Why this group of calls belongs together. */
+  note?: string;
+  /** The `id`s of the {@link Call}s in `provenance` that make it up. */
+  calls: string[];
+  /** The `xml:id`s of the MPM elements those calls wrote, as of the run this was saved from. */
+  elements: string[];
 }
 
 export interface WorkFile extends Work {
-    provenance: Call[];
-    segments: Segment[];
-    secondary?: Record<string, unknown>;
+  provenance: Call[];
+  segments: Segment[];
+  secondary?: Record<string, unknown>;
 }
 
 export type ImportResult = {
-    transformers: Transformer[];
-    segments: Segment[];
-    secondary?: Record<string, unknown>;
-}
+  transformers: Transformer[];
+  segments: Segment[];
+  secondary?: Record<string, unknown>;
+};
 
 /** The recording ids a `MakeChoice` call preferred — which recording each note was taken from. */
 export const sourcesOf = (transformers: Transformer[]): string[] =>
-    Array.from(new Set(transformers
+  Array.from(
+    new Set(
+      transformers
         .filter((t): t is MakeChoice => t.name === 'MakeChoice')
-        .flatMap(t => 'prefer' in t.options
-            ? [t.options.prefer]
-            : [t.options.velocity, t.options.timing])));
+        .flatMap((t) =>
+          'prefer' in t.options ? [t.options.prefer] : [t.options.velocity, t.options.timing],
+        ),
+    ),
+  );
 
 /**
  * Serialize a chain and its grouping.
@@ -78,37 +82,35 @@ export const sourcesOf = (transformers: Transformer[]): string[] =>
  * free and one that has not gets an empty list rather than a wrong one.
  */
 export function exportWork(
-    work: Work,
-    transformers: Transformer[],
-    segments: readonly Omit<Segment, 'elements'>[] = [],
-    secondary?: Record<string, unknown>,
+  work: Work,
+  transformers: Transformer[],
+  segments: readonly Omit<Segment, 'elements'>[] = [],
+  secondary?: Record<string, unknown>,
 ): string {
-    const createdById = new Map(transformers.map(t => [t.id, t.created]));
+  const createdById = new Map(transformers.map((t) => [t.id, t.created]));
 
-    const file: WorkFile = {
-        ...work,
-        provenance: transformers.map(({ id, name, options }) => ({ id, name, options })),
-        segments: segments.map(segment => ({
-            ...segment,
-            elements: Array.from(new Set(
-                segment.calls.flatMap(id => createdById.get(id) ?? [])
-            )),
-        })),
-        ...(secondary !== undefined && { secondary }),
-    };
+  const file: WorkFile = {
+    ...work,
+    provenance: transformers.map(({ id, name, options }) => ({ id, name, options })),
+    segments: segments.map((segment) => ({
+      ...segment,
+      elements: Array.from(new Set(segment.calls.flatMap((id) => createdById.get(id) ?? []))),
+    })),
+    ...(secondary !== undefined && { secondary }),
+  };
 
-    return JSON.stringify(file, replacer, 2);
+  return JSON.stringify(file, replacer, 2);
 }
 
 /** `Map` and `Set` survive the round trip; nothing else needs to. */
 function replacer(_: string, value: unknown) {
-    if (value instanceof Map) return { dataType: 'Map', value: Array.from(value.entries()) };
-    if (value instanceof Set) return { dataType: 'Set', value: Array.from(value.values()) };
-    return value;
+  if (value instanceof Map) return { dataType: 'Map', value: Array.from(value.entries()) };
+  if (value instanceof Set) return { dataType: 'Set', value: Array.from(value.values()) };
+  return value;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The calls of a parsed work file.
@@ -120,76 +122,78 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * them.
  */
 const readProvenance = (imported: Record<string, unknown>): Call[] => {
-    const provenance = imported.provenance;
-    if (!Array.isArray(provenance)) {
-        throw new Error('Not a work file: "provenance" is missing or not a list');
-    }
+  const provenance = imported.provenance;
+  if (!Array.isArray(provenance)) {
+    throw new Error('Not a work file: "provenance" is missing or not a list');
+  }
 
-    return provenance.map((call, index) => {
-        if (!isRecord(call) || typeof call.name !== 'string') {
-            throw new Error(`Work file call ${String(index)} has no name`);
-        }
-        return {
-            id: typeof call.id === 'string' ? call.id : v4(),
-            name: call.name,
-            options: isRecord(call.options) ? call.options as TransformationOptions : {},
-        };
-    });
-}
+  return provenance.map((call, index) => {
+    if (!isRecord(call) || typeof call.name !== 'string') {
+      throw new Error(`Work file call ${String(index)} has no name`);
+    }
+    return {
+      id: typeof call.id === 'string' ? call.id : v4(),
+      name: call.name,
+      options: isRecord(call.options) ? (call.options as TransformationOptions) : {},
+    };
+  });
+};
 
 const readSegments = (imported: Record<string, unknown>): Segment[] => {
-    const segments = imported.segments;
-    if (segments === undefined) return [];
-    if (!Array.isArray(segments)) {
-        throw new Error('Not a work file: "segments" is not a list');
-    }
+  const segments = imported.segments;
+  if (segments === undefined) return [];
+  if (!Array.isArray(segments)) {
+    throw new Error('Not a work file: "segments" is not a list');
+  }
 
-    return segments.map((segment, index) => {
-        if (!isRecord(segment) || !Array.isArray(segment.calls)) {
-            throw new Error(`Work file segment ${String(index)} has no "calls" list`);
-        }
-        return {
-            id: typeof segment.id === 'string' ? segment.id : v4(),
-            ...(typeof segment.note === 'string' && segment.note ? { note: segment.note } : {}),
-            calls: segment.calls.filter((id): id is string => typeof id === 'string'),
-            elements: Array.isArray(segment.elements)
-                ? segment.elements.filter((id): id is string => typeof id === 'string')
-                : [],
-        };
-    });
-}
+  return segments.map((segment, index) => {
+    if (!isRecord(segment) || !Array.isArray(segment.calls)) {
+      throw new Error(`Work file segment ${String(index)} has no "calls" list`);
+    }
+    return {
+      id: typeof segment.id === 'string' ? segment.id : v4(),
+      ...(typeof segment.note === 'string' && segment.note ? { note: segment.note } : {}),
+      calls: segment.calls.filter((id): id is string => typeof id === 'string'),
+      elements: Array.isArray(segment.elements)
+        ? segment.elements.filter((id): id is string => typeof id === 'string')
+        : [],
+    };
+  });
+};
 
 export function importWork(json: string): ImportResult {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function reviver(_: string, value: any) {
-        if (typeof value === 'object' && value !== null) {
-            if (value.dataType === 'Map') return new Map(value.value);
-            if (value.dataType === 'Set') return new Set(value.value);
-        }
-        return value;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function reviver(_: string, value: any) {
+    if (typeof value === 'object' && value !== null) {
+      if (value.dataType === 'Map') return new Map(value.value);
+      if (value.dataType === 'Set') return new Set(value.value);
     }
+    return value;
+  }
 
-    const imported: unknown = JSON.parse(json, reviver);
-    if (!isRecord(imported)) {
-        throw new Error('Not a work file: expected a JSON object');
-    }
+  const imported: unknown = JSON.parse(json, reviver);
+  if (!isRecord(imported)) {
+    throw new Error('Not a work file: expected a JSON object');
+  }
 
-    const transformers = readProvenance(imported)
-        .map(call => {
-            const transformer = createTransformer(call.name);
-            if (!transformer) {
-                console.warn(`Unknown transformer name: ${call.name}`);
-                return null;
-            }
-            transformer.id = call.id;
-            transformer.options = call.options;
-            return transformer;
-        })
-        .filter((transformer): transformer is Transformer => transformer !== null)
+  const transformers = readProvenance(imported)
+    .map((call) => {
+      const transformer = createTransformer(call.name);
+      if (!transformer) {
+        console.warn(`Unknown transformer name: ${call.name}`);
+        return null;
+      }
+      transformer.id = call.id;
+      transformer.options = call.options;
+      return transformer;
+    })
+    .filter((transformer): transformer is Transformer => transformer !== null);
 
-    return {
-        transformers: transformers.sort(compareTransformers),
-        segments: readSegments(imported),
-        ...(imported.secondary !== undefined && { secondary: imported.secondary as Record<string, unknown> })
-    };
+  return {
+    transformers: transformers.sort(compareTransformers),
+    segments: readSegments(imported),
+    ...(imported.secondary !== undefined && {
+      secondary: imported.secondary as Record<string, unknown>,
+    }),
+  };
 }

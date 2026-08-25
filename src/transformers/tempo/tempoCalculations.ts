@@ -26,12 +26,12 @@
  * counterpart in espressivo because a renderer never needs one — and the two fitting helpers the
  * desks drive, which now measure with the renderer's quadrature instead of their own.
  */
-import { TempoMap, resolveTempo, tempoAt, type Tempo as ResolvedTempo } from 'espressivo'
-import type { InstructionOptions } from "../../mpm";
-import { beatLengthInTicks, PULSES_PER_QUARTER } from "../../ppq";
+import { TempoMap, resolveTempo, tempoAt, type Tempo as ResolvedTempo } from 'espressivo';
+import type { InstructionOptions } from '../../mpm';
+import { beatLengthInTicks, PULSES_PER_QUARTER } from '../../ppq';
 
 export interface WithEndDate {
-    endDate: number
+  endDate: number;
 }
 
 /**
@@ -40,7 +40,7 @@ export interface WithEndDate {
  * `@endDate` is not an MPM attribute and never was: it is the window a span is evaluated over,
  * which every one of these functions needs and which the instruction itself does not carry.
  */
-export type TempoWithEndDate = InstructionOptions<'tempo'> & WithEndDate
+export type TempoWithEndDate = InstructionOptions<'tempo'> & WithEndDate;
 
 // ── the bridge to espressivo ──────────────────────────────────────
 
@@ -62,11 +62,12 @@ export type TempoWithEndDate = InstructionOptions<'tempo'> & WithEndDate
  * scope it becomes meico's default of 100 rather than the `NaN` arithmetic on the string used to
  * give. `String(x)` round-trips a double exactly, so a numeric one is unchanged.
  */
-export const resolveSpan = (tempo: TempoWithEndDate): ResolvedTempo => resolveTempo(
+export const resolveSpan = (tempo: TempoWithEndDate): ResolvedTempo =>
+  resolveTempo(
     {
-        startDate: tempo.date,
-        endDate: tempo.endDate,
-        beatLength: tempo.beatLength,
+      startDate: tempo.date,
+      endDate: tempo.endDate,
+      beatLength: tempo.beatLength,
     },
     String(tempo.bpm),
     tempo.transitionTo === undefined ? null : String(tempo.transitionTo),
@@ -74,7 +75,7 @@ export const resolveSpan = (tempo: TempoWithEndDate): ResolvedTempo => resolveTe
     // No style: mpmify writes numeric `@bpm` throughout, and a `<tempoDef>` it did not write is
     // not in scope here anyway. An unresolvable name therefore lands on meico's 100.0.
     null,
-)
+  );
 
 /**
  * The instantaneous tempo of an already-resolved span at `date`, clamped to the span's own ends.
@@ -91,7 +92,7 @@ export const resolveSpan = (tempo: TempoWithEndDate): ResolvedTempo => resolveTe
  * `endDate`, and the previous one was in force before `startDate`.
  */
 const tempoAtClamped = (tempo: ResolvedTempo, date: number): number =>
-    tempoAt(tempo, Math.min(Math.max(date, tempo.startDate), tempo.endDate))
+  tempoAt(tempo, Math.min(Math.max(date, tempo.startDate), tempo.endDate));
 
 /**
  * Milliseconds elapsed across `ticks` at a constant `bpm` — meico's own constant-tempo formula,
@@ -100,10 +101,10 @@ const tempoAtClamped = (tempo: ResolvedTempo, date: number): number =>
  * as a fit that will not round-trip, which is expensive to trace back to a divisor.
  */
 const msForConstantTempo = (
-    ticks: number,
-    bpm: number,
-    tempo: Pick<ResolvedTempo, 'beatLength'>
-): number => (15000.0 * ticks) / (bpm * tempo.beatLength * PULSES_PER_QUARTER)
+  ticks: number,
+  bpm: number,
+  tempo: Pick<ResolvedTempo, 'beatLength'>,
+): number => (15000.0 * ticks) / (bpm * tempo.beatLength * PULSES_PER_QUARTER);
 
 /**
  * Elapsed milliseconds from the start of an already-resolved span to `date`, for **any** `date`.
@@ -134,22 +135,28 @@ const msForConstantTempo = (
  * line, so the split changes nothing. Only transitions reach the outer branches.
  */
 export const millisecondsAt = (date: number, tempo: ResolvedTempo): number => {
-    // Already linear in `date` over the whole real line, and espressivo's own formula for it.
-    if (tempo.kind === 'constant') {
-        return TempoMap.computeDiffTiming(date, PULSES_PER_QUARTER, tempo)
-    }
+  // Already linear in `date` over the whole real line, and espressivo's own formula for it.
+  if (tempo.kind === 'constant') {
+    return TempoMap.computeDiffTiming(date, PULSES_PER_QUARTER, tempo);
+  }
 
-    if (date < tempo.startDate) {
-        return msForConstantTempo(date - tempo.startDate, tempoAtClamped(tempo, tempo.startDate), tempo)
-    }
+  if (date < tempo.startDate) {
+    return msForConstantTempo(
+      date - tempo.startDate,
+      tempoAtClamped(tempo, tempo.startDate),
+      tempo,
+    );
+  }
 
-    if (date > tempo.endDate) {
-        const toEnd = TempoMap.computeDiffTiming(tempo.endDate, PULSES_PER_QUARTER, tempo)
-        return toEnd + msForConstantTempo(date - tempo.endDate, tempoAtClamped(tempo, tempo.endDate), tempo)
-    }
+  if (date > tempo.endDate) {
+    const toEnd = TempoMap.computeDiffTiming(tempo.endDate, PULSES_PER_QUARTER, tempo);
+    return (
+      toEnd + msForConstantTempo(date - tempo.endDate, tempoAtClamped(tempo, tempo.endDate), tempo)
+    );
+  }
 
-    return TempoMap.computeDiffTiming(date, PULSES_PER_QUARTER, tempo)
-}
+  return TempoMap.computeDiffTiming(date, PULSES_PER_QUARTER, tempo);
+};
 
 // ── Curve shape fitting ───────────────────────────────────────────
 
@@ -164,51 +171,51 @@ export const millisecondsAt = (date: number, tempo: ResolvedTempo): number => {
  * did you draw", and turning that into a tick-domain instruction is the fitter's job downstream.
  */
 export function fitMeanTempoAt(
-    from: { seconds: number, bpm: number },
-    to: { seconds: number, bpm: number },
-    trail: { seconds: number, bpm: number }[]
+  from: { seconds: number; bpm: number },
+  to: { seconds: number; bpm: number },
+  trail: { seconds: number; bpm: number }[],
 ): number {
-    const duration = to.seconds - from.seconds
-    const bpmRange = to.bpm - from.bpm
+  const duration = to.seconds - from.seconds;
+  const bpmRange = to.bpm - from.bpm;
 
-    if (Math.abs(duration) < 1e-9 || Math.abs(bpmRange) < 1e-9 || trail.length < 2) return 0.5
+  if (Math.abs(duration) < 1e-9 || Math.abs(bpmRange) < 1e-9 || trail.length < 2) return 0.5;
 
-    const normalized = trail
-        .map(pt => ({
-            x: (pt.seconds - from.seconds) / duration,
-            bpm: pt.bpm
-        }))
-        .filter(pt => pt.x > 0.01 && pt.x < 0.99)
+  const normalized = trail
+    .map((pt) => ({
+      x: (pt.seconds - from.seconds) / duration,
+      bpm: pt.bpm,
+    }))
+    .filter((pt) => pt.x > 0.01 && pt.x < 0.99);
 
-    if (normalized.length === 0) return 0.5
+  if (normalized.length === 0) return 0.5;
 
-    let bestIm = 0.5
-    let bestError = Infinity
+  let bestIm = 0.5;
+  let bestError = Infinity;
 
-    for (let i = 2; i <= 98; i++) {
-        const im = i / 100
-        // A unit span, so `tempoAt`'s progress term is `x` itself and nothing is lost to the
-        // division. `beatLength` does not enter the tempo curve at all.
-        const curve = resolveSpan({
-            date: 0,
-            endDate: 1,
-            beatLength: 0.25,
-            bpm: from.bpm,
-            transitionTo: to.bpm,
-            meanTempoAt: im,
-        })
-        let error = 0
-        for (const pt of normalized) {
-            const predicted = tempoAt(curve, pt.x)
-            error += (predicted - pt.bpm) ** 2
-        }
-        if (error < bestError) {
-            bestError = error
-            bestIm = im
-        }
+  for (let i = 2; i <= 98; i++) {
+    const im = i / 100;
+    // A unit span, so `tempoAt`'s progress term is `x` itself and nothing is lost to the
+    // division. `beatLength` does not enter the tempo curve at all.
+    const curve = resolveSpan({
+      date: 0,
+      endDate: 1,
+      beatLength: 0.25,
+      bpm: from.bpm,
+      transitionTo: to.bpm,
+      meanTempoAt: im,
+    });
+    let error = 0;
+    for (const pt of normalized) {
+      const predicted = tempoAt(curve, pt.x);
+      error += (predicted - pt.bpm) ** 2;
     }
+    if (error < bestError) {
+      bestError = error;
+      bestIm = im;
+    }
+  }
 
-    return bestIm
+  return bestIm;
 }
 
 // ── Elapsed-time calculation ──────────────────────────────────────
@@ -228,22 +235,25 @@ export function fitMeanTempoAt(
  * expressed in quarters here regardless of what the real instruction counts in.
  */
 export function computeElapsedMs(
-    startBpm: number,
-    endBpm: number,
-    meanTempoAt: number,
-    segLengthBeats: number
+  startBpm: number,
+  endBpm: number,
+  meanTempoAt: number,
+  segLengthBeats: number,
 ): number {
-    if (segLengthBeats <= 0) return 0
+  if (segLengthBeats <= 0) return 0;
 
-    const endDate = segLengthBeats * PULSES_PER_QUARTER
-    return millisecondsAt(endDate, resolveSpan({
-        date: 0,
-        endDate,
-        beatLength: 0.25,
-        bpm: startBpm,
-        transitionTo: endBpm,
-        meanTempoAt,
-    }))
+  const endDate = segLengthBeats * PULSES_PER_QUARTER;
+  return millisecondsAt(
+    endDate,
+    resolveSpan({
+      date: 0,
+      endDate,
+      beatLength: 0.25,
+      bpm: startBpm,
+      transitionTo: endBpm,
+      meanTempoAt,
+    }),
+  );
 }
 
 // ── Elapsed-time optimiser ────────────────────────────────────────
@@ -256,59 +266,60 @@ export function computeElapsedMs(
  * Phase 2 – scale BPMs uniformly if phase 1 cannot reach the target.
  */
 export function optimizeForElapsedTime(
-    startBpm: number,
-    endBpm: number,
-    meanTempoAt: number,
-    beatLength: number,
-    startTick: number,
-    endTick: number,
-    targetMs: number
-): { startBpm: number, endBpm: number, meanTempoAt: number, bpmScaled: boolean } {
-    const segLengthBeats = Math.abs(endTick - startTick) / beatLengthInTicks(beatLength)
-    if (segLengthBeats <= 0 || targetMs <= 0) {
-        return { startBpm, endBpm, meanTempoAt, bpmScaled: false }
+  startBpm: number,
+  endBpm: number,
+  meanTempoAt: number,
+  beatLength: number,
+  startTick: number,
+  endTick: number,
+  targetMs: number,
+): { startBpm: number; endBpm: number; meanTempoAt: number; bpmScaled: boolean } {
+  const segLengthBeats = Math.abs(endTick - startTick) / beatLengthInTicks(beatLength);
+  if (segLengthBeats <= 0 || targetMs <= 0) {
+    return { startBpm, endBpm, meanTempoAt, bpmScaled: false };
+  }
+
+  if (Math.abs(startBpm - endBpm) < 0.5) {
+    const neededBpm = (segLengthBeats * 60000) / targetMs;
+    const avgBpm = (startBpm + endBpm) / 2;
+    const scaled = Math.abs(neededBpm - avgBpm) > 0.5;
+    return { startBpm: neededBpm, endBpm: neededBpm, meanTempoAt: 0.5, bpmScaled: scaled };
+  }
+
+  const msAt02 = computeElapsedMs(startBpm, endBpm, 0.02, segLengthBeats);
+  const msAt98 = computeElapsedMs(startBpm, endBpm, 0.98, segLengthBeats);
+  const msMin = Math.min(msAt02, msAt98);
+  const msMax = Math.max(msAt02, msAt98);
+
+  if (targetMs >= msMin && targetMs <= msMax) {
+    const increasing = msAt98 > msAt02;
+    let lo = 0.02,
+      hi = 0.98;
+
+    for (let iter = 0; iter < 50; iter++) {
+      const mid = (lo + hi) / 2;
+      const msMid = computeElapsedMs(startBpm, endBpm, mid, segLengthBeats);
+      if (Math.abs(msMid - targetMs) < 0.1) {
+        return { startBpm, endBpm, meanTempoAt: mid, bpmScaled: false };
+      }
+      if (msMid < targetMs === increasing) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
     }
 
-    if (Math.abs(startBpm - endBpm) < 0.5) {
-        const neededBpm = segLengthBeats * 60000 / targetMs
-        const avgBpm = (startBpm + endBpm) / 2
-        const scaled = Math.abs(neededBpm - avgBpm) > 0.5
-        return { startBpm: neededBpm, endBpm: neededBpm, meanTempoAt: 0.5, bpmScaled: scaled }
-    }
+    return { startBpm, endBpm, meanTempoAt: (lo + hi) / 2, bpmScaled: false };
+  }
 
-    const msAt02 = computeElapsedMs(startBpm, endBpm, 0.02, segLengthBeats)
-    const msAt98 = computeElapsedMs(startBpm, endBpm, 0.98, segLengthBeats)
-    const msMin = Math.min(msAt02, msAt98)
-    const msMax = Math.max(msAt02, msAt98)
-
-    if (targetMs >= msMin && targetMs <= msMax) {
-        const increasing = msAt98 > msAt02
-        let lo = 0.02, hi = 0.98
-
-        for (let iter = 0; iter < 50; iter++) {
-            const mid = (lo + hi) / 2
-            const msMid = computeElapsedMs(startBpm, endBpm, mid, segLengthBeats)
-            if (Math.abs(msMid - targetMs) < 0.1) {
-                return { startBpm, endBpm, meanTempoAt: mid, bpmScaled: false }
-            }
-            if ((msMid < targetMs) === increasing) {
-                lo = mid
-            } else {
-                hi = mid
-            }
-        }
-
-        return { startBpm, endBpm, meanTempoAt: (lo + hi) / 2, bpmScaled: false }
-    }
-
-    const currentMs = computeElapsedMs(startBpm, endBpm, meanTempoAt, segLengthBeats)
-    const scale = currentMs / targetMs
-    return {
-        startBpm: startBpm * scale,
-        endBpm: endBpm * scale,
-        meanTempoAt,
-        bpmScaled: true
-    }
+  const currentMs = computeElapsedMs(startBpm, endBpm, meanTempoAt, segLengthBeats);
+  const scale = currentMs / targetMs;
+  return {
+    startBpm: startBpm * scale,
+    endBpm: endBpm * scale,
+    meanTempoAt,
+    bpmScaled: true,
+  };
 }
 
 // ── evaluating one instruction ────────────────────────────────────
@@ -322,7 +333,7 @@ export function optimizeForElapsedTime(
  * a constant, and taking the wrong arm is invisible until a timestamp moves.
  */
 export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) =>
-    millisecondsAt(date, resolveSpan(tempo))
+  millisecondsAt(date, resolveSpan(tempo));
 
 /**
  * The tick span a millisecond span covers at a constant tempo — the exact inverse of
@@ -336,12 +347,12 @@ export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) =>
  * arpeggio, and it has no segment of its own to be measured in.
  */
 export const ticksForConstantTempo = (
-    milliseconds: number,
-    tempo: Pick<InstructionOptions<'tempo'>, 'bpm' | 'beatLength'>
-): number => (milliseconds * Number(tempo.bpm) * tempo.beatLength * PULSES_PER_QUARTER) / 15000.0
+  milliseconds: number,
+  tempo: Pick<InstructionOptions<'tempo'>, 'bpm' | 'beatLength'>,
+): number => (milliseconds * Number(tempo.bpm) * tempo.beatLength * PULSES_PER_QUARTER) / 15000.0;
 
 /** How close {@link dateAtMilliseconds} gets, where the iteration it replaces stopped at 1 ms. */
-const INVERSE_TOLERANCE_MS = 1e-6
+const INVERSE_TOLERANCE_MS = 1e-6;
 
 /**
  * ... and how narrow it lets the bracket get before it stops, which is the exit that actually
@@ -350,14 +361,14 @@ const INVERSE_TOLERANCE_MS = 1e-6
  * millisecond test alone is not guaranteed to be reachable. A millionth of a tick is a
  * nanosecond at any tempo anyone plays.
  */
-const INVERSE_TOLERANCE_TICKS = 1e-6
+const INVERSE_TOLERANCE_TICKS = 1e-6;
 
 /**
  * A backstop, not a working limit: bisection alone halves the bracket every step, so
  * {@link INVERSE_TOLERANCE_TICKS} is reached from any real span within about fifty. Newton
  * normally arrives in four or five.
  */
-const MAX_INVERSE_STEPS = 100
+const MAX_INVERSE_STEPS = 100;
 
 /**
  * The tick date at which `targetMilliseconds` have elapsed since the start of `tempo`'s span —
@@ -398,56 +409,70 @@ const MAX_INVERSE_STEPS = 100
  * right.
  */
 export const dateAtMilliseconds = (targetMilliseconds: number, tempo: ResolvedTempo): number => {
-    // A caller that does not know the time it is asking about is not owed a tick that looks like
-    // an answer. `NaN` is what the arithmetic downstream already refuses to write.
-    if (!Number.isFinite(targetMilliseconds)) return NaN
+  // A caller that does not know the time it is asking about is not owed a tick that looks like
+  // an answer. `NaN` is what the arithmetic downstream already refuses to write.
+  if (!Number.isFinite(targetMilliseconds)) return NaN;
 
-    const { startDate, endDate } = tempo
+  const { startDate, endDate } = tempo;
 
-    if (tempo.kind === 'constant') {
-        return startDate + ticksForConstantTempo(targetMilliseconds, tempo)
-    }
+  if (tempo.kind === 'constant') {
+    return startDate + ticksForConstantTempo(targetMilliseconds, tempo);
+  }
 
-    // Outside the span `millisecondsAt` continues at the boundary tempo, so the inverse is
-    // closed-form there too — and it is exactly the extrapolation the ornament frames rely on.
-    if (targetMilliseconds <= 0) {
-        return startDate + ticksForConstantTempo(targetMilliseconds, {
-            bpm: tempoAtClamped(tempo, startDate), beatLength: tempo.beatLength,
-        })
-    }
+  // Outside the span `millisecondsAt` continues at the boundary tempo, so the inverse is
+  // closed-form there too — and it is exactly the extrapolation the ornament frames rely on.
+  if (targetMilliseconds <= 0) {
+    return (
+      startDate +
+      ticksForConstantTempo(targetMilliseconds, {
+        bpm: tempoAtClamped(tempo, startDate),
+        beatLength: tempo.beatLength,
+      })
+    );
+  }
 
-    const spanMilliseconds = millisecondsAt(endDate, tempo)
-    if (targetMilliseconds >= spanMilliseconds) {
-        return endDate + ticksForConstantTempo(targetMilliseconds - spanMilliseconds, {
-            bpm: tempoAtClamped(tempo, endDate), beatLength: tempo.beatLength,
-        })
-    }
+  const spanMilliseconds = millisecondsAt(endDate, tempo);
+  if (targetMilliseconds >= spanMilliseconds) {
+    return (
+      endDate +
+      ticksForConstantTempo(targetMilliseconds - spanMilliseconds, {
+        bpm: tempoAtClamped(tempo, endDate),
+        beatLength: tempo.beatLength,
+      })
+    );
+  }
 
-    // Inside the curve, where there is no closed form. The target lies strictly between 0 and
-    // the span's own elapsed time, so `[startDate, endDate]` brackets it.
-    let low = startDate
-    let high = endDate
-    let guess = startDate + ticksForConstantTempo(targetMilliseconds, {
-        bpm: tempoAtClamped(tempo, startDate), beatLength: tempo.beatLength,
-    })
-    if (!(guess > low && guess < high)) guess = (low + high) / 2
+  // Inside the curve, where there is no closed form. The target lies strictly between 0 and
+  // the span's own elapsed time, so `[startDate, endDate]` brackets it.
+  let low = startDate;
+  let high = endDate;
+  let guess =
+    startDate +
+    ticksForConstantTempo(targetMilliseconds, {
+      bpm: tempoAtClamped(tempo, startDate),
+      beatLength: tempo.beatLength,
+    });
+  if (!(guess > low && guess < high)) guess = (low + high) / 2;
 
-    for (let step = 0; step < MAX_INVERSE_STEPS; step++) {
-        const elapsed = millisecondsAt(guess, tempo)
-        if (Math.abs(elapsed - targetMilliseconds) <= INVERSE_TOLERANCE_MS) return guess
+  for (let step = 0; step < MAX_INVERSE_STEPS; step++) {
+    const elapsed = millisecondsAt(guess, tempo);
+    if (Math.abs(elapsed - targetMilliseconds) <= INVERSE_TOLERANCE_MS) return guess;
 
-        if (elapsed < targetMilliseconds) low = guess
-        else high = guess
-        if (high - low <= INVERSE_TOLERANCE_TICKS) return guess
+    if (elapsed < targetMilliseconds) low = guess;
+    else high = guess;
+    if (high - low <= INVERSE_TOLERANCE_TICKS) return guess;
 
-        const newton = guess + ticksForConstantTempo(targetMilliseconds - elapsed, {
-            bpm: tempoAtClamped(tempo, guess), beatLength: tempo.beatLength,
-        })
-        guess = newton > low && newton < high ? newton : (low + high) / 2
-    }
+    const newton =
+      guess +
+      ticksForConstantTempo(targetMilliseconds - elapsed, {
+        bpm: tempoAtClamped(tempo, guess),
+        beatLength: tempo.beatLength,
+      });
+    guess = newton > low && newton < high ? newton : (low + high) / 2;
+  }
 
-    return guess
-}
+  return guess;
+};
 
 /**
  * The instantaneous tempo, in bpm, that `tempo` calls for at `date`.
@@ -457,4 +482,4 @@ export const dateAtMilliseconds = (targetMilliseconds: number, tempo: ResolvedTe
  * asks outside the span at all.
  */
 export const getTempoAt = (date: number, tempo: TempoWithEndDate): number =>
-    tempoAtClamped(resolveSpan(tempo), date)
+  tempoAtClamped(resolveSpan(tempo), date);

@@ -37,123 +37,121 @@
  *   and is held byte-equivalent to meico on it; reassembling that here would be new and
  *   unproven code that has to stay in step with a renderer it does not own.
  */
-import { exportMPM, InstructionType, Mpm, withoutMaps } from "../mpm"
-import { Alignment, AlignedNote, AlignedPedal } from "../alignment"
-import { computeTickTimes } from "../transformers/tempo/tickTimes"
-import { performMsmToData } from "espressivo"
+import { exportMPM, InstructionType, Mpm, withoutMaps } from '../mpm';
+import { Alignment, AlignedNote, AlignedPedal } from '../alignment';
+import { computeTickTimes } from '../transformers/tempo/tickTimes';
+import { performMsmToData } from 'espressivo';
 
 export interface NoteResidual {
-    readonly note: AlignedNote
+  readonly note: AlignedNote;
 
-    /**
-     * Where the recorded onset falls on the score grid, in ticks. `undefined` when no `<tempo>`
-     * covers the note, which is what the MPM having no tempoMap yet looks like.
-     */
-    readonly tickDate: number | undefined
+  /**
+   * Where the recorded onset falls on the score grid, in ticks. `undefined` when no `<tempo>`
+   * covers the note, which is what the MPM having no tempoMap yet looks like.
+   */
+  readonly tickDate: number | undefined;
 
-    /** The recorded duration on the score grid, in ticks. */
-    readonly tickDuration: number | undefined
+  /** The recorded duration on the score grid, in ticks. */
+  readonly tickDuration: number | undefined;
 
-    /**
-     * Recorded velocity minus rendered, in MIDI units. The quantity the accumulator spelled
-     * `absoluteVelocityChange`.
-     */
-    readonly velocity: number | undefined
+  /**
+   * Recorded velocity minus rendered, in MIDI units. The quantity the accumulator spelled
+   * `absoluteVelocityChange`.
+   */
+  readonly velocity: number | undefined;
 
-    /**
-     * What the probed MPM sounds this note at. The quantity `InsertArticulation` reaches by
-     * taking the residual back off the recording, and the divisor `relativeVelocity` needs:
-     * the renderer computes velocity as dynamics x relativeVelocity, so the ratio to write is
-     * `note.velocity / renderedVelocity`.
-     */
-    readonly renderedVelocity: number | undefined
+  /**
+   * What the probed MPM sounds this note at. The quantity `InsertArticulation` reaches by
+   * taking the residual back off the recording, and the divisor `relativeVelocity` needs:
+   * the renderer computes velocity as dynamics x relativeVelocity, so the ratio to write is
+   * `note.velocity / renderedVelocity`.
+   */
+  readonly renderedVelocity: number | undefined;
 }
 
 export interface PedalResidual {
-    readonly pedal: AlignedPedal
-    readonly tickDate: number | undefined
-    readonly tickDuration: number | undefined
+  readonly pedal: AlignedPedal;
+  readonly tickDate: number | undefined;
+  readonly tickDuration: number | undefined;
 }
 
 export interface Residual {
-    of(note: AlignedNote): NoteResidual | undefined
-    ofPedal(pedal: AlignedPedal): PedalResidual | undefined
-    readonly notes: readonly NoteResidual[]
-    readonly pedals: readonly PedalResidual[]
+  of(note: AlignedNote): NoteResidual | undefined;
+  ofPedal(pedal: AlignedPedal): PedalResidual | undefined;
+  readonly notes: readonly NoteResidual[];
+  readonly pedals: readonly PedalResidual[];
 }
 
 export interface DeriveResidualOptions {
-    /**
-     * Instruction types to take out of the MPM before measuring — normally the one dimension
-     * the caller is about to fit, so that what comes back is what it has to account for.
-     */
-    readonly without?: readonly InstructionType[]
+  /**
+   * Instruction types to take out of the MPM before measuring — normally the one dimension
+   * the caller is about to fit, so that what comes back is what it has to account for.
+   */
+  readonly without?: readonly InstructionType[];
 }
 
 /**
  * espressivo needs a seed for any imprecision distribution that carries none of its own. A fixed
  * one keeps the residual from moving between two calls that were asked the same question.
  */
-const RESIDUAL_SEED = 0x6D706D
+const RESIDUAL_SEED = 0x6d706d;
 
 export const deriveResidual = (
-    msm: Alignment,
-    mpm: Mpm,
-    options: DeriveResidualOptions = {}
+  msm: Alignment,
+  mpm: Mpm,
+  options: DeriveResidualOptions = {},
 ): Residual => {
-    const probe = options.without?.length ? withoutMaps(mpm, options.without) : mpm
+  const probe = options.without?.length ? withoutMaps(mpm, options.without) : mpm;
 
-    const ticks = computeTickTimes(msm, probe)
-    const rendered = renderedVelocities(msm, probe)
+  const ticks = computeTickTimes(msm, probe);
+  const rendered = renderedVelocities(msm, probe);
 
-    const notes: NoteResidual[] = msm.allNotes.map(note => {
-        const placed = ticks.notes.get(note['xml:id'])
-        const renderedVelocity = rendered?.get(note['xml:id'])
-        return {
-            note,
-            tickDate: placed?.tickDate,
-            tickDuration: placed?.tickDuration,
-            velocity: renderedVelocity === undefined
-                ? undefined
-                : note.velocity - renderedVelocity,
-            renderedVelocity,
-        }
-    })
-
-    const pedals: PedalResidual[] = msm.pedals.map(pedal => {
-        const placed = ticks.pedals.get(pedal['xml:id'])
-        return { pedal, tickDate: placed?.tickDate, tickDuration: placed?.tickDuration }
-    })
-
-    const byNote = new Map(notes.map(entry => [entry.note['xml:id'], entry]))
-    const byPedal = new Map(pedals.map(entry => [entry.pedal['xml:id'], entry]))
-
+  const notes: NoteResidual[] = msm.allNotes.map((note) => {
+    const placed = ticks.notes.get(note['xml:id']);
+    const renderedVelocity = rendered?.get(note['xml:id']);
     return {
-        of: note => byNote.get(note['xml:id']),
-        ofPedal: pedal => byPedal.get(pedal['xml:id']),
-        notes,
-        pedals,
-    }
-}
+      note,
+      tickDate: placed?.tickDate,
+      tickDuration: placed?.tickDuration,
+      velocity: renderedVelocity === undefined ? undefined : note.velocity - renderedVelocity,
+      renderedVelocity,
+    };
+  });
+
+  const pedals: PedalResidual[] = msm.pedals.map((pedal) => {
+    const placed = ticks.pedals.get(pedal['xml:id']);
+    return { pedal, tickDate: placed?.tickDate, tickDuration: placed?.tickDuration };
+  });
+
+  const byNote = new Map(notes.map((entry) => [entry.note['xml:id'], entry]));
+  const byPedal = new Map(pedals.map((entry) => [entry.pedal['xml:id'], entry]));
+
+  return {
+    of: (note) => byNote.get(note['xml:id']),
+    ofPedal: (pedal) => byPedal.get(pedal['xml:id']),
+    notes,
+    pedals,
+  };
+};
 
 /** What the probed MPM renders each note at, by `xml:id`. */
 const renderedVelocities = (msm: Alignment, mpm: Mpm): Map<string, number> | undefined => {
-    const score = msm.serializeScore()
-    if (!score) return undefined
+  const score = msm.serializeScore();
+  if (!score) return undefined;
 
-    const data = performMsmToData(
-        { msm: score, mpm: exportMPM(mpm) },
-        // No ornament expansion: a v3 ornament generates notes the score never had, and a
-        // generated note has no recorded counterpart to be a residual against. Held out, every
-        // performed note answers to an `xml:id` the score also knows.
-        { expandOrnaments: false, seed: RESIDUAL_SEED }
-    )
+  const data = performMsmToData(
+    { msm: score, mpm: exportMPM(mpm) },
+    // No ornament expansion: a v3 ornament generates notes the score never had, and a
+    // generated note has no recorded counterpart to be a residual against. Held out, every
+    // performed note answers to an `xml:id` the score also knows.
+    { expandOrnaments: false, seed: RESIDUAL_SEED },
+  );
 
-    const velocities = new Map<string, number>()
-    for (const part of data.parts) {
-        for (const note of part.notes) {
-            if (note.id !== null) velocities.set(note.id, note.velocity)
-        }
+  const velocities = new Map<string, number>();
+  for (const part of data.parts) {
+    for (const note of part.notes) {
+      if (note.id !== null) velocities.set(note.id, note.velocity);
     }
-    return velocities
-}
+  }
+  return velocities;
+};

@@ -1,6 +1,6 @@
 # mpmify
 
-Using an alignment of a score with performance data, mpmify creates 
+Using an alignment of a score with performance data, mpmify creates
 an MPM representation of the performance.
 
 ## Building
@@ -20,34 +20,63 @@ This compiles TypeScript sources to `lib/`.
 ## Quick Example
 
 ```ts
-import { Alignment, createMpm, InsertDynamicsInstructions, ApproximateLogarithmicTempo } from 'mpmify'
+import {
+  Alignment,
+  createMpm,
+  InsertDynamicsInstructions,
+  ApproximateLogarithmicTempo,
+} from 'mpmify';
 
 // 1. An alignment: the score, and what the recording did with it. Symbolic `date` and
 //    `duration` are in ticks; the performance is stated in MSM's own attributes, in ms.
-const msm = new Alignment([
+const msm = new Alignment(
+  [
     {
-        'xml:id': 'n1', part: 1, date: 0, duration: 720,
-        pitchname: 'c', accidentals: 0, octave: 4,
-        'milliseconds.date': 0, 'milliseconds.date.end': 450,
-        'midi.pitch': 60, velocity: 80
+      'xml:id': 'n1',
+      part: 1,
+      date: 0,
+      duration: 720,
+      pitchname: 'c',
+      accidentals: 0,
+      octave: 4,
+      'milliseconds.date': 0,
+      'milliseconds.date.end': 450,
+      'midi.pitch': 60,
+      velocity: 80,
     },
     {
-        'xml:id': 'n2', part: 1, date: 720, duration: 720,
-        pitchname: 'd', accidentals: 0, octave: 4,
-        'milliseconds.date': 500, 'milliseconds.date.end': 900,
-        'midi.pitch': 62, velocity: 90
-    }
-], { numerator: 4, denominator: 4 })
+      'xml:id': 'n2',
+      part: 1,
+      date: 720,
+      duration: 720,
+      pitchname: 'd',
+      accidentals: 0,
+      octave: 4,
+      'milliseconds.date': 500,
+      'milliseconds.date.end': 900,
+      'midi.pitch': 62,
+      velocity: 90,
+    },
+  ],
+  { numerator: 4, denominator: 4 },
+);
 
 // 2. Create an empty MPM and apply transformers
-const mpm = createMpm()
+const mpm = createMpm();
 
 new ApproximateLogarithmicTempo({
-    scope: 'global', from: 0, to: msm.lastDate(), beatLength: 0.25, silentOnsets: []
-}).run(msm, mpm)
+  scope: 'global',
+  from: 0,
+  to: msm.lastDate(),
+  beatLength: 0.25,
+  silentOnsets: [],
+}).run(msm, mpm);
 new InsertDynamicsInstructions({
-    scope: 'global', from: 0, to: msm.lastDate(), phantomVelocities: new Map()
-}).run(msm, mpm)
+  scope: 'global',
+  from: 0,
+  to: msm.lastDate(),
+  phantomVelocities: new Map(),
+}).run(msm, mpm);
 
 // mpm now contains dynamics and tempo instructions derived from the performance
 ```

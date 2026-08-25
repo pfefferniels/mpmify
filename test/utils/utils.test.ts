@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest"
-import { fix } from "../../src/utils/utils"
+import { describe, expect, test } from 'vitest';
+import { fix } from '../../src/utils/utils';
 
 /**
  * `fix` rounds one numeric property of an object in place.
@@ -12,55 +12,55 @@ import { fix } from "../../src/utils/utils"
  * is legitimately tiny after a milliseconds-to-ticks conversion of a short arpeggio, and writes
  * the result straight into the definition.
  */
-describe("fix", () => {
-    test("rounds an ordinary number to the requested precision", () => {
-        const obj = { value: 0.12345 }
-        fix(obj, 'value', 2)
-        expect(obj.value).toBe(0.12)
-    })
+describe('fix', () => {
+  test('rounds an ordinary number to the requested precision', () => {
+    const obj = { value: 0.12345 };
+    fix(obj, 'value', 2);
+    expect(obj.value).toBe(0.12);
+  });
 
-    test("rounds the half up, which is why the decimal spelling is used", () => {
-        // `1.005 * 100` is 100.49999999999999 and would round down.
-        const obj = { value: 1.005 }
-        fix(obj, 'value', 2)
-        expect(obj.value).toBe(1.01)
-    })
+  test('rounds the half up, which is why the decimal spelling is used', () => {
+    // `1.005 * 100` is 100.49999999999999 and would round down.
+    const obj = { value: 1.005 };
+    fix(obj, 'value', 2);
+    expect(obj.value).toBe(1.01);
+  });
 
-    test("a number JavaScript spells exponentially survives", () => {
-        const tiny = { value: 1e-7 }
-        fix(tiny, 'value', 2)
-        expect(tiny.value).toBe(0)
+  test('a number JavaScript spells exponentially survives', () => {
+    const tiny = { value: 1e-7 };
+    fix(tiny, 'value', 2);
+    expect(tiny.value).toBe(0);
 
-        const huge = { value: 1.5e21 }
-        fix(huge, 'value', 2)
-        expect(huge.value).toBe(1.5e21)
-    })
+    const huge = { value: 1.5e21 };
+    fix(huge, 'value', 2);
+    expect(huge.value).toBe(1.5e21);
+  });
 
-    test("a tiny number keeps its magnitude when the precision reaches it", () => {
-        const obj = { value: 1.23456e-7 }
-        fix(obj, 'value', 10)
-        expect(obj.value).toBe(1.235e-7)
-    })
+  test('a tiny number keeps its magnitude when the precision reaches it', () => {
+    const obj = { value: 1.23456e-7 };
+    fix(obj, 'value', 10);
+    expect(obj.value).toBe(1.235e-7);
+  });
 
-    test("zero is a value, not an absent property", () => {
-        const obj = { value: 0 }
-        fix(obj, 'value', 2)
-        expect(obj.value).toBe(0)
-    })
+  test('zero is a value, not an absent property', () => {
+    const obj = { value: 0 };
+    fix(obj, 'value', 2);
+    expect(obj.value).toBe(0);
+  });
 
-    test("a non-finite value is left alone rather than turned into something else", () => {
-        const obj = { value: NaN }
-        fix(obj, 'value', 2)
-        expect(obj.value).toBeNaN()
+  test('a non-finite value is left alone rather than turned into something else', () => {
+    const obj = { value: NaN };
+    fix(obj, 'value', 2);
+    expect(obj.value).toBeNaN();
 
-        const infinite = { value: Infinity }
-        fix(infinite, 'value', 2)
-        expect(infinite.value).toBe(Infinity)
-    })
+    const infinite = { value: Infinity };
+    fix(infinite, 'value', 2);
+    expect(infinite.value).toBe(Infinity);
+  });
 
-    test("a non-numeric property is untouched", () => {
-        const obj = { value: 'monophonic' }
-        fix(obj, 'value', 2)
-        expect(obj.value).toBe('monophonic')
-    })
-})
+  test('a non-numeric property is untouched', () => {
+    const obj = { value: 'monophonic' };
+    fix(obj, 'value', 2);
+    expect(obj.value).toBe('monophonic');
+  });
+});

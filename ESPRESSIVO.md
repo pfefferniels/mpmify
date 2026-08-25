@@ -13,26 +13,26 @@ mpmify is **not** a bag of MPM generators. It is a **reduction pipeline**, and i
 the order and the residual chain, not in any single algorithm.
 
 The idea: an MPM is the transformation from a score MSM into a performed MSM. Rendering goes
-score → performance. mpmify goes the other way — it *has* the performance (a score-to-audio
+score → performance. mpmify goes the other way — it _has_ the performance (a score-to-audio
 alignment) and solves for the MPM. Each transformer explains one slice of the deviation between
 score and recording and writes the MPM instruction that accounts for it.
 
 **The order in `Order.ts` is that reduction, and it is not permutable.** Three places where the
 reason is visible in the code:
 
-- `InsertTemporalSpread` runs *before* tempo and ends by giving every note of a rolled chord the
+- `InsertTemporalSpread` runs _before_ tempo and ends by giving every note of a rolled chord the
   same collapsed onset. A rolled chord has no single onset to measure tempo from; explain the
   roll, collapse it, and only then is the onset clean enough to read a tempo off.
-- `TranslatePhyiscalTimeToTicks` is the hinge. It reads the tempo *already written into the MPM*
+- `TranslatePhyiscalTimeToTicks` is the hinge. It reads the tempo _already written into the MPM_
   to convert each physical onset into a tick date. Before it, "how late is this note" is in
   seconds; after it, in ticks off the score grid — the only domain `<rubato>` can speak.
 - Accentuation after dynamics, for the same reason one dimension over: a metrical pattern is
   invisible underneath a trend that has not yet taken its share.
 
-The residual is no longer *carried*. It used to be written back onto the aligned notes, each step
+The residual is no longer _carried_. It used to be written back onto the aligned notes, each step
 subtracting its own share for the next; `src/residual/` computes it instead, from the score, the
 recording and the MPM, on demand. A transformer asks for it with its own dimension held out
-(`deriveResidual(msm, mpm, { without: ['articulation'] })`) — "what does everything *else*
+(`deriveResidual(msm, mpm, { without: ['articulation'] })`) — "what does everything _else_
 explain?" — which is the same quantity the subtraction produced, by construction rather than by
 bookkeeping.
 
@@ -78,10 +78,10 @@ fitting is — and it is called `Alignment` rather than `MSM` because it is not 
 
 Every attribute it carries **is** MSM's, though:
 
-| | in ticks | in milliseconds |
-|---|---|---|
-| the score | `date`, `duration`, `midi.pitch`, `pitchname`, `octave`, `accidentals` | — |
-| the recording | — | `milliseconds.date`, `milliseconds.date.end`, `velocity` |
+|               | in ticks                                                               | in milliseconds                                          |
+| ------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| the score     | `date`, `duration`, `midi.pitch`, `pitchname`, `octave`, `accidentals` | —                                                        |
+| the recording | —                                                                      | `milliseconds.date`, `milliseconds.date.end`, `velocity` |
 
 Those three are what `Performance.perform` writes and `readPerformanceData` reads. mpmify used to
 carry the recording in `midi.onset` / `midi.duration` / `midi.velocity`, in **seconds** — three
@@ -144,22 +144,22 @@ its `created` list by intercepting every write, so every write had to funnel. `c
 **derived** now — `run` fingerprints every instruction before and after `transform` and diffs —
 and with nothing to funnel, neither the table nor the class had anything left to do.
 
-Deriving is also more accurate: a transformer that *modifies* an instruction is attributed to it,
+Deriving is also more accurate: a transformer that _modifies_ an instruction is attributed to it,
 where interception saw insertions only. `created` means "answerable for".
 
 ### What mpmify adds, and why each is a function rather than a wrapper
 
 Everything below is a free function over `Mpm`, in `src/mpm/`. None of them wraps a write.
 
-| what | why espressivo cannot answer it |
-|---|---|
+| what                                                | why espressivo cannot answer it                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `requireMap` / `mapOf` / `scopesOf` (`document.ts`) | a `Scope` is mpmify's and the alignment's way of naming a part. Turning one into a `<global>` or numbered `<part>`, then its `<dated>`, then the map, creating each on the way, is four steps no transformer should repeat. What comes back is espressivo's own `TempoMap`, `DynamicsMap`, … with its whole surface. |
-| `getInstructions` (`instructions.ts`) | espressivo reads by index and by type; "every `<tempo>` in scope S" is the question mpmify asks. The `READ` table there is the only thing in the whole module that knows one instruction type from another, and it has no write half. |
-| `auditInstructions` / `fingerprintInstructions` | what a transformer changed, what it left unnamed, what it wrote as `NaN` — all by looking at the document afterwards. |
-| `insertStyle` / `ensureDefaultStyle` (`styles.ts`) | mpmify's one-`<styleDef>`-per-collection convention, and the `<style date="0">` switch without which every `@name.ref` in a map is unresolvable. |
-| the definition functions | espressivo has no `Scope`; these resolve one to a `<header>` and its `<styleDef>`. |
-| `withoutMaps` | rendering a probe with one dimension held out, which is what the residual is. |
-| `unwrap` | espressivo's `mpm/` layer answers `Result`; the def factories are total over what mpmify hands them, so a failure is a caller bug and not a case to branch on. |
+| `getInstructions` (`instructions.ts`)               | espressivo reads by index and by type; "every `<tempo>` in scope S" is the question mpmify asks. The `READ` table there is the only thing in the whole module that knows one instruction type from another, and it has no write half.                                                                                |
+| `auditInstructions` / `fingerprintInstructions`     | what a transformer changed, what it left unnamed, what it wrote as `NaN` — all by looking at the document afterwards.                                                                                                                                                                                                |
+| `insertStyle` / `ensureDefaultStyle` (`styles.ts`)  | mpmify's one-`<styleDef>`-per-collection convention, and the `<style date="0">` switch without which every `@name.ref` in a map is unresolvable.                                                                                                                                                                     |
+| the definition functions                            | espressivo has no `Scope`; these resolve one to a `<header>` and its `<styleDef>`.                                                                                                                                                                                                                                   |
+| `withoutMaps`                                       | rendering a probe with one dimension held out, which is what the residual is.                                                                                                                                                                                                                                        |
+| `unwrap`                                            | espressivo's `mpm/` layer answers `Result`; the def factories are total over what mpmify hands them, so a failure is a caller bug and not a case to branch on.                                                                                                                                                       |
 
 ### `fillInAt`, the one contract the generic insert was hiding
 
@@ -183,11 +183,11 @@ It has a module of its own that says so, rather than hiding among the real attri
 table. **Do not move it upstream.** espressivo writes standard MPM and nothing else, and that is
 what makes it safe to hand it the whole document.
 
-| what | where | why it is not MPM |
-|---|---|---|
+| what               | where                      | why it is not MPM                                                                                                                                                                                                                                                                      |
+| ------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | the ornament draft | `src/mpm/ornamentDraft.ts` | seven `ornamentDef` fields parked on an `<ornament>` between the transformers that fit them and the one that moves them into a real def. `<ornament>` is a `memberOf` `att.id`, `att.note.order`, `att.reference.name`, `att.scale`, `att.time.symbolic.date` — and none of the seven. |
 
-The draft stays *on the element* deliberately: `InsertDynamicsGradient` and `InsertTemporalSpread`
+The draft stays _on the element_ deliberately: `InsertDynamicsGradient` and `InsertTemporalSpread`
 each write half of one `<ornament>` at the same date, and the element is the only thing they share.
 `StylizeOrnamentation` clears it, so it never reaches a saved document. It survives every insert,
 patch and read on the way, because espressivo only ever touches an attribute one of its options
@@ -199,7 +199,7 @@ There used to be two more, and both are gone:
   the work file's `segments[].elements`, in a place the ODD has no attribute for. The work file
   says it now.
 - **`<appInfo>`** and its `<transformation>` children. `<metadata>` is `author* comment*
-  relatedResources?` (`axelberndt/MPM`, `src/specs/metadata.xml`) and nothing else; mpmify wrote
+relatedResources?` (`axelberndt/MPM`, `src/specs/metadata.xml`) and nothing else; mpmify wrote
   the element anyway, to record which transformation produced the document. That record is the
   work file's `provenance`, which is where it belongs — a work file, not the MPM. Metadata now
   goes through espressivo's own `Mpm.addMetadata`.
@@ -256,7 +256,7 @@ There used to be two more, and both are gone:
 
 ## 5. Verification
 
-- `npx vitest`. The accuracy suite is `test/roundtrip/`: its bounds are *recorded measurements*
+- `npx vitest`. The accuracy suite is `test/roundtrip/`: its bounds are _recorded measurements_
   with a note naming the gap — tightening one is what "fixed" means, loosening one needs a
   stated reason. It compares in **performance space**, not MPM space, because MPM to performance
   is many-to-one: the chain is entitled to explain the same performance differently than the

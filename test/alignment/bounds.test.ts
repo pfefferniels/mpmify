@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest"
-import { Alignment, AlignedNote, AlignedPedal } from "../../src/alignment"
+import { describe, expect, test } from 'vitest';
+import { Alignment, AlignedNote, AlignedPedal } from '../../src/alignment';
 
 /**
  * The three places an `Alignment` reports a bound — `lastDate`, `end` and the minimum
@@ -14,7 +14,8 @@ import { Alignment, AlignedNote, AlignedPedal } from "../../src/alignment"
  */
 
 /** Onsets are in milliseconds; a note left without one is one the recording never reached. */
-const note = (id: string, date: number, duration = 720, onset?: number): AlignedNote => ({
+const note = (id: string, date: number, duration = 720, onset?: number): AlignedNote =>
+  ({
     'xml:id': id,
     part: 1,
     date,
@@ -25,72 +26,69 @@ const note = (id: string, date: number, duration = 720, onset?: number): Aligned
     'midi.pitch': 60,
     velocity: 100,
     ...(onset === undefined
-        ? {}
-        : { 'milliseconds.date': onset, 'milliseconds.date.end': onset + 1000 }),
-} as AlignedNote)
+      ? {}
+      : { 'milliseconds.date': onset, 'milliseconds.date.end': onset + 1000 }),
+  }) as AlignedNote;
 
 const pedal = (id: string, onset: number, duration = 1000): AlignedPedal => ({
-    'xml:id': id,
-    type: 'sustain',
-    'milliseconds.date': onset,
-    'milliseconds.date.end': onset + duration,
-})
+  'xml:id': id,
+  type: 'sustain',
+  'milliseconds.date': onset,
+  'milliseconds.date.end': onset + duration,
+});
 
 describe('the bounds of a score', () => {
-    test('an empty score ends where it begins', () => {
-        const msm = new Alignment()
-        expect(msm.lastDate()).toBe(0)
-        expect(msm.end).toBe(0)
-        expect(msm.lastNote()).toBeUndefined()
-    })
+  test('an empty score ends where it begins', () => {
+    const msm = new Alignment();
+    expect(msm.lastDate()).toBe(0);
+    expect(msm.end).toBe(0);
+    expect(msm.lastNote()).toBeUndefined();
+  });
 
-    test('lastDate is the latest date, end the latest date plus duration', () => {
-        // The longest note does not start last, so `end` has to look past `lastDate`'s answer.
-        const msm = new Alignment([
-            note('a', 0, 2880),
-            note('b', 720, 360),
-        ])
-        expect(msm.lastDate()).toBe(720)
-        expect(msm.end).toBe(2880)
-    })
+  test('lastDate is the latest date, end the latest date plus duration', () => {
+    // The longest note does not start last, so `end` has to look past `lastDate`'s answer.
+    const msm = new Alignment([note('a', 0, 2880), note('b', 720, 360)]);
+    expect(msm.lastDate()).toBe(720);
+    expect(msm.end).toBe(2880);
+  });
 
-    test('lastNote is the first note on the last date', () => {
-        const msm = new Alignment([note('a', 0), note('b', 720), note('c', 720)])
-        expect(msm.lastNote()?.['xml:id']).toBe('b')
-    })
-})
+  test('lastNote is the first note on the last date', () => {
+    const msm = new Alignment([note('a', 0), note('b', 720), note('c', 720)]);
+    expect(msm.lastNote()?.['xml:id']).toBe('b');
+  });
+});
 
 describe('shifting a score to its first onset', () => {
-    test('subtracts the earliest onset from notes and pedals alike', () => {
-        const msm = new Alignment([note('a', 0, 720, 2000), note('b', 720, 720, 3000)])
-        msm.pedals = [pedal('p', 2500)]
+  test('subtracts the earliest onset from notes and pedals alike', () => {
+    const msm = new Alignment([note('a', 0, 720, 2000), note('b', 720, 720, 3000)]);
+    msm.pedals = [pedal('p', 2500)];
 
-        msm.shiftToFirstOnset()
+    msm.shiftToFirstOnset();
 
-        expect(msm.allNotes.map(n => n['milliseconds.date'])).toEqual([0, 1000])
-        expect(msm.pedals[0]['milliseconds.date']).toBe(500)
-        expect(msm.pedals[0]['milliseconds.date.end']).toBe(1500)
-    })
+    expect(msm.allNotes.map((n) => n['milliseconds.date'])).toEqual([0, 1000]);
+    expect(msm.pedals[0]['milliseconds.date']).toBe(500);
+    expect(msm.pedals[0]['milliseconds.date.end']).toBe(1500);
+  });
 
-    test('a pedal pressed before the first note keeps its release', () => {
-        const msm = new Alignment([note('a', 0, 720, 2000)])
-        msm.pedals = [pedal('p', 1500, 2000)]
+  test('a pedal pressed before the first note keeps its release', () => {
+    const msm = new Alignment([note('a', 0, 720, 2000)]);
+    msm.pedals = [pedal('p', 1500, 2000)];
 
-        msm.shiftToFirstOnset()
+    msm.shiftToFirstOnset();
 
-        // Half the press is cut away with the silence, so the release stays where it was.
-        expect(msm.pedals[0]['milliseconds.date']).toBe(0)
-        expect(msm.pedals[0]['milliseconds.date.end']).toBe(1500)
-    })
+    // Half the press is cut away with the silence, so the release stays where it was.
+    expect(msm.pedals[0]['milliseconds.date']).toBe(0);
+    expect(msm.pedals[0]['milliseconds.date.end']).toBe(1500);
+  });
 
-    test('a score with no recorded onset is left alone', () => {
-        // `Math.min()` of nothing is `Infinity`, and the pedal loop subtracted it unguarded.
-        const msm = new Alignment([note('a', 0), note('b', 720)])
-        msm.pedals = [pedal('p', 4000)]
+  test('a score with no recorded onset is left alone', () => {
+    // `Math.min()` of nothing is `Infinity`, and the pedal loop subtracted it unguarded.
+    const msm = new Alignment([note('a', 0), note('b', 720)]);
+    msm.pedals = [pedal('p', 4000)];
 
-        msm.shiftToFirstOnset()
+    msm.shiftToFirstOnset();
 
-        expect(msm.pedals[0]['milliseconds.date']).toBe(4000)
-        expect(msm.pedals[0]['milliseconds.date.end']).toBe(5000)
-    })
-})
+    expect(msm.pedals[0]['milliseconds.date']).toBe(4000);
+    expect(msm.pedals[0]['milliseconds.date.end']).toBe(5000);
+  });
+});

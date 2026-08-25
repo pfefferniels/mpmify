@@ -1,6 +1,6 @@
-import { describe, expect, test } from "vitest"
-import { StylizeArticulation } from "../../src/transformers/articulation/StylizeArticulation"
-import { StylizeOrnamentation } from "../../src/transformers/ornamentation/StylizeOrnamentation"
+import { describe, expect, test } from 'vitest';
+import { StylizeArticulation } from '../../src/transformers/articulation/StylizeArticulation';
+import { StylizeOrnamentation } from '../../src/transformers/ornamentation/StylizeOrnamentation';
 
 /**
  * A tolerance of `0` is a request, not a missing argument.
@@ -15,55 +15,62 @@ import { StylizeOrnamentation } from "../../src/transformers/ornamentation/Styli
  * no-op after `InsertArticulation`, and a caller diagnosing that by asking for exact matches got
  * 0.01 instead, with nothing to say so.
  */
-describe("StylizeArticulation options", () => {
-    test("defaults stand when nothing is passed", () => {
-        expect(new StylizeArticulation().options).toEqual({
-            volumeTolerance: 0.01,
-            relativeDurationTolerance: 0.2,
-        })
-    })
+describe('StylizeArticulation options', () => {
+  test('defaults stand when nothing is passed', () => {
+    expect(new StylizeArticulation().options).toEqual({
+      volumeTolerance: 0.01,
+      relativeDurationTolerance: 0.2,
+    });
+  });
 
-    test("a tolerance of 0 is kept", () => {
-        expect(new StylizeArticulation({ volumeTolerance: 0, relativeDurationTolerance: 0 }).options)
-            .toEqual({ volumeTolerance: 0, relativeDurationTolerance: 0 })
-    })
+  test('a tolerance of 0 is kept', () => {
+    expect(
+      new StylizeArticulation({ volumeTolerance: 0, relativeDurationTolerance: 0 }).options,
+    ).toEqual({ volumeTolerance: 0, relativeDurationTolerance: 0 });
+  });
 
-    test("one option can be given without the other", () => {
-        expect(new StylizeArticulation({ volumeTolerance: 5 }).options)
-            .toEqual({ volumeTolerance: 5, relativeDurationTolerance: 0.2 })
-    })
-})
+  test('one option can be given without the other', () => {
+    expect(new StylizeArticulation({ volumeTolerance: 5 }).options).toEqual({
+      volumeTolerance: 5,
+      relativeDurationTolerance: 0.2,
+    });
+  });
+});
 
-describe("StylizeOrnamentation options", () => {
-    test("defaults stand when nothing is passed", () => {
-        expect(new StylizeOrnamentation().options).toEqual({
-            tickTolerance: 10,
-            intensityTolerance: 0.3,
-            gradientTolerance: 0.1,
-        })
-    })
+describe('StylizeOrnamentation options', () => {
+  test('defaults stand when nothing is passed', () => {
+    expect(new StylizeOrnamentation().options).toEqual({
+      tickTolerance: 10,
+      intensityTolerance: 0.3,
+      gradientTolerance: 0.1,
+    });
+  });
 
-    test("all three are read, not only the first", () => {
-        expect(new StylizeOrnamentation({
-            tickTolerance: 5,
-            intensityTolerance: 0.9,
-            gradientTolerance: 0.9,
-        }).options).toEqual({
-            tickTolerance: 5,
-            intensityTolerance: 0.9,
-            gradientTolerance: 0.9,
-        })
-    })
+  test('all three are read, not only the first', () => {
+    expect(
+      new StylizeOrnamentation({
+        tickTolerance: 5,
+        intensityTolerance: 0.9,
+        gradientTolerance: 0.9,
+      }).options,
+    ).toEqual({
+      tickTolerance: 5,
+      intensityTolerance: 0.9,
+      gradientTolerance: 0.9,
+    });
+  });
 
-    test("a tolerance of 0 is kept", () => {
-        expect(new StylizeOrnamentation({
-            tickTolerance: 0,
-            intensityTolerance: 0,
-            gradientTolerance: 0,
-        }).options).toEqual({
-            tickTolerance: 0,
-            intensityTolerance: 0,
-            gradientTolerance: 0,
-        })
-    })
-})
+  test('a tolerance of 0 is kept', () => {
+    expect(
+      new StylizeOrnamentation({
+        tickTolerance: 0,
+        intensityTolerance: 0,
+        gradientTolerance: 0,
+      }).options,
+    ).toEqual({
+      tickTolerance: 0,
+      intensityTolerance: 0,
+      gradientTolerance: 0,
+    });
+  });
+});

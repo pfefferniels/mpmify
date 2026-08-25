@@ -1,14 +1,31 @@
+// replaces tsconfig.test.json (note the name: espressivo spells it tsconfig.tests.json).
+// typecheck-only project over everything tsconfig.json excludes.
+//
+// no baseUrl and no paths. mpmify's old tsconfig.test.json mapped the bare specifier `mpmify`
+// to ./src for scripts/bake; baseUrl is REMOVED in TypeScript 7, and step 2 rewrites those
+// eight specifiers to relative imports anyway. leaving the mapping out is what makes this
+// config compile under both TS6 and TS7.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": true,
-    "incremental": false,
-    "target": "es2020",
+    // test/ and scripts/ use process, __dirname and node:fs. src/ does not.
     "types": ["node"],
-    "baseUrl": ".",
-    "paths": {
-      "mpmify": ["./src"]
-    }
+
+    // a test may take a parameter it ignores; src/ may not.
+    "noUnusedParameters": false,
+
+    // a test walking a parsed record and asserting `result.meanSigned` reads a looked-up key
+    // on purpose. bracketing every one would obscure the assertion.
+    "noPropertyAccessFromIndexSignature": false,
+
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "."
   },
-  "include": ["src", "test", "scripts", "vite.config.ts"]
+  // scripts/ is in, unlike espressivo's own tests project, which covers only src + tests +
+  // vitest.config.ts. 1,323 LOC of bake tooling would otherwise be linted and never compiled.
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "vite.config.ts"],
+  "exclude": ["node_modules", "lib", "test/fixtures"]
 }

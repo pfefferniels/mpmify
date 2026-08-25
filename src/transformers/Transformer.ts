@@ -1,18 +1,23 @@
-import { auditInstructions, fingerprintInstructions, getInstructions, InstructionType, Scope } from "../mpm";
-import { Alignment } from "../alignment";
-import { Residual } from "../residual";
-import { Mpm } from "espressivo";
-import { v4 } from "uuid";
+import {
+  auditInstructions,
+  fingerprintInstructions,
+  getInstructions,
+  InstructionType,
+  Scope,
+} from '../mpm';
+import { Alignment } from '../alignment';
+import { Residual } from '../residual';
+import { Mpm } from 'espressivo';
+import { v4 } from 'uuid';
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface TransformationOptions {
-}
+export interface TransformationOptions {}
 
 /**
  * The part on which the transformer is to be applied to.
  */
 export interface ScopedTransformationOptions extends TransformationOptions {
-    scope: Scope
+  scope: Scope;
 }
 
 /**
@@ -23,75 +28,77 @@ export interface ScopedTransformationOptions extends TransformationOptions {
 export type TransformerConstructor = new (...args: any[]) => Transformer;
 
 export interface Transformer {
-    id: string
-    readonly name: string
-    options: TransformationOptions
-    /**
-     * The `xml:id`s of the MPM elements this call is answerable for, as of its last run.
-     *
-     * Derived, never declared — see {@link AbstractTransformer.run}. It is what a work file's
-     * segments name, and what the bake turns into spans.
-     */
-    created: string[]
-    run(msm: Alignment, mpm: Mpm): void
-    readonly requires: Array<TransformerConstructor>
+  id: string;
+  readonly name: string;
+  options: TransformationOptions;
+  /**
+   * The `xml:id`s of the MPM elements this call is answerable for, as of its last run.
+   *
+   * Derived, never declared — see {@link AbstractTransformer.run}. It is what a work file's
+   * segments name, and what the bake turns into spans.
+   */
+  created: string[];
+  run(msm: Alignment, mpm: Mpm): void;
+  readonly requires: Array<TransformerConstructor>;
 }
 
 /**
  * The default chaining behavior.
  */
-export abstract class AbstractTransformer<OptionsType extends TransformationOptions> implements Transformer {
-    id: string = v4()
-    abstract readonly name: string
-    options: OptionsType
-    created: string[] = []
+export abstract class AbstractTransformer<
+  OptionsType extends TransformationOptions,
+> implements Transformer {
+  id: string = v4();
+  abstract readonly name: string;
+  options: OptionsType;
+  created: string[] = [];
 
-    abstract readonly requires: Array<TransformerConstructor>
+  abstract readonly requires: Array<TransformerConstructor>;
 
-    protected constructor(options: OptionsType) {
-        this.options = options
+  protected constructor(options: OptionsType) {
+    this.options = options;
+  }
+
+  /**
+   * Run the transformer and record which MPM elements it is answerable for.
+   *
+   * `created` is **derived**, by fingerprinting every instruction before and after — the same
+   * move `src/residual/` made, and for the same reason. Nothing intercepts a write, which is
+   * what lets `transform` write straight through espressivo's own maps.
+   *
+   * "Answerable for", not "inserted": the diff sees an instruction a transformer *changed* as
+   * well as one it added, so `StylizeArticulation` naming an articulation and
+   * `CombineAdjacentRubatos` folding two frames together are both attributed.
+   *
+   * Not to be overridden.
+   */
+  public run(msm: Alignment, mpm: Mpm) {
+    const before = fingerprintInstructions(mpm);
+    this.transform(msm, mpm);
+
+    const { fingerprints, unnamed, nonFinite } = auditInstructions(mpm);
+
+    if (unnamed.length > 0) {
+      throw new Error(
+        `${this.name} left ${String(unnamed.length)} instruction(s) with no xml:id ` +
+          `(${unnamed.slice(0, 3).join(', ')}). One without an id cannot be attributed ` +
+          'to the transformer that wrote it — pass `id` in the options.',
+      );
+    }
+    if (nonFinite.length > 0) {
+      throw new Error(
+        `${this.name} wrote ${nonFinite.slice(0, 3).join(', ')}: an MPM attribute must be ` +
+          'a finite number. Whatever computed it produced NaN or an infinity — look ' +
+          'there, not here.',
+      );
     }
 
-    /**
-     * Run the transformer and record which MPM elements it is answerable for.
-     *
-     * `created` is **derived**, by fingerprinting every instruction before and after — the same
-     * move `src/residual/` made, and for the same reason. Nothing intercepts a write, which is
-     * what lets `transform` write straight through espressivo's own maps.
-     *
-     * "Answerable for", not "inserted": the diff sees an instruction a transformer *changed* as
-     * well as one it added, so `StylizeArticulation` naming an articulation and
-     * `CombineAdjacentRubatos` folding two frames together are both attributed.
-     *
-     * Not to be overridden.
-     */
-    public run(msm: Alignment, mpm: Mpm) {
-        const before = fingerprintInstructions(mpm)
-        this.transform(msm, mpm)
+    this.created = [...fingerprints]
+      .filter(([id, xml]) => before.get(id) !== xml)
+      .map(([id]) => id);
+  }
 
-        const { fingerprints, unnamed, nonFinite } = auditInstructions(mpm)
-
-        if (unnamed.length > 0) {
-            throw new Error(
-                `${this.name} left ${String(unnamed.length)} instruction(s) with no xml:id `
-                + `(${unnamed.slice(0, 3).join(', ')}). One without an id cannot be attributed `
-                + 'to the transformer that wrote it — pass `id` in the options.'
-            )
-        }
-        if (nonFinite.length > 0) {
-            throw new Error(
-                `${this.name} wrote ${nonFinite.slice(0, 3).join(', ')}: an MPM attribute must be `
-                + 'a finite number. Whatever computed it produced NaN or an infinity — look '
-                + 'there, not here.'
-            )
-        }
-
-        this.created = [...fingerprints]
-            .filter(([id, xml]) => before.get(id) !== xml)
-            .map(([id]) => id)
-    }
-
-    protected abstract transform(msm: Alignment, mpm: Mpm): void
+  protected abstract transform(msm: Alignment, mpm: Mpm): void;
 }
 
 export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
@@ -112,30 +119,36 @@ export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
  * id is only unique if it is unique in the document.
  */
 export const generateId = (type: InstructionType, date: number, mpm: Mpm) => {
-    const taken = new Set(getInstructions(mpm, type).map(instruction => instruction.id))
-    let candidate = `${type}_${date}`
-    for (let n = 1; taken.has(candidate); n++) {
-        candidate = `${type}_${date}_${n}`
-    }
-    return candidate
-}
+  const taken = new Set(getInstructions(mpm, type).map((instruction) => instruction.id));
+  let candidate = `${type}_${date}`;
+  for (let n = 1; taken.has(candidate); n++) {
+    candidate = `${type}_${date}_${n}`;
+  }
+  return candidate;
+};
 
-export const isRangeBased = (transformer: TransformationOptions): transformer is TransformationOptions & { from: number; to: number } => {
-    return 'from' in transformer && 'to' in transformer;
-}
+export const isRangeBased = (
+  transformer: TransformationOptions,
+): transformer is TransformationOptions & { from: number; to: number } => {
+  return 'from' in transformer && 'to' in transformer;
+};
 
-export const isDateBased = (transformer: TransformationOptions): transformer is TransformationOptions & { date: number } => {
-    return 'date' in transformer;
-}
+export const isDateBased = (
+  transformer: TransformationOptions,
+): transformer is TransformationOptions & { date: number } => {
+  return 'date' in transformer;
+};
 
-export const isNoteBased = (transformer: TransformationOptions): transformer is TransformationOptions & { noteIDs: string[] } => {
-    return 'noteIDs' in transformer;
-}
+export const isNoteBased = (
+  transformer: TransformationOptions,
+): transformer is TransformationOptions & { noteIDs: string[] } => {
+  return 'noteIDs' in transformer;
+};
 
 type Range = {
-    from: number;
-    to?: number;
-}
+  from: number;
+  to?: number;
+};
 
 /**
  * The span of score a transformer acts on.
@@ -147,74 +160,85 @@ type Range = {
  * a chain that happens not to touch a pedal.
  */
 export const getRange = (
-    transformer: TransformationOptions | Transformer[],
-    msm: Alignment,
-    residual?: Residual
+  transformer: TransformationOptions | Transformer[],
+  msm: Alignment,
+  residual?: Residual,
 ): Range | undefined => {
-    if (Array.isArray(transformer)) {
-        const ranges = transformer
-            .map(t => {
-                return getRange(t.options, msm, residual)
-            })
-            .filter(d => !!d)
+  if (Array.isArray(transformer)) {
+    const ranges = transformer
+      .map((t) => {
+        return getRange(t.options, msm, residual);
+      })
+      .filter((d) => !!d);
 
-        if (ranges.length === 0) {
-            return undefined;
-        }
-
-        const from = Math.min(...ranges.map(({ from }) => from));
-        const to = Math.max(...ranges.map(({ from, to }) => Math.max(from, to ?? from)));
-        if (to <= from) return { from };
-        return { from, to };
+    if (ranges.length === 0) {
+      return undefined;
     }
 
-    if (isRangeBased(transformer)) {
-        return { from: transformer.from, to: transformer.to }
-    }
-    if (isDateBased(transformer)) {
-        if ('length' in transformer && typeof transformer.length === 'number') {
-            return { from: transformer.date, to: transformer.date + transformer.length }
-        }
-        return { from: transformer.date }
-    }
-    if (isNoteBased(transformer)) {
-        const noteids = transformer.noteIDs
-        const dates = noteids
-            .map(id => msm.getByID(id)?.date)
-            .filter((d): d is number => d !== undefined)
-        if (dates.length === 0) {
-            return undefined
-        }
-        return { from: Math.min(...dates), to: Math.max(...dates) }
-    }
-    if ('pedal' in transformer) {
-        const pedalId = (transformer as TransformationOptions & { pedal?: string }).pedal
-        const pedals = pedalId
-            ? msm.pedals.filter(p => p['xml:id'] === pedalId)
-            : msm.pedals
+    const from = Math.min(...ranges.map(({ from }) => from));
+    const to = Math.max(...ranges.map(({ from, to }) => Math.max(from, to ?? from)));
+    if (to <= from) return { from };
+    return { from, to };
+  }
 
-        const direction = 'direction' in transformer ? (transformer as TransformationOptions & { direction?: string }).direction : undefined
-        const start = 'start' in transformer ? (transformer as TransformationOptions & { start?: number }).start ?? 0 : 0
-        const duration = 'duration' in transformer ? (transformer as TransformationOptions & { duration?: number }).duration ?? 0 : 0
-
-        if (!residual) {
-            throw new Error(
-                'getRange needs a residual to place a pedal: its position on the score grid is '
-                + 'derived from the MPM, not carried on the pedal. Pass deriveResidual(msm, mpm).')
-        }
-
-        const ranges = pedals
-            .map(p => {
-                const placed = residual.ofPedal(p)
-                if (placed?.tickDate === undefined || placed.tickDuration === undefined) return undefined
-                const base = direction === 'up' ? placed.tickDate + placed.tickDuration : placed.tickDate
-                return { from: base + start, to: base + start + duration }
-            })
-            .filter((r): r is { from: number; to: number } => r !== undefined)
-
-        if (ranges.length === 0) {
-            return
-        }
-        return { from: Math.min(...ranges.map(r => r.from)), to: Math.max(...ranges.map(r => r.to)) }
+  if (isRangeBased(transformer)) {
+    return { from: transformer.from, to: transformer.to };
+  }
+  if (isDateBased(transformer)) {
+    if ('length' in transformer && typeof transformer.length === 'number') {
+      return { from: transformer.date, to: transformer.date + transformer.length };
     }
-}
+    return { from: transformer.date };
+  }
+  if (isNoteBased(transformer)) {
+    const noteids = transformer.noteIDs;
+    const dates = noteids
+      .map((id) => msm.getByID(id)?.date)
+      .filter((d): d is number => d !== undefined);
+    if (dates.length === 0) {
+      return undefined;
+    }
+    return { from: Math.min(...dates), to: Math.max(...dates) };
+  }
+  if ('pedal' in transformer) {
+    const pedalId = (transformer as TransformationOptions & { pedal?: string }).pedal;
+    const pedals = pedalId ? msm.pedals.filter((p) => p['xml:id'] === pedalId) : msm.pedals;
+
+    const direction =
+      'direction' in transformer
+        ? (transformer as TransformationOptions & { direction?: string }).direction
+        : undefined;
+    const start =
+      'start' in transformer
+        ? ((transformer as TransformationOptions & { start?: number }).start ?? 0)
+        : 0;
+    const duration =
+      'duration' in transformer
+        ? ((transformer as TransformationOptions & { duration?: number }).duration ?? 0)
+        : 0;
+
+    if (!residual) {
+      throw new Error(
+        'getRange needs a residual to place a pedal: its position on the score grid is ' +
+          'derived from the MPM, not carried on the pedal. Pass deriveResidual(msm, mpm).',
+      );
+    }
+
+    const ranges = pedals
+      .map((p) => {
+        const placed = residual.ofPedal(p);
+        if (placed?.tickDate === undefined || placed.tickDuration === undefined) return undefined;
+        const base = direction === 'up' ? placed.tickDate + placed.tickDuration : placed.tickDate;
+        return { from: base + start, to: base + start + duration };
+      })
+      .filter((r): r is { from: number; to: number } => r !== undefined);
+
+    if (ranges.length === 0) {
+      return;
+    }
+    return {
+      from: Math.min(...ranges.map((r) => r.from)),
+      to: Math.max(...ranges.map((r) => r.to)),
+    };
+  }
+};

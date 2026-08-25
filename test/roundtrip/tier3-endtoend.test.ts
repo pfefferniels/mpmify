@@ -1,6 +1,6 @@
-import { describe, test } from "vitest"
-import { tierThreeCases } from "./cases"
-import { expectCase } from "./expectations"
+import { describe, test } from 'vitest';
+import { tierThreeCases } from './cases';
+import { expectCase } from './expectations';
 
 /**
  * Tier 3 — several aspects at once, and in the last pair, the segmentation withheld.
@@ -15,7 +15,9 @@ import { expectCase } from "./expectations"
  */
 
 describe('several aspects at once, rendered back', () => {
-    for (const spec of tierThreeCases) {
-        test(spec.name, () => { expectCase(spec) })
-    }
-})
+  for (const spec of tierThreeCases) {
+    test(spec.name, () => {
+      expectCase(spec);
+    });
+  }
+});

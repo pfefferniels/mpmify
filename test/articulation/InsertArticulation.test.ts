@@ -1,22 +1,22 @@
-import { expect, test } from "vitest"
-import { Alignment } from "../../src/alignment"
-import { Mpm, createMpm, getDefinition, getInstructions, requireMap } from "../../src/mpm"
-import { InsertArticulation } from "../../src/transformers"
+import { expect, test } from 'vitest';
+import { Alignment } from '../../src/alignment';
+import { Mpm, createMpm, getDefinition, getInstructions, requireMap } from '../../src/mpm';
+import { InsertArticulation } from '../../src/transformers';
 
 /**
  * Quickly generates a simple MSM note
  * @note Example for duration and position: 0.25 = quarter note etc.
  */
 const generateNote = (position: number, duration: number, id: string, part: number = 1) => ({
-    'xml:id': id,
-    date: position * 4 * 720,
-    part: part,
-    pitchname: 'g',
-    octave: 4,
-    duration: duration * 4 * 720,
-    accidentals: 0,
-    'midi.pitch': 67
-})
+  'xml:id': id,
+  date: position * 4 * 720,
+  part: part,
+  pitchname: 'g',
+  octave: 4,
+  duration: duration * 4 * 720,
+  accidentals: 0,
+  'midi.pitch': 67,
+});
 
 /**
  * Two notes of a chord, one played half as long as written, one twice.
@@ -34,80 +34,88 @@ const generateNote = (position: number, duration: number, id: string, part: numb
  * no longer changes what these two notes measure. It stays because it also gives the piece a
  * second date, and the assertions below were recorded against a score that had one.
  */
-const msmFixture = () => new Alignment([
-    {
-        ...generateNote(0, 0.25, 'note0'),   // duration = 720 ticks
+const msmFixture = () =>
+  new Alignment(
+    [
+      {
+        ...generateNote(0, 0.25, 'note0'), // duration = 720 ticks
         'milliseconds.date': 0,
-        'milliseconds.date.end': 500,        // → 360 ticks
+        'milliseconds.date.end': 500, // → 360 ticks
         velocity: 50,
-    },
-    {
-        ...generateNote(0, 0.25, 'note1'),   // duration = 720 ticks
+      },
+      {
+        ...generateNote(0, 0.25, 'note1'), // duration = 720 ticks
         'milliseconds.date': 0,
-        'milliseconds.date.end': 2000,       // → 1440 ticks
+        'milliseconds.date.end': 2000, // → 1440 ticks
         velocity: 50,
-    },
-    {
-        ...generateNote(1, 0.25, 'rest'),    // date 2880; not articulated, it only sets msm.end
+      },
+      {
+        ...generateNote(1, 0.25, 'rest'), // date 2880; not articulated, it only sets msm.end
         'milliseconds.date': 4000,
         'milliseconds.date.end': 5000,
         velocity: 50,
-    }],
-    { numerator: 1, denominator: 4 })
+      },
+    ],
+    { numerator: 1, denominator: 4 },
+  );
 
 /** The tempo the recorded milliseconds above are read against. */
 const atSixtyBpm = () => {
-    const mpm = createMpm()
-    requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 })
-    return mpm
-}
+  const mpm = createMpm();
+  requireMap(mpm, 'tempo', 'global').addTempo({ id: 't1', date: 0, bpm: 60, beatLength: 0.25 });
+  return mpm;
+};
 
 /** Call the protected `transform` method for testing */
 const callTransform = (transformer: InsertArticulation, msm: Alignment, mpm: Mpm) => {
-    type Transformable = { transform(msm: Alignment, mpm: Mpm): void }
-    ;(transformer as unknown as Transformable).transform(msm, mpm)
-}
+  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  (transformer as unknown as Transformable).transform(msm, mpm);
+};
 
-const run = (msm: Alignment, mpm: Mpm) => callTransform(new InsertArticulation({
-    scope: 'global',
-    noteIDs: ['note0', 'note1'],
-    aspects: new Set(['relativeDuration']),
-    name: 'my-articulation',
-}), msm, mpm)
+const run = (msm: Alignment, mpm: Mpm) =>
+  callTransform(
+    new InsertArticulation({
+      scope: 'global',
+      noteIDs: ['note0', 'note1'],
+      aspects: new Set(['relativeDuration']),
+      name: 'my-articulation',
+    }),
+    msm,
+    mpm,
+  );
 
 test('it writes one <articulation> per note, each naming the definition', () => {
-    // The two notes share a date, and used to share an instruction: `noteid="#note0 #note1"`.
-    // `@noteid` is a single reference — espressivo strips the `#` and looks the rest up as an
-    // id — so that instruction named no note and articulated none of them (issue #53).
-    const msm = msmFixture()
-    const mpm = atSixtyBpm()
+  // The two notes share a date, and used to share an instruction: `noteid="#note0 #note1"`.
+  // `@noteid` is a single reference — espressivo strips the `#` and looks the rest up as an
+  // id — so that instruction named no note and articulated none of them (issue #53).
+  const msm = msmFixture();
+  const mpm = atSixtyBpm();
 
-    run(msm, mpm)
+  run(msm, mpm);
 
-    const articulations = getInstructions(mpm, 'articulation', 'global')
-    expect(articulations).toHaveLength(2)
-    expect(articulations.map(a => a.noteid).sort()).toEqual(['#note0', '#note1'])
-    expect(articulations.map(a => a.nameRef)).toEqual(['my-articulation', 'my-articulation'])
-    // One id each: they share a date, and `generateId` numbers by what the map already holds.
-    expect(new Set(articulations.map(a => a.id)).size).toBe(2)
-    // The measured values moved into the definition; the instructions only refer to it. Read
-    // as options rather than as rendering data, so an absent `@relativeDuration` is `undefined`
-    // here and not the 1.0 the renderer would apply in its place.
-    expect(articulations.map(a => a.relativeDuration)).toEqual([undefined, undefined])
-})
+  const articulations = getInstructions(mpm, 'articulation', 'global');
+  expect(articulations).toHaveLength(2);
+  expect(articulations.map((a) => a.noteid).sort()).toEqual(['#note0', '#note1']);
+  expect(articulations.map((a) => a.nameRef)).toEqual(['my-articulation', 'my-articulation']);
+  // One id each: they share a date, and `generateId` numbers by what the map already holds.
+  expect(new Set(articulations.map((a) => a.id)).size).toBe(2);
+  // The measured values moved into the definition; the instructions only refer to it. Read
+  // as options rather than as rendering data, so an absent `@relativeDuration` is `undefined`
+  // here and not the 1.0 the renderer would apply in its place.
+  expect(articulations.map((a) => a.relativeDuration)).toEqual([undefined, undefined]);
+});
 
 test('the definition holds the mean of the measured aspect', () => {
-    const msm = msmFixture()
-    const mpm = atSixtyBpm()
+  const msm = msmFixture();
+  const mpm = atSixtyBpm();
 
-    run(msm, mpm)
+  run(msm, mpm);
 
-    const def = getDefinition(mpm, 'articulationDef', 'my-articulation')
-    expect(def).not.toBeNull()
-    // 360/720 = 0.5 and 1440/720 = 2 → mean 1.25
-    expect(def!.getRelativeDuration()).toBeCloseTo(1.25, 10)
-})
-
+  const def = getDefinition(mpm, 'articulationDef', 'my-articulation');
+  expect(def).not.toBeNull();
+  // 360/720 = 0.5 and 1440/720 = 2 → mean 1.25
+  expect(def!.getRelativeDuration()).toBeCloseTo(1.25, 10);
+});
 
 // The <style> switch is now checked on every fitted MPM the round-trip suite produces: see
 // the 'a map that references definitions switches to a style' invariant in

@@ -1,30 +1,30 @@
 export interface IPoint {
-    value: number[];
-    index: number;
-    label: number;
+  value: number[];
+  index: number;
+  label: number;
 }
 
 interface DBScanOptions {
-    /**
-     * The neighbourhood radius, given per dimension: two points are neighbours when they are
-     * within `epsilons[d]` of each other in *every* dimension `d`. This is a per-axis box, not
-     * a Euclidean ball — which is what the callers want, since they measure ticks against
-     * velocity units against dimensionless gradients and there is no meaningful way to add
-     * those in quadrature.
-     *
-     * Must have one entry per dimension of `points`; a shorter array throws. It used to default
-     * to `[1, 1]` regardless of the data, and a missing entry made every comparison `<= undefined`
-     * — i.e. `false` — so a three-dimensional call quietly labelled every point noise (issue #37).
-     *
-     * @default 1 in every dimension
-     */
-    epsilons?: number[];
+  /**
+   * The neighbourhood radius, given per dimension: two points are neighbours when they are
+   * within `epsilons[d]` of each other in *every* dimension `d`. This is a per-axis box, not
+   * a Euclidean ball — which is what the callers want, since they measure ticks against
+   * velocity units against dimensionless gradients and there is no meaningful way to add
+   * those in quadrature.
+   *
+   * Must have one entry per dimension of `points`; a shorter array throws. It used to default
+   * to `[1, 1]` regardless of the data, and a missing entry made every comparison `<= undefined`
+   * — i.e. `false` — so a three-dimensional call quietly labelled every point noise (issue #37).
+   *
+   * @default 1 in every dimension
+   */
+  epsilons?: number[];
 
-    /**
-     * The minimum number of points in any group for them to be considered a distinct group. All other points are considered to be noise, and will receive a label of -1.
-     * @default 2
-     */
-    minPoints?: number;
+  /**
+   * The minimum number of points in any group for them to be considered a distinct group. All other points are considered to be noise, and will receive a label of -1.
+   * @default 2
+   */
+  minPoints?: number;
 }
 
 /**
@@ -33,87 +33,84 @@ interface DBScanOptions {
  * @returns labels is the returned list of clustered group labels. A label of -1 indicates the point is noise
  */
 export function dbscan(points: number[][], options: DBScanOptions = {}) {
-    if (!(points instanceof Array)) {
-        throw Error(`points must be of type array, ${typeof points} given`);
-    }
-    
-    const dimensions = points.reduce((widest, point) => Math.max(widest, point.length), 0);
-    const { epsilons = new Array<number>(dimensions).fill(1), minPoints = 2 } = options;
-    if (epsilons.length < dimensions) {
-        throw Error(`epsilons covers ${epsilons.length} dimension(s), but the points have ${dimensions}`);
-    }
+  if (!(points instanceof Array)) {
+    throw Error(`points must be of type array, ${typeof points} given`);
+  }
 
-    const data: IPoint[] = [];
-    let clusterId = 0;
+  const dimensions = points.reduce((widest, point) => Math.max(widest, point.length), 0);
+  const { epsilons = new Array<number>(dimensions).fill(1), minPoints = 2 } = options;
+  if (epsilons.length < dimensions) {
+    throw Error(
+      `epsilons covers ${epsilons.length} dimension(s), but the points have ${dimensions}`,
+    );
+  }
 
-    for (let index = 0; index < points.length; index++) {
-        const point = points[index];
-        data.push({
-            index,
-            value: point,
-            label: -1,
-        });
-    }
+  const data: IPoint[] = [];
+  let clusterId = 0;
 
-    for (const point of data) {
-        // Only process unlabelled points
-        if (point.label !== -1) {
-            continue;
-        }
-        // Get all the points neighbors
-        let neighbors = rangeQuery(point, data, epsilons);
-        // Check if point is noise
-        if (neighbors.length < minPoints) {
-            point.label = 0;
-            continue;
-        }
-        // Next cluster label
-        clusterId += 1;
-        // Label initial point
-        point.label = clusterId;
-        // Remove point p from n
-        let neighbors2 = neighbors.filter(
-            (neighbor) => neighbor.index !== point.index,
-        );
-        // Process every seed point
-        while (neighbors2.length) {
-            const neighbor = neighbors2.pop();
-            if (!neighbor) {
-                break;
-            }
-            // Change noise to border
-            if (neighbor.label === 0) {
-                neighbor.label = clusterId;
-            }
-            // Previously processed
-            if (neighbor.label !== -1) {
-                continue;
-            }
-            // Label neighbor
-            neighbor.label = clusterId;
-            // Find neighbors
-            neighbors = rangeQuery(neighbor, data, epsilons);
-            // Add new neighbors to seed
-            if (neighbors.length >= minPoints) {
-                neighbors2 = neighbors2.concat(neighbors);
-            }
-        }
-    }
-    
-    for (const point of data) {
-        point.label -= 1;
-    }
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index];
+    data.push({
+      index,
+      value: point,
+      label: -1,
+    });
+  }
 
-    return data
+  for (const point of data) {
+    // Only process unlabelled points
+    if (point.label !== -1) {
+      continue;
+    }
+    // Get all the points neighbors
+    let neighbors = rangeQuery(point, data, epsilons);
+    // Check if point is noise
+    if (neighbors.length < minPoints) {
+      point.label = 0;
+      continue;
+    }
+    // Next cluster label
+    clusterId += 1;
+    // Label initial point
+    point.label = clusterId;
+    // Remove point p from n
+    let neighbors2 = neighbors.filter((neighbor) => neighbor.index !== point.index);
+    // Process every seed point
+    while (neighbors2.length) {
+      const neighbor = neighbors2.pop();
+      if (!neighbor) {
+        break;
+      }
+      // Change noise to border
+      if (neighbor.label === 0) {
+        neighbor.label = clusterId;
+      }
+      // Previously processed
+      if (neighbor.label !== -1) {
+        continue;
+      }
+      // Label neighbor
+      neighbor.label = clusterId;
+      // Find neighbors
+      neighbors = rangeQuery(neighbor, data, epsilons);
+      // Add new neighbors to seed
+      if (neighbors.length >= minPoints) {
+        neighbors2 = neighbors2.concat(neighbors);
+      }
+    }
+  }
+
+  for (const point of data) {
+    point.label -= 1;
+  }
+
+  return data;
 }
 
-function rangeQuery(
-    current: IPoint,
-    data: IPoint[],
-    epsilons: number[]
-) {
-    return data.filter(
-        point => point.value
-            .every((value, dimension) => Math.abs(value - current.value[dimension]) <= epsilons[dimension])
-    );
+function rangeQuery(current: IPoint, data: IPoint[], epsilons: number[]) {
+  return data.filter((point) =>
+    point.value.every(
+      (value, dimension) => Math.abs(value - current.value[dimension]) <= epsilons[dimension],
+    ),
+  );
 }

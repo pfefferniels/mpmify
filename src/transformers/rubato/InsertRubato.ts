@@ -1,16 +1,16 @@
-import type { AddRubatoOptions } from "espressivo"
-import { Mpm, requireMap } from "../../mpm"
-import { Alignment, AlignedNote } from "../../alignment"
-import { AbstractTransformer, generateId, ScopedTransformationOptions } from "../Transformer"
-import { clamp } from "../../utils/utils"
-import { PULSES_PER_QUARTER } from "../../ppq"
-import { TranslatePhysicalTimeToTicks } from "../tempo"
-import { determineIntensity } from "../ornamentation"
-import { deriveResidual, Residual } from "../../residual"
+import type { AddRubatoOptions } from 'espressivo';
+import { Mpm, requireMap } from '../../mpm';
+import { Alignment, AlignedNote } from '../../alignment';
+import { AbstractTransformer, generateId, ScopedTransformationOptions } from '../Transformer';
+import { clamp } from '../../utils/utils';
+import { PULSES_PER_QUARTER } from '../../ppq';
+import { TranslatePhysicalTimeToTicks } from '../tempo';
+import { determineIntensity } from '../ornamentation';
+import { deriveResidual, Residual } from '../../residual';
 
 // Re-exported: `calculateRubatoOnDate` has been part of the package surface since before it
 // moved, and mpm-desk's rubato desk imports it from "mpmify".
-export { calculateRubatoOnDate } from "./rubatoMath"
+export { calculateRubatoOnDate } from './rubatoMath';
 
 /**
  * Where a chord fell under the tempo, averaged over its notes — or `undefined` when the
@@ -19,101 +19,99 @@ export { calculateRubatoOnDate } from "./rubatoMath"
  * derived from it and the fitted @intensity into NaN.
  */
 const avarageTickDate = (notes: AlignedNote[], residual: Residual) => {
-    let sum = 0
-    for (const note of notes) {
-        const time = residual.of(note)
-        // Both are the tempo interpolation's output, and this transformer needs it to have run.
-        if (time?.tickDate === undefined || time.tickDuration === undefined) return undefined
-        sum += time.tickDate
-    }
-    return sum / notes.length
-}
+  let sum = 0;
+  for (const note of notes) {
+    const time = residual.of(note);
+    // Both are the tempo interpolation's output, and this transformer needs it to have run.
+    if (time?.tickDate === undefined || time.tickDuration === undefined) return undefined;
+    sum += time.tickDate;
+  }
+  return sum / notes.length;
+};
 
 export interface InsertRubatoOptions extends ScopedTransformationOptions {
-    date: number
-    length: number
+  date: number;
+  length: number;
 }
 
 /**
  * Interpolates <rubato> elements.
  */
 export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
-    name = 'InsertRubato'
-    requires = [TranslatePhysicalTimeToTicks]
+  name = 'InsertRubato';
+  requires = [TranslatePhysicalTimeToTicks];
 
-    constructor(options?: InsertRubatoOptions) {
-        super(options || {
-            scope: 'global',
-            date: 0,
-            length: PULSES_PER_QUARTER
-        })
+  constructor(options?: InsertRubatoOptions) {
+    super(
+      options || {
+        scope: 'global',
+        date: 0,
+        length: PULSES_PER_QUARTER,
+      },
+    );
+  }
+
+  protected transform(msm: Alignment, mpm: Mpm) {
+    // Where the notes fell under the tempo, with rubato held out — this is what fits it.
+    // Holding it out also means a second call over a looping frame reads the same raw
+    // positions the first one did, rather than positions the first call has compensated.
+    const residual = deriveResidual(msm, mpm, { without: ['rubato'] });
+
+    const frame = { date: this.options.date, length: this.options.length };
+    const chords = [...msm.asChords(this.options.scope).entries()].filter(
+      ([date, _]) => date >= frame.date && date < frame.date + frame.length,
+    );
+
+    if (chords.length === 0) return;
+
+    // The rubato transformation can only be placed
+    // after a tempo interpolation. Make sure that
+    // all notes have a tick date and a tick duration.
+    const meanTickDates: number[] = [];
+    for (const [, notes] of chords) {
+      const mean = avarageTickDate(notes, residual);
+      if (mean === undefined) {
+        console.warn(
+          'InsertRubato: some note has no tick date or duration — run a tempo interpolation first.',
+        );
+        return;
+      }
+      meanTickDates.push(mean);
     }
 
-    protected transform(msm: Alignment, mpm: Mpm) {
-        // Where the notes fell under the tempo, with rubato held out — this is what fits it.
-        // Holding it out also means a second call over a looping frame reads the same raw
-        // positions the first one did, rather than positions the first call has compensated.
-        const residual = deriveResidual(msm, mpm, { without: ['rubato'] })
+    // if there are notes on the first date, we can use their
+    // average tick date to determine a late start. Otherwise,
+    // there is no late start.
+    const startDate = chords[0][0] === this.options.date ? meanTickDates[0] : this.options.date;
+    // A @lateStart of 0 is the renderer's default (espressivo `resolveRubato`), so the
+    // frame that starts on time says nothing rather than saying nothing new.
+    let lateStart: number | undefined = clamp((startDate - frame.date) / frame.length, 0, 0.9);
+    if (lateStart === 0) lateStart = undefined;
 
-        const frame = { date: this.options.date, length: this.options.length }
-        const chords = [...msm.asChords(this.options.scope).entries()]
-            .filter(([date, _]) => date >= frame.date && date < frame.date + frame.length)
+    const endDate = this.options.date + this.options.length;
 
-        if (chords.length === 0) return
+    const scaledDates = meanTickDates.map(
+      (realDate) => (realDate - startDate) / (endDate - startDate),
+    );
 
-        // The rubato transformation can only be placed
-        // after a tempo interpolation. Make sure that
-        // all notes have a tick date and a tick duration.
-        const meanTickDates: number[] = []
-        for (const [, notes] of chords) {
-            const mean = avarageTickDate(notes, residual)
-            if (mean === undefined) {
-                console.warn('InsertRubato: some note has no tick date or duration — run a tempo interpolation first.')
-                return
-            }
-            meanTickDates.push(mean)
-        }
-
-        // if there are notes on the first date, we can use their
-        // average tick date to determine a late start. Otherwise,
-        // there is no late start.
-        const startDate = chords[0][0] === this.options.date
-            ? meanTickDates[0]
-            : this.options.date
-        // A @lateStart of 0 is the renderer's default (espressivo `resolveRubato`), so the
-        // frame that starts on time says nothing rather than saying nothing new.
-        let lateStart: number | undefined =
-            clamp(
-                (startDate - frame.date) / frame.length,
-                0,
-                0.9
-            )
-        if (lateStart === 0) lateStart = undefined
-
-        const endDate = this.options.date + this.options.length
-
-        const scaledDates = meanTickDates
-            .map(realDate => (realDate - startDate) / (endDate - startDate))
-
-        if (!scaledDates.includes(0)) {
-            scaledDates.unshift(0)
-        }
-        if (!scaledDates.includes(1)) {
-            scaledDates.push(1)
-        }
-
-        const intensity = determineIntensity(scaledDates)
-
-        const rubato: AddRubatoOptions = {
-            id: generateId('rubato', frame.date, mpm),
-            date: frame.date,
-            frameLength: frame.length,
-            intensity,
-            loop: false,
-            lateStart,
-        }
-
-        requireMap(mpm, 'rubato', this.options.scope).addRubato(rubato)
+    if (!scaledDates.includes(0)) {
+      scaledDates.unshift(0);
+    }
+    if (!scaledDates.includes(1)) {
+      scaledDates.push(1);
     }
 
+    const intensity = determineIntensity(scaledDates);
+
+    const rubato: AddRubatoOptions = {
+      id: generateId('rubato', frame.date, mpm),
+      date: frame.date,
+      frameLength: frame.length,
+      intensity,
+      loop: false,
+      lateStart,
+    };
+
+    requireMap(mpm, 'rubato', this.options.scope).addRubato(rubato);
+  }
 }

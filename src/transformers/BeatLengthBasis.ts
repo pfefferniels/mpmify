@@ -3,4 +3,5 @@
  * whole bar, half bar, the denominator or for every single given note.
  */
 
-export type BeatLengthBasis = 'bar' | 'halfbar' | 'thirdbar' | 'denominator' | 'everything' | number;
+export type BeatLengthBasis =
+  'bar' | 'halfbar' | 'thirdbar' | 'denominator' | 'everything' | number;

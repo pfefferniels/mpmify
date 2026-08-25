@@ -1,27 +1,27 @@
-import { Alignment, AlignedNote } from "../../src/alignment"
+import { Alignment, AlignedNote } from '../../src/alignment';
 
-export const PPQ = 720
+export const PPQ = 720;
 /** One quarter note, the beat these scores are built on. */
-export const QUARTER = PPQ
+export const QUARTER = PPQ;
 
-const PITCH_NAMES = ['c', 'c', 'd', 'd', 'e', 'f', 'f', 'g', 'g', 'a', 'a', 'b']
-const ACCIDENTALS = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]
+const PITCH_NAMES = ['c', 'c', 'd', 'd', 'e', 'f', 'f', 'g', 'g', 'a', 'a', 'b'];
+const ACCIDENTALS = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
 
 export interface ScoreSpec {
-    /** Number of beats. One note per voice per beat. */
-    beats: number
-    /** Ticks per beat. Defaults to a quarter note. */
-    beatTicks?: number
-    timeSignature?: { numerator: number, denominator: number }
-    /**
-     * MIDI pitch of each simultaneous voice. Several pitches make every beat a chord, which is
-     * what makes `asChords`, asynchrony and the shake layer do anything at all.
-     */
-    pitches?: number[]
-    /** Put each voice in its own MSM part rather than stacking them in part 1. */
-    separateParts?: boolean
-    /** Note length as a fraction of the beat. 1 is a fully tied-over legato score. */
-    gate?: number
+  /** Number of beats. One note per voice per beat. */
+  beats: number;
+  /** Ticks per beat. Defaults to a quarter note. */
+  beatTicks?: number;
+  timeSignature?: { numerator: number; denominator: number };
+  /**
+   * MIDI pitch of each simultaneous voice. Several pitches make every beat a chord, which is
+   * what makes `asChords`, asynchrony and the shake layer do anything at all.
+   */
+  pitches?: number[];
+  /** Put each voice in its own MSM part rather than stacking them in part 1. */
+  separateParts?: boolean;
+  /** Note length as a fraction of the beat. 1 is a fully tied-over legato score. */
+  gate?: number;
 }
 
 /**
@@ -31,29 +31,29 @@ export interface ScoreSpec {
  * onsets the score already carried.
  */
 export const buildScore = (spec: ScoreSpec): Alignment => {
-    const beatTicks = spec.beatTicks ?? QUARTER
-    const pitches = spec.pitches ?? [67]
-    const gate = spec.gate ?? 1
+  const beatTicks = spec.beatTicks ?? QUARTER;
+  const pitches = spec.pitches ?? [67];
+  const gate = spec.gate ?? 1;
 
-    const notes: AlignedNote[] = []
-    for (let beat = 0; beat < spec.beats; beat++) {
-        pitches.forEach((pitch, voice) => {
-            const part = spec.separateParts ? voice + 1 : 1
-            notes.push({
-                'xml:id': `n${voice}_${beat}`,
-                part,
-                date: beat * beatTicks,
-                duration: Math.round(beatTicks * gate),
-                pitchname: PITCH_NAMES[pitch % 12],
-                accidentals: ACCIDENTALS[pitch % 12],
-                octave: Math.floor(pitch / 12) - 1,
-                'midi.pitch': pitch,
-            } as AlignedNote)
-        })
-    }
+  const notes: AlignedNote[] = [];
+  for (let beat = 0; beat < spec.beats; beat++) {
+    pitches.forEach((pitch, voice) => {
+      const part = spec.separateParts ? voice + 1 : 1;
+      notes.push({
+        'xml:id': `n${voice}_${beat}`,
+        part,
+        date: beat * beatTicks,
+        duration: Math.round(beatTicks * gate),
+        pitchname: PITCH_NAMES[pitch % 12],
+        accidentals: ACCIDENTALS[pitch % 12],
+        octave: Math.floor(pitch / 12) - 1,
+        'midi.pitch': pitch,
+      } as AlignedNote);
+    });
+  }
 
-    return new Alignment(notes, spec.timeSignature ?? { numerator: 4, denominator: 4 })
-}
+  return new Alignment(notes, spec.timeSignature ?? { numerator: 4, denominator: 4 });
+};
 
 /** The date of the last note — the `to` every fitting window ends at. */
-export const lastDate = (spec: ScoreSpec) => (spec.beats - 1) * (spec.beatTicks ?? QUARTER)
+export const lastDate = (spec: ScoreSpec) => (spec.beats - 1) * (spec.beatTicks ?? QUARTER);

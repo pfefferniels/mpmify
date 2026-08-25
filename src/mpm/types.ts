@@ -17,62 +17,62 @@
  *   together with the element they were read from.
  */
 import type {
-    AddAccentuationPatternOptions,
-    AddArticulationOptions,
-    AddAsynchronyOptions,
-    AddDynamicsOptions,
-    AddMovementOptions,
-    AddOrnamentOptions,
-    AddRubatoOptions,
-    AddTempoOptions,
-    AccentuationPatternDef,
-    ArticulationDef,
-    Element,
-    MapKind,
-    MapOfKind,
-    OrnamentDef,
-    StyleKind,
-} from 'espressivo'
+  AddAccentuationPatternOptions,
+  AddArticulationOptions,
+  AddAsynchronyOptions,
+  AddDynamicsOptions,
+  AddMovementOptions,
+  AddOrnamentOptions,
+  AddRubatoOptions,
+  AddTempoOptions,
+  AccentuationPatternDef,
+  ArticulationDef,
+  Element,
+  MapKind,
+  MapOfKind,
+  OrnamentDef,
+  StyleKind,
+} from 'espressivo';
 
 /**
  * A part can be specified as either a given part number or global. Used by the alignment and
  * the MPM alike.
  */
-export type Scope = number | 'global'
+export type Scope = number | 'global';
 
 // ── instructions ──────────────────────────────────────────────────
 
 /** The espressivo options record each instruction type is written from and read back into. */
 export interface OptionsOfType {
-    tempo: AddTempoOptions
-    dynamics: AddDynamicsOptions
-    movement: AddMovementOptions
-    articulation: AddArticulationOptions
-    rubato: AddRubatoOptions
-    ornament: AddOrnamentOptions
-    accentuationPattern: AddAccentuationPatternOptions
-    asynchrony: AddAsynchronyOptions
+  tempo: AddTempoOptions;
+  dynamics: AddDynamicsOptions;
+  movement: AddMovementOptions;
+  articulation: AddArticulationOptions;
+  rubato: AddRubatoOptions;
+  ornament: AddOrnamentOptions;
+  accentuationPattern: AddAccentuationPatternOptions;
+  asynchrony: AddAsynchronyOptions;
 }
 
-export type InstructionType = keyof OptionsOfType
+export type InstructionType = keyof OptionsOfType;
 
 /**
  * What a given instruction type is written from — so a caller states the type once.
  *
  * Not `OptionsOf`, which `Transformer.ts` already uses for the options of a *transformer*.
  */
-export type InstructionOptions<K extends InstructionType> = OptionsOfType[K]
+export type InstructionOptions<K extends InstructionType> = OptionsOfType[K];
 
 export const instructionTypes = [
-    'articulation',
-    'asynchrony',
-    'dynamics',
-    'movement',
-    'ornament',
-    'rubato',
-    'tempo',
-    'accentuationPattern',
-] as const satisfies readonly InstructionType[]
+  'articulation',
+  'asynchrony',
+  'dynamics',
+  'movement',
+  'ornament',
+  'rubato',
+  'tempo',
+  'accentuationPattern',
+] as const satisfies readonly InstructionType[];
 
 /**
  * One instruction as it stands in the document: everything it says, plus where it is.
@@ -87,67 +87,67 @@ export const instructionTypes = [
  * directly; that is what the options are for.
  */
 export type Instruction<K extends InstructionType> = InstructionOptions<K> & {
-    readonly type: K
-    readonly element: Element
-    readonly scope: Scope
-}
+  readonly type: K;
+  readonly element: Element;
+  readonly scope: Scope;
+};
 
 /** Any instruction, as a union over the types — not an intersection of all of them. */
-export type AnyInstruction = { [K in InstructionType]: Instruction<K> }[InstructionType]
+export type AnyInstruction = { [K in InstructionType]: Instruction<K> }[InstructionType];
 
 /** Which `<dated>` map each instruction type lives in. */
 export const mapNames = {
-    articulation: 'articulationMap',
-    asynchrony: 'asynchronyMap',
-    dynamics: 'dynamicsMap',
-    movement: 'movementMap',
-    ornament: 'ornamentationMap',
-    rubato: 'rubatoMap',
-    tempo: 'tempoMap',
-    accentuationPattern: 'metricalAccentuationMap',
-} as const satisfies Record<InstructionType, MapKind>
+  articulation: 'articulationMap',
+  asynchrony: 'asynchronyMap',
+  dynamics: 'dynamicsMap',
+  movement: 'movementMap',
+  ornament: 'ornamentationMap',
+  rubato: 'rubatoMap',
+  tempo: 'tempoMap',
+  accentuationPattern: 'metricalAccentuationMap',
+} as const satisfies Record<InstructionType, MapKind>;
 
 /** The espressivo map class an instruction type is written through. */
-export type MapFor<K extends InstructionType> = MapOfKind[(typeof mapNames)[K]]
+export type MapFor<K extends InstructionType> = MapOfKind[(typeof mapNames)[K]];
 
 // ── definitions ───────────────────────────────────────────────────
 
 /** The espressivo class each definition type is. */
 export interface DefOfType {
-    articulationDef: ArticulationDef
-    ornamentDef: OrnamentDef
-    accentuationPatternDef: AccentuationPatternDef
+  articulationDef: ArticulationDef;
+  ornamentDef: OrnamentDef;
+  accentuationPatternDef: AccentuationPatternDef;
 }
 
-export type DefinitionType = keyof DefOfType
-export type DefOf<T extends DefinitionType> = DefOfType[T]
+export type DefinitionType = keyof DefOfType;
+export type DefOf<T extends DefinitionType> = DefOfType[T];
 
 export const definitionTypes = [
-    'ornamentDef',
-    'articulationDef',
-    'accentuationPatternDef',
-] as const satisfies readonly DefinitionType[]
+  'ornamentDef',
+  'articulationDef',
+  'accentuationPatternDef',
+] as const satisfies readonly DefinitionType[];
 
 /**
  * The style kind each definition type belongs to. espressivo names the `<header>` collection
  * from this (`collectionNameOfKind`), so mpmify never spells `articulationStyles` itself.
  */
 export const styleKinds = {
-    articulationDef: 'articulation',
-    ornamentDef: 'ornamentation',
-    accentuationPatternDef: 'metricalAccentuation',
-} as const satisfies Record<DefinitionType, StyleKind>
+  articulationDef: 'articulation',
+  ornamentDef: 'ornamentation',
+  accentuationPatternDef: 'metricalAccentuation',
+} as const satisfies Record<DefinitionType, StyleKind>;
 
 /** A `<style>` switch: which `<styleDef>` is in force from a date. */
 export interface Style {
-    'xml:id': string
-    date: number
-    'name.ref': string
-    defaultArticulation?: string
+  'xml:id': string;
+  date: number;
+  'name.ref': string;
+  defaultArticulation?: string;
 }
 
 /**
  * The `<styleDef>` every mpmify-written definition goes into. mpmify has never written more
  * than one style per collection, and the `<style>` switches it emits all name this one.
  */
-export const DEFAULT_STYLE_NAME = 'performance_style'
+export const DEFAULT_STYLE_NAME = 'performance_style';

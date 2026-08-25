@@ -1,6 +1,6 @@
-import { describe, test } from "vitest"
-import { tierTwoCases } from "./cases"
-import { expectCase } from "./expectations"
+import { describe, test } from 'vitest';
+import { tierTwoCases } from './cases';
+import { expectCase } from './expectations';
 
 /**
  * Tier 2 — one aspect at a time, segmentation handed in, compared in performance space.
@@ -16,7 +16,9 @@ import { expectCase } from "./expectations"
  */
 
 describe('one aspect, boundaries given, rendered back', () => {
-    for (const spec of tierTwoCases) {
-        test(spec.name, () => { expectCase(spec) })
-    }
-})
+  for (const spec of tierTwoCases) {
+    test(spec.name, () => {
+      expectCase(spec);
+    });
+  }
+});

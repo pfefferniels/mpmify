@@ -37,50 +37,50 @@
  * an overlap could take its onset from one segment and its duration from the next. The windows
  * are a partition now, and {@link segmentAtMs} is where that is stated — see its note.
  */
-import { getInstructions, Mpm, Scope } from "../../mpm"
-import { Alignment, AlignedNote } from "../../alignment"
-import { millisecondsAt, resolveSpan, TempoWithEndDate } from "./tempoCalculations"
-import type { Tempo as ResolvedTempo } from 'espressivo'
+import { getInstructions, Mpm, Scope } from '../../mpm';
+import { Alignment, AlignedNote } from '../../alignment';
+import { millisecondsAt, resolveSpan, TempoWithEndDate } from './tempoCalculations';
+import type { Tempo as ResolvedTempo } from 'espressivo';
 
 export interface PlacedTempo {
-    /** The instruction, carrying the date the next one starts (or the end of the score). */
-    readonly tempo: TempoWithEndDate
+  /** The instruction, carrying the date the next one starts (or the end of the score). */
+  readonly tempo: TempoWithEndDate;
 
-    /**
-     * The instruction as the renderer resolves it. Resolved once per segment because the
-     * consumers evaluate it many times, and resolving parses `@bpm` out of text: a walk over a
-     * score asks about the same span once per note, and `dateAtMilliseconds` several times per
-     * ask.
-     */
-    readonly resolved: ResolvedTempo
+  /**
+   * The instruction as the renderer resolves it. Resolved once per segment because the
+   * consumers evaluate it many times, and resolving parses `@bpm` out of text: a walk over a
+   * score asks about the same span once per note, and `dateAtMilliseconds` several times per
+   * ask.
+   */
+  readonly resolved: ResolvedTempo;
 
-    /**
-     * The date the *next* instruction starts, or `undefined` for the last segment.
-     *
-     * Distinct from `tempo.endDate`, which for the last segment is the end of the score. A note
-     * belongs to a segment when it is at or after `tempo.date` and, if there is a next
-     * instruction, before it — the open-ended last segment takes everything remaining.
-     */
-    readonly nextDate: number | undefined
+  /**
+   * The date the *next* instruction starts, or `undefined` for the last segment.
+   *
+   * Distinct from `tempo.endDate`, which for the last segment is the end of the score. A note
+   * belongs to a segment when it is at or after `tempo.date` and, if there is a next
+   * instruction, before it — the open-ended last segment takes everything remaining.
+   */
+  readonly nextDate: number | undefined;
 
-    /** Where the segment begins on the recorded millisecond timeline. */
-    readonly startMs: number
+  /** Where the segment begins on the recorded millisecond timeline. */
+  readonly startMs: number;
 
-    /** What the `<tempo>` says the segment lasts, in milliseconds. */
-    readonly modelledMs: number
+  /** What the `<tempo>` says the segment lasts, in milliseconds. */
+  readonly modelledMs: number;
 
-    /** The note whose recorded onset sits exactly on the segment's end, if there is one. */
-    readonly anchor: AlignedNote | undefined
+  /** The note whose recorded onset sits exactly on the segment's end, if there is one. */
+  readonly anchor: AlignedNote | undefined;
 
-    /**
-     * What the *recording* says the segment lasts: the anchor's onset less {@link startMs}, or
-     * {@link modelledMs} where no note lands on the boundary.
-     *
-     * `startMs + measuredMs` is therefore the next segment's `startMs`, always — which is why
-     * this and not {@link modelledMs} is what bounds a segment as a window on the recording.
-     * {@link segmentAtMs} is the only place that division is made.
-     */
-    readonly measuredMs: number
+  /**
+   * What the *recording* says the segment lasts: the anchor's onset less {@link startMs}, or
+   * {@link modelledMs} where no note lands on the boundary.
+   *
+   * `startMs + measuredMs` is therefore the next segment's `startMs`, always — which is why
+   * this and not {@link modelledMs} is what bounds a segment as a window on the recording.
+   * {@link segmentAtMs} is the only place that division is made.
+   */
+  readonly measuredMs: number;
 }
 
 /**
@@ -90,40 +90,40 @@ export interface PlacedTempo {
  * tempoMap yet looks like — every caller reads that as "no tick position is derivable".
  */
 export const placeTempos = (msm: Alignment, mpm: Mpm, scope: Scope): PlacedTempo[] => {
-    const tempos = getInstructions(mpm, 'tempo', scope)
+  const tempos = getInstructions(mpm, 'tempo', scope);
 
-    // The anchoring rule, in one place. `notesInPart(scope)` and not `allNotes`: the tempo being
-    // walked governs this scope, so the note that dates its boundary must be one it governs.
-    //
-    // Indexed by date once rather than scanned per segment, which made placing a map O(tempos x
-    // notes) — and every consumer of a tick position places the map first. The first note on a
-    // date wins, which is the note `find` used to answer with.
-    const anchorByDate = new Map<number, AlignedNote>()
-    for (const note of msm.notesInPart(scope)) {
-        if (!anchorByDate.has(note.date)) anchorByDate.set(note.date, note)
-    }
+  // The anchoring rule, in one place. `notesInPart(scope)` and not `allNotes`: the tempo being
+  // walked governs this scope, so the note that dates its boundary must be one it governs.
+  //
+  // Indexed by date once rather than scanned per segment, which made placing a map O(tempos x
+  // notes) — and every consumer of a tick position places the map first. The first note on a
+  // date wins, which is the note `find` used to answer with.
+  const anchorByDate = new Map<number, AlignedNote>();
+  for (const note of msm.notesInPart(scope)) {
+    if (!anchorByDate.has(note.date)) anchorByDate.set(note.date, note);
+  }
 
-    const segments: PlacedTempo[] = []
-    let startMs = 0
+  const segments: PlacedTempo[] = [];
+  let startMs = 0;
 
-    for (let i = 0; i < tempos.length; i++) {
-        const nextDate = tempos[i + 1]?.date
-        const endDate = nextDate ?? msm.end
+  for (let i = 0; i < tempos.length; i++) {
+    const nextDate = tempos[i + 1]?.date;
+    const endDate = nextDate ?? msm.end;
 
-        const tempo: TempoWithEndDate = { ...tempos[i], endDate }
-        const resolved = resolveSpan(tempo)
-        const modelledMs = millisecondsAt(endDate, resolved)
+    const tempo: TempoWithEndDate = { ...tempos[i], endDate };
+    const resolved = resolveSpan(tempo);
+    const modelledMs = millisecondsAt(endDate, resolved);
 
-        const anchor = anchorByDate.get(endDate)
-        const measuredMs = anchor ? anchor['milliseconds.date'] - startMs : modelledMs
+    const anchor = anchorByDate.get(endDate);
+    const measuredMs = anchor ? anchor['milliseconds.date'] - startMs : modelledMs;
 
-        segments.push({ tempo, resolved, nextDate, startMs, modelledMs, anchor, measuredMs })
+    segments.push({ tempo, resolved, nextDate, startMs, modelledMs, anchor, measuredMs });
 
-        startMs += measuredMs
-    }
+    startMs += measuredMs;
+  }
 
-    return segments
-}
+  return segments;
+};
 
 /**
  * Whether `date` falls in the stretch of *score* this segment governs.
@@ -144,7 +144,7 @@ export const placeTempos = (msm: Alignment, mpm: Mpm, scope: Scope): PlacedTempo
  * either way is a decision about partial fits, not about issue #27.
  */
 export const coversDate = (segment: PlacedTempo, date: number): boolean =>
-    date >= segment.tempo.date && (segment.nextDate === undefined || date < segment.nextDate)
+  date >= segment.tempo.date && (segment.nextDate === undefined || date < segment.nextDate);
 
 /**
  * The segment governing a millisecond time on the *recording*'s timeline.
@@ -167,8 +167,8 @@ export const coversDate = (segment: PlacedTempo, date: number): boolean =>
  * backwards, the later segment wins.
  */
 export const segmentAtMs = (segments: PlacedTempo[], ms: number): PlacedTempo | undefined => {
-    for (let i = segments.length - 1; i > 0; i--) {
-        if (ms >= segments[i].startMs) return segments[i]
-    }
-    return segments[0]
-}
+  for (let i = segments.length - 1; i > 0; i--) {
+    if (ms >= segments[i].startMs) return segments[i];
+  }
+  return segments[0];
+};

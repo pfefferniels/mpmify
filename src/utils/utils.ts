@@ -1,6 +1,6 @@
 export const isDefined = (onset?: number) => {
-    return onset !== undefined && !isNaN(onset)
-}
+  return onset !== undefined && !isNaN(onset);
+};
 
 /**
  * `value`, held inside `[min, max]`.
@@ -12,8 +12,8 @@ export const isDefined = (onset?: number) => {
  * call sites were already written against.
  */
 export const clamp = (value: number, min: number, max: number) => {
-    return Math.max(min, Math.min(value, max))
-}
+  return Math.max(min, Math.min(value, max));
+};
 
 /**
  * `num` re-spelled with its decimal exponent moved by `by`.
@@ -28,19 +28,19 @@ export const clamp = (value: number, min: number, max: number) => {
  * and `'1e-7' + 'e2'` is not a number at all (issue #36).
  */
 const shiftDecimalExponent = (num: number, by: number) => {
-    const [mantissa, exponent] = num.toString().split('e')
-    return +(`${mantissa}e${(exponent ? +exponent : 0) + by}`)
-}
+  const [mantissa, exponent] = num.toString().split('e');
+  return +`${mantissa}e${(exponent ? +exponent : 0) + by}`;
+};
 
 const toFixed = (num: number, precision: number) => {
-    if (!Number.isFinite(num)) return num
-    const rounded = Math.round(shiftDecimalExponent(num, precision))
-    return +shiftDecimalExponent(rounded, -precision).toFixed(precision)
-}
+  if (!Number.isFinite(num)) return num;
+  const rounded = Math.round(shiftDecimalExponent(num, precision));
+  return +shiftDecimalExponent(rounded, -precision).toFixed(precision);
+};
 
 export const fix = <T extends object>(obj: T, key: keyof T, precision: number) => {
-    const property = obj[key]
-    if (typeof property === 'number' && Number.isFinite(property)) {
-        (obj[key] as number) = toFixed(property, precision)
-    }
-}
+  const property = obj[key];
+  if (typeof property === 'number' && Number.isFinite(property)) {
+    (obj[key] as number) = toFixed(property, precision);
+  }
+};

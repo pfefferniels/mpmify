@@ -4,7 +4,7 @@ This document describes the mathematics behind the piecewise tempo curve
 fitting algorithm, based on the explicit power-function model from
 Berndt (2011, §3).
 
-Berndt's own scheme is an *alternating* one — fix the boundary tempos and
+Berndt's own scheme is an _alternating_ one — fix the boundary tempos and
 choose the shapes, then fix the shapes and solve for the tempos. This
 implementation does not alternate, and §4 says why: on an accelerando the
 two steps pull against each other and the iteration diverges.
@@ -33,10 +33,10 @@ $$
 
 **Parameters per segment:**
 
-| Symbol | Meaning |
-|---|---|
-| $\tau_m, \tau_{m+1}$ | Boundary tempos (BPM) at $d_m$ and $d_{m+1}$ |
-| $i_m \in [0.02, 0.98]$ | Shape parameter controlling the curve's inflection point |
+| Symbol                                                  | Meaning                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------- |
+| $\tau_m, \tau_{m+1}$                                    | Boundary tempos (BPM) at $d_m$ and $d_{m+1}$              |
+| $i_m \in [0.02, 0.98]$                                  | Shape parameter controlling the curve's inflection point  |
 | $\hat{s}_m \in \{\text{acc}, \text{rit}, \text{auto}\}$ | Direction inferred automatically from local segment trend |
 
 **Interpretation of $i_m$:**
@@ -123,7 +123,7 @@ $\text{BPM} \notin [5, 600]$ are discarded.
 **These points do not enter the fit.** They seed the boundary tempos (§3.1)
 and decide each segment's direction (§5), and nothing else. That is what the
 silent 5–600 band is for: keeping a grace note or a mis-aligned onset out of
-the *initial estimate*, which is the one place a single wild interval could
+the _initial estimate_, which is the one place a single wild interval could
 still send the search into the wrong basin.
 
 ### 2.3 Onset weighting
@@ -160,7 +160,7 @@ and it stops timing error accumulating along a chain: each segment is asked
 to take the time it took, not to make up for its predecessors.
 
 A segment whose end falls between two onsets gets one synthetic anchor there
-holding the interpolated boundary time. This is the old *timing constraint*,
+holding the interpolated boundary time. This is the old _timing constraint_,
 now expressed as one more row of the same least-squares problem rather than
 as a penalty with a weight of its own. It is added only where the boundary
 lies inside the observed range: past the last onset the interpolation is a
@@ -185,14 +185,14 @@ least-squares fit of $T_m(d_j)$ to $\text{BPM}_j$, with the elapsed-time
 requirement added as a linearised penalty of fixed weight $w_t = 5$. Two
 things are wrong with that, and they compound:
 
-1. *The unit.* $\text{BPM} \propto 1/\Delta t$, so a fixed timing jitter
+1. _The unit._ $\text{BPM} \propto 1/\Delta t$, so a fixed timing jitter
    $\sigma$ becomes a BPM error scaling as $\text{BPM}^2\sigma$, i.e. a
    variance scaling as $\text{BPM}^4$. Least squares over BPM therefore
    assumes a noise model the data does not have, and assumes it in the
    direction that matters — under-weighting exactly the slow passages that
    dominate elapsed time, since elapsed time is the integral of $1/T$.
 
-2. *The balance.* The IOI term's total weight grows with the number of
+2. _The balance._ The IOI term's total weight grows with the number of
    intervals in the segment; the timing term's did not. On a 16-IOI segment
    the constraint that actually encodes "reproduce the performance" was
    outweighed three to one, and on a long segment it disappeared.
@@ -222,7 +222,7 @@ Berndt's alternating scheme, and the shape this code had before, is:
 > repeat: (A) fix $\boldsymbol\tau$, choose each $i_m$; (B) fix $\mathbf{i}$,
 > solve for $\boldsymbol\tau$.
 
-Alternating minimisation converges only if both steps descend the *same*
+Alternating minimisation converges only if both steps descend the _same_
 function. The two steps here descended different ones — (A) squared elapsed
 milliseconds, (B) squared BPM plus the timing penalty — and the composed map
 is then not a descent method on anything. On an accelerando it diverged.
@@ -233,12 +233,12 @@ elapsed SSE $3.4{\times}10^{5} \to 7.5{\times}10^{5}$, segment duration error
 returned was worse than what it started from.
 
 The divergence is directional, which is why ritardandi looked fine. Elapsed
-time is $\int 1/T$, so it is dominated by the segment's *slow* end. On a
+time is $\int 1/T$, so it is dominated by the segment's _slow_ end. On a
 ritardando the slow end is $\tau_{m+1}$, whose coefficient is $\varphi$ —
 and $\varphi$ grows as $i_m$ shrinks, so the parameter the timing depends on
 gains leverage as the shape moves, and the loop self-corrects. On an
 accelerando the slow end is $\tau_m$, whose coefficient is $1 - \varphi$,
-which *loses* leverage as $i_m$ shrinks. A shape error drags $\tau_m$ down, a
+which _loses_ leverage as $i_m$ shrinks. A shape error drags $\tau_m$ down, a
 low $\tau_m$ makes the model start too slow, and step (A) answers by
 shrinking $i_m$ further. The feedback is positive and it runs away. That, and
 not the weight of the timing term, is the 27-fold acc/rit asymmetry the issue
@@ -275,7 +275,7 @@ banded Cholesky solves the normal equations in $O(M)$.
 
 The Jacobian is taken by central differences on the renderer
 ($\varepsilon = 0.5$ BPM, $10^{-3}$ in shape) rather than in closed form,
-because the renderer *is* the model: its Simpson rule picks its own
+because the renderer _is_ the model: its Simpson rule picks its own
 sub-interval count from the span, and differentiating a hand copy of it would
 reintroduce exactly the drift `tempoCalculations` was rewritten to remove.
 Seven evaluations of $E_m$ per segment covers it.
@@ -296,7 +296,7 @@ The scaling is not cosmetic. BPM and a shape parameter in $[0,1]$ are not
 commensurable, and the columns of $J$ say so: on a sixteen-beat accelerando
 the shape's curvature is $4.1{\times}10^{8}$ and the arrival tempo's is
 $9.0{\times}10^{3}$, a ratio of 46 000. Any floor or damping expressed as a
-fraction of the *largest* curvature is several per cent of the smallest —
+fraction of the _largest_ curvature is several per cent of the smallest —
 enough to cancel most of the data's own gradient there and leave the fit
 stationary five BPM and 0.15 of a shape short of a curve it can represent
 exactly. In the scaled space every constrained unknown has unit curvature and
@@ -317,13 +317,13 @@ $\rho = 10^{-8}$ means $10^{-8}$ to all of them alike.
 Near the optimum this converges quadratically. A representative trace for the
 true 60 → 120 at $i = 0.7$:
 
-| iteration | $\mathcal{F}$ | $\tau_0 \to \tau_1$ | $i$ |
-|---|---|---|---|
-| 0 | $7.8{\times}10^{4}$ | 56.72 → 112.67 | 0.602 |
-| 1 | $1.4{\times}10^{4}$ | 60.76 → 118.31 | 0.711 |
-| 2 | $6.7{\times}10^{1}$ | 60.00 → 119.92 | 0.699 |
-| 3 | $3.5{\times}10^{-4}$ | 60.00 → 120.00 | 0.700 |
-| 4 | $4.4{\times}10^{-7}$ | 60.00 → 120.00 | 0.700 |
+| iteration | $\mathcal{F}$        | $\tau_0 \to \tau_1$ | $i$   |
+| --------- | -------------------- | ------------------- | ----- |
+| 0         | $7.8{\times}10^{4}$  | 56.72 → 112.67      | 0.602 |
+| 1         | $1.4{\times}10^{4}$  | 60.76 → 118.31      | 0.711 |
+| 2         | $6.7{\times}10^{1}$  | 60.00 → 119.92      | 0.699 |
+| 3         | $3.5{\times}10^{-4}$ | 60.00 → 120.00      | 0.700 |
+| 4         | $4.4{\times}10^{-7}$ | 60.00 → 120.00      | 0.700 |
 
 ### 4.3 Where global information enters
 
@@ -419,7 +419,7 @@ current tempos and keeps the proposal only if it lowers $\mathcal{F}$.
 
 The fitter reproduces the onsets it is given. When those onsets have already
 been warped by something the tempo map is not responsible for — rubato, above
-all — a better tempo fit explains *more* of that warp as tempo and leaves the
+all — a better tempo fit explains _more_ of that warp as tempo and leaves the
 next fitter in the chain a residual that is no longer the thing it is built to
 describe. Over a fitting window 1.75 rubato frames long, a steady 120 BPM
 comes back as 54 → 128. The round-trip suite records this on three cases; the
@@ -429,5 +429,5 @@ defect is fitting tempo and rubato in sequence, not the tempo fit.
 
 ## References
 
-Berndt, A. (2011). *Musical Tempo Curves.* Proceedings of the
+Berndt, A. (2011). _Musical Tempo Curves._ Proceedings of the
 International Computer Music Conference (ICMC), Huddersfield.

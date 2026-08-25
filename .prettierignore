@@ -1,0 +1,6 @@
+node_modules
+lib
+coverage
+package-lock.json
+test/fixtures
+scripts/mpm-digest.txt

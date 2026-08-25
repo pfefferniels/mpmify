@@ -17,10 +17,10 @@
  */
 
 /** Ticks per quarter note. */
-export const PULSES_PER_QUARTER = 720
+export const PULSES_PER_QUARTER = 720;
 
 /** Ticks per whole note — the unit `@beatLength` is a fraction of. */
-export const PULSES_PER_WHOLE = 4 * PULSES_PER_QUARTER
+export const PULSES_PER_WHOLE = 4 * PULSES_PER_QUARTER;
 
 /**
  * The tick length of one beat of the given `@beatLength`.
@@ -28,4 +28,4 @@ export const PULSES_PER_WHOLE = 4 * PULSES_PER_QUARTER
  * `beatLength` is a fraction of a whole note, so 0.25 is a quarter and answers
  * {@link PULSES_PER_QUARTER}.
  */
-export const beatLengthInTicks = (beatLength: number): number => beatLength * PULSES_PER_WHOLE
+export const beatLengthInTicks = (beatLength: number): number => beatLength * PULSES_PER_WHOLE;

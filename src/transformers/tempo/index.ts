@@ -1,2 +1,2 @@
-export * from "./ApproximateLogarithmicTempo"
-export * from "./TranslatePhysicalTimeToTicks"
+export * from './ApproximateLogarithmicTempo';
+export * from './TranslatePhysicalTimeToTicks';

@@ -1,23 +1,53 @@
+// scaffolding. this file dies at the move — espressivo's own tsconfig.json takes over, and the
+// only line here that will not survive verbatim is `noUncheckedIndexedAccess`.
 {
   "compilerOptions": {
-    "strict": true,
-    "incremental": true,
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "downlevelIteration": true,
-    "target": "es5",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "declaration": true,
+    // espressivo's edition, and the whole of it is native on the engines floor (node 22).
+    // DOM is what declares `console`; drop it and the nine console sites in src/ become
+    // TS2584. after step 7 removes them, nothing here needs DOM — but espressivo keeps it,
+    // so keep it.
+    "target": "ES2025",
+    "lib": ["ES2025", "DOM"],
+
+    // this is what forces the 345 `.js` specifiers. it only bites once package.json says
+    // `"type": "module"` — without that, nodenext reads every .ts as CommonJS and reports
+    // TS1295/TS1287 instead, which is 487 errors about the wrong thing.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
     "outDir": "lib",
+    "rootDir": "src",
+    "strict": true,
+
+    // src/ reaches for no ambient global — no process, no Buffer, no __dirname. verified.
+    // test/ and scripts/ do; tsconfig.tests.json adds "node" back for them.
+    "types": [],
+
+    // beyond strict. measured against this tree: verbatimModuleSyntax 89, noUnusedParameters 3,
+    // noImplicitReturns 2, noPropertyAccessFromIndexSignature 19, the rest 0.
+    "useUnknownInCatchVariables": true,
+    "noImplicitReturns": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedParameters": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedSideEffectImports": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+
+    // OFF, deliberately, and this is the one divergence from espressivo. 278 errors in src/,
+    // 200 more in test/. the cure is `src/prelude/seq.ts` — elementAtOrNull, numberAt, head,
+    // pairwise — which is not on espressivo's barrel and so cannot be reached from here. it
+    // goes on after the move, in espressivo, where prelude is a relative import.
+    "noUncheckedIndexedAccess": false,
+
     "esModuleInterop": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "lib", "**/*.test.ts"]
 }

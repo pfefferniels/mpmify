@@ -1,17 +1,6 @@
 {
-  "entry": [
-    "scripts/bake/bakeSegments.ts",
-    "scripts/bake/verifySegments.ts"
-  ],
-  "project": [
-    "src/**/*.ts",
-    "scripts/**/*.ts",
-    "test/roundtrip/aligned*.ts"
-  ],
-  "ignore": [
-    "scripts/bake/intensityCurve.ts"
-  ],
-  "ignoreDependencies": [
-    "espressivo"
-  ]
+  "entry": ["scripts/bake/bakeSegments.ts", "scripts/bake/verifySegments.ts"],
+  "project": ["src/**/*.ts", "scripts/**/*.ts", "test/roundtrip/aligned*.ts"],
+  "ignore": ["scripts/bake/intensityCurve.ts"],
+  "ignoreDependencies": ["espressivo"]
 }

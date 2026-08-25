@@ -8,22 +8,22 @@
  * another. Writing needs no such table: a transformer inserting a `<tempo>` holds a `TempoMap`
  * and calls `addTempo` on it.
  */
-import { Element, Mpm } from 'espressivo'
-import { mapOf, scopesOf } from './document'
-import { getDefinition } from './styles'
+import { Element, Mpm } from 'espressivo';
+import { mapOf, scopesOf } from './document';
+import { getDefinition } from './styles';
 import {
-    AnyInstruction,
-    Instruction,
-    InstructionOptions,
-    InstructionType,
-    instructionTypes,
-    MapFor,
-    Scope,
-} from './types'
-import { PULSES_PER_WHOLE } from '../ppq'
+  AnyInstruction,
+  Instruction,
+  InstructionOptions,
+  InstructionType,
+  instructionTypes,
+  MapFor,
+  Scope,
+} from './types';
+import { PULSES_PER_WHOLE } from '../ppq';
 
 /** `NaN`, `Infinity` and `-Infinity` as an attribute would be spelled. See {@link auditInstructions}. */
-const NON_FINITE = /([\w.:]+)="(-?Infinity|NaN)"/g
+const NON_FINITE = /([\w.:]+)="(-?Infinity|NaN)"/g;
 
 /**
  * How one instruction type is read back out of its map.
@@ -32,27 +32,30 @@ const NON_FINITE = /([\w.:]+)="(-?Infinity|NaN)"/g
  * fails to compile here rather than falling through a `switch` at runtime.
  */
 const READ: {
-    readonly [K in InstructionType]: (map: MapFor<K>, index: number) => InstructionOptions<K> | null
+  readonly [K in InstructionType]: (map: MapFor<K>, index: number) => InstructionOptions<K> | null;
 } = {
-    tempo: (map, index) => map.getTempoOptionsOf(index),
-    dynamics: (map, index) => map.getDynamicsOptionsOf(index),
-    movement: (map, index) => map.getMovementOptionsOf(index),
-    articulation: (map, index) => map.getArticulationOptionsOf(index),
-    rubato: (map, index) => map.getRubatoOptionsOf(index),
-    ornament: (map, index) => map.getOrnamentOptionsOf(index),
-    accentuationPattern: (map, index) => map.getAccentuationPatternOptionsOf(index),
-    asynchrony: (map, index) => map.getAsynchronyOptionsOf(index),
-}
+  tempo: (map, index) => map.getTempoOptionsOf(index),
+  dynamics: (map, index) => map.getDynamicsOptionsOf(index),
+  movement: (map, index) => map.getMovementOptionsOf(index),
+  articulation: (map, index) => map.getArticulationOptionsOf(index),
+  rubato: (map, index) => map.getRubatoOptionsOf(index),
+  ornament: (map, index) => map.getOrnamentOptionsOf(index),
+  accentuationPattern: (map, index) => map.getAccentuationPatternOptionsOf(index),
+  asynchrony: (map, index) => map.getAsynchronyOptionsOf(index),
+};
 
 /** The snapshot for the entry at `index`, or null if it is not an instruction of that type. */
 const at = <K extends InstructionType>(
-    type: K, map: MapFor<K>, index: number, scope: Scope,
+  type: K,
+  map: MapFor<K>,
+  index: number,
+  scope: Scope,
 ): Instruction<K> | null => {
-    const options = READ[type](map, index)
-    const element = map.getElement(index)
-    if (options === null || element === null) return null
-    return { ...options, type, element, scope }
-}
+  const options = READ[type](map, index);
+  const element = map.getElement(index);
+  if (options === null || element === null) return null;
+  return { ...options, type, element, scope };
+};
 
 /**
  * Every instruction of a type, as snapshots, in document order. `<style>` switches are
@@ -66,30 +69,30 @@ const at = <K extends InstructionType>(
  * @param scope the part to read; every scope if omitted
  */
 export function getInstructions<K extends InstructionType>(
-    mpm: Mpm, type: K, scope?: Scope,
-): Instruction<K>[]
-export function getInstructions(mpm: Mpm, type?: undefined, scope?: Scope): AnyInstruction[]
-export function getInstructions(
-    mpm: Mpm, type?: InstructionType, scope?: Scope,
-): AnyInstruction[] {
-    const scopes: Scope[] = scope !== undefined ? [scope] : scopesOf(mpm)
-    const types = type ? [type] : instructionTypes
+  mpm: Mpm,
+  type: K,
+  scope?: Scope,
+): Instruction<K>[];
+export function getInstructions(mpm: Mpm, type?: undefined, scope?: Scope): AnyInstruction[];
+export function getInstructions(mpm: Mpm, type?: InstructionType, scope?: Scope): AnyInstruction[] {
+  const scopes: Scope[] = scope !== undefined ? [scope] : scopesOf(mpm);
+  const types = type ? [type] : instructionTypes;
 
-    const result: AnyInstruction[] = []
-    for (const one of scopes) {
-        for (const instructionType of types) {
-            const map = mapOf(mpm, instructionType, one)
-            if (!map) continue
-            for (let index = 0; index < map.size(); ++index) {
-                // The one uncorrelated step: `instructionType` is a loop variable over the
-                // union, so nothing ties it to the map it just produced. The pairing is
-                // `mapNames`'.
-                const instruction = at(instructionType, map, index, one) as AnyInstruction | null
-                if (instruction) result.push(instruction)
-            }
-        }
+  const result: AnyInstruction[] = [];
+  for (const one of scopes) {
+    for (const instructionType of types) {
+      const map = mapOf(mpm, instructionType, one);
+      if (!map) continue;
+      for (let index = 0; index < map.size(); ++index) {
+        // The one uncorrelated step: `instructionType` is a loop variable over the
+        // union, so nothing ties it to the map it just produced. The pairing is
+        // `mapNames`'.
+        const instruction = at(instructionType, map, index, one) as AnyInstruction | null;
+        if (instruction) result.push(instruction);
+      }
     }
-    return result
+  }
+  return result;
 }
 
 /**
@@ -97,28 +100,27 @@ export function getInstructions(
  * type it will find — callers narrow on `.type`.
  */
 export const findInstructionById = (mpm: Mpm, id: string): AnyInstruction | null => {
-    for (const scope of scopesOf(mpm)) {
-        for (const type of instructionTypes) {
-            const map = mapOf(mpm, type, scope)
-            const element = map?.getElementByID(id)
-            if (!map || !element) continue
-            const found = at(type, map, map.getElementIndexOf(element), scope) as
-                AnyInstruction | null
-            if (found) return found
-        }
+  for (const scope of scopesOf(mpm)) {
+    for (const type of instructionTypes) {
+      const map = mapOf(mpm, type, scope);
+      const element = map?.getElementByID(id);
+      if (!map || !element) continue;
+      const found = at(type, map, map.getElementIndexOf(element), scope) as AnyInstruction | null;
+      if (found) return found;
     }
-    return null
-}
+  }
+  return null;
+};
 
 /** Remove the instruction this snapshot stands for, wherever in the document it is. */
 export const removeInstruction = (mpm: Mpm, instruction: AnyInstruction): void => {
-    for (const scope of scopesOf(mpm)) {
-        const map = mapOf(mpm, instruction.type, scope)
-        if (!map || map.getElementIndexOf(instruction.element) < 0) continue
-        map.removeElement(instruction.element)
-        return
-    }
-}
+  for (const scope of scopesOf(mpm)) {
+    const map = mapOf(mpm, instruction.type, scope);
+    if (!map || map.getElementIndexOf(instruction.element) < 0) continue;
+    map.removeElement(instruction.element);
+    return;
+  }
+};
 
 /**
  * What one walk of the document says about it: what every instruction currently is, and the two
@@ -135,9 +137,9 @@ export const removeInstruction = (mpm: Mpm, instruction: AnyInstruction): void =
  * way in, which is what lets writes go straight through an espressivo map.
  */
 export interface InstructionAudit {
-    readonly fingerprints: Map<string, string>
-    readonly unnamed: string[]
-    readonly nonFinite: string[]
+  readonly fingerprints: Map<string, string>;
+  readonly unnamed: string[];
+  readonly nonFinite: string[];
 }
 
 /**
@@ -148,31 +150,31 @@ export interface InstructionAudit {
  * called once per transformer in the chain.
  */
 export const auditInstructions = (mpm: Mpm): InstructionAudit => {
-    const fingerprints = new Map<string, string>()
-    const unnamed: string[] = []
-    const nonFinite: string[] = []
+  const fingerprints = new Map<string, string>();
+  const unnamed: string[] = [];
+  const nonFinite: string[] = [];
 
-    for (const instruction of getInstructions(mpm)) {
-        const xml = instruction.element.toXML()
+  for (const instruction of getInstructions(mpm)) {
+    const xml = instruction.element.toXML();
 
-        if (instruction.id === undefined) {
-            unnamed.push(`<${instruction.type}> at ${String(instruction.date)}`)
-        } else {
-            fingerprints.set(instruction.id, xml)
-        }
-
-        // Read off the serialized text, not off the parsed options, and not for free: the
-        // attributes that most need this are the ones a fitter computes, and two of those —
-        // `@bpm` and `@volume` — may hold a style-relative NAME as well as a number, so
-        // espressivo reads `bpm="NaN"` back as the string `'NaN'` and a test on the parsed value
-        // sees a perfectly ordinary string. The text says what the document says.
-        for (const [, name, value] of xml.matchAll(NON_FINITE)) {
-            nonFinite.push(`<${instruction.type} @${name}>="${value}"`)
-        }
+    if (instruction.id === undefined) {
+      unnamed.push(`<${instruction.type}> at ${String(instruction.date)}`);
+    } else {
+      fingerprints.set(instruction.id, xml);
     }
 
-    return { fingerprints, unnamed, nonFinite }
-}
+    // Read off the serialized text, not off the parsed options, and not for free: the
+    // attributes that most need this are the ones a fitter computes, and two of those —
+    // `@bpm` and `@volume` — may hold a style-relative NAME as well as a number, so
+    // espressivo reads `bpm="NaN"` back as the string `'NaN'` and a test on the parsed value
+    // sees a perfectly ordinary string. The text says what the document says.
+    for (const [, name, value] of xml.matchAll(NON_FINITE)) {
+      nonFinite.push(`<${instruction.type} @${name}>="${value}"`);
+    }
+  }
+
+  return { fingerprints, unnamed, nonFinite };
+};
 
 /**
  * Every instruction in the document, by `xml:id`, as the text of its element.
@@ -182,7 +184,7 @@ export const auditInstructions = (mpm: Mpm): InstructionAudit => {
  * as one that was added.
  */
 export const fingerprintInstructions = (mpm: Mpm): Map<string, string> =>
-    auditInstructions(mpm).fingerprints
+  auditInstructions(mpm).fingerprints;
 
 /**
  * The instructions in force at a date: those exactly at it, plus the last one before it where
@@ -209,49 +211,54 @@ export const fingerprintInstructions = (mpm: Mpm): Map<string, string> =>
  * `4 / 4` (issue #42).
  */
 export const instructionsEffectiveAtDate = <K extends InstructionType>(
-    mpm: Mpm, date: number, type: K, scope?: Scope, beatDenominator = 4,
+  mpm: Mpm,
+  date: number,
+  type: K,
+  scope?: Scope,
+  beatDenominator = 4,
 ): Instruction<K>[] => {
-    const scopes: Scope[] = scope !== undefined ? [scope] : scopesOf(mpm)
+  const scopes: Scope[] = scope !== undefined ? [scope] : scopesOf(mpm);
 
-    const seen = new Set<Element>()
-    const result: Instruction<K>[] = []
-    const take = (instruction: Instruction<K>) => {
-        if (seen.has(instruction.element)) return
-        seen.add(instruction.element)
-        result.push(instruction)
+  const seen = new Set<Element>();
+  const result: Instruction<K>[] = [];
+  const take = (instruction: Instruction<K>) => {
+    if (seen.has(instruction.element)) return;
+    seen.add(instruction.element);
+    result.push(instruction);
+  };
+
+  for (const one of scopes) {
+    const instructions = getInstructions(mpm, type, one);
+    for (const instruction of instructions) {
+      if (instruction.date === date) take(instruction);
     }
 
-    for (const one of scopes) {
-        const instructions = getInstructions(mpm, type, one)
-        for (const instruction of instructions) {
-            if (instruction.date === date) take(instruction)
-        }
+    const ongoing = instructions
+      .slice()
+      .reverse()
+      .find((i) => i.date <= date);
+    if (!ongoing) continue;
 
-        const ongoing = instructions.slice().reverse().find(i => i.date <= date)
-        if (!ongoing) continue
+    // `Instruction<K>` for a generic `K` is not a discriminated union, so `.type` does not
+    // narrow it. Widening to the union first is what makes the three arms readable.
+    const running = ongoing as AnyInstruction;
 
-        // `Instruction<K>` for a generic `K` is not a discriminated union, so `.type` does not
-        // narrow it. Widening to the union first is what makes the three arms readable.
-        const running = ongoing as AnyInstruction
-
-        if (running.type === 'tempo' || running.type === 'dynamics' || running.type === 'movement') {
-            take(ongoing)
-        }
-        else if (running.type === 'rubato') {
-            // `@frameLength` is optional on the instruction — absent, the `rubatoDef` it names
-            // supplies one. Reading that would mean resolving the def here; treating absence as
-            // a zero-length frame keeps the old reading, which computed `NaN` and so fell
-            // through the same way.
-            if (running.loop || date < running.date + (running.frameLength ?? 0)) take(ongoing)
-        }
-        else if (running.type === 'accentuationPattern') {
-            const def = getDefinition(mpm, 'accentuationPatternDef', running.accentuationPatternDefName)
-            // `@length` is in beats, and a beat is `4 * ppq / denominator` ticks — the same
-            // conversion espressivo's `MetricalAccentuationMap` makes when it renders the pattern.
-            if (def && date < running.date + def.getLength() * PULSES_PER_WHOLE / beatDenominator) {
-                take(ongoing)
-            }
-        }
+    if (running.type === 'tempo' || running.type === 'dynamics' || running.type === 'movement') {
+      take(ongoing);
+    } else if (running.type === 'rubato') {
+      // `@frameLength` is optional on the instruction — absent, the `rubatoDef` it names
+      // supplies one. Reading that would mean resolving the def here; treating absence as
+      // a zero-length frame keeps the old reading, which computed `NaN` and so fell
+      // through the same way.
+      if (running.loop || date < running.date + (running.frameLength ?? 0)) take(ongoing);
+    } else if (running.type === 'accentuationPattern') {
+      const def = getDefinition(mpm, 'accentuationPatternDef', running.accentuationPatternDefName);
+      // `@length` is in beats, and a beat is `4 * ppq / denominator` ticks — the same
+      // conversion espressivo's `MetricalAccentuationMap` makes when it renders the pattern.
+      if (def && date < running.date + (def.getLength() * PULSES_PER_WHOLE) / beatDenominator) {
+        take(ongoing);
+      }
     }
-    return result
-}
+  }
+  return result;
+};

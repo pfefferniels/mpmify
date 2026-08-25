@@ -12,26 +12,21 @@
  * wraps a write.
  */
 import {
-    Dated,
-    Document,
-    Global,
-    Mpm,
-    Part,
-    Performance,
-    type AnyResult,
-    type Header,
-    type OkOf,
-} from 'espressivo'
-import { PULSES_PER_QUARTER } from '../ppq'
-import {
-    InstructionType,
-    mapNames,
-    MapFor,
-    Scope,
-} from './types'
+  Dated,
+  Document,
+  Global,
+  Mpm,
+  Part,
+  Performance,
+  type AnyResult,
+  type Header,
+  type OkOf,
+} from 'espressivo';
+import { PULSES_PER_QUARTER } from '../ppq';
+import { InstructionType, mapNames, MapFor, Scope } from './types';
 
 /** The `<performance>` mpmify writes into. mpm-ts wrote exactly one, unnamed. */
-const PERFORMANCE_NAME = 'unknown'
+const PERFORMANCE_NAME = 'unknown';
 
 /**
  * The value of one of espressivo's `Result`-returning factories, or a throw naming the reason.
@@ -42,18 +37,20 @@ const PERFORMANCE_NAME = 'unknown'
  * from.
  */
 export const unwrap = <R extends AnyResult>(result: R, what = 'value'): OkOf<R> => {
-    if (!result.ok) {
-        throw new Error(`espressivo refused to build a ${what}: ${JSON.stringify(result.error)}`)
-    }
-    return result.value as OkOf<R>
-}
+  if (!result.ok) {
+    throw new Error(`espressivo refused to build a ${what}: ${JSON.stringify(result.error)}`);
+  }
+  return result.value as OkOf<R>;
+};
 
 /** An empty MPM with the one `<performance>` mpmify writes into, at mpmify's own PPQ. */
 export const createMpm = (): Mpm => {
-    const mpm = new Mpm()
-    mpm.addPerformance(unwrap(Performance.fromName(PERFORMANCE_NAME, PULSES_PER_QUARTER), 'performance'))
-    return mpm
-}
+  const mpm = new Mpm();
+  mpm.addPerformance(
+    unwrap(Performance.fromName(PERFORMANCE_NAME, PULSES_PER_QUARTER), 'performance'),
+  );
+  return mpm;
+};
 
 /**
  * Read MPM source.
@@ -62,10 +59,10 @@ export const createMpm = (): Mpm => {
  * `accentuationPatternDef` a `length`, re-sorts every map by date and drops duplicate maps. A
  * round trip is therefore normalising, not faithful.
  */
-export const parseMPM = (xml: string): Mpm => new Mpm(xml)
+export const parseMPM = (xml: string): Mpm => new Mpm(xml);
 
 /** Serialize an MPM document. */
-export const exportMPM = (mpm: Mpm): string => mpm.writeMpm() ?? ''
+export const exportMPM = (mpm: Mpm): string => mpm.writeMpm() ?? '';
 
 /**
  * The `<performance>` mpmify works in, created if the document has none.
@@ -74,16 +71,19 @@ export const exportMPM = (mpm: Mpm): string => mpm.writeMpm() ?? ''
  * without a performance behaves like a fresh one rather than silently answering nothing.
  */
 export const performanceOf = (mpm: Mpm): Performance => {
-    const existing = mpm.getPerformance(0)
-    if (existing) return existing
-    const performance = unwrap(Performance.fromName(PERFORMANCE_NAME, PULSES_PER_QUARTER), 'performance')
-    mpm.addPerformance(performance)
-    return performance
-}
+  const existing = mpm.getPerformance(0);
+  if (existing) return existing;
+  const performance = unwrap(
+    Performance.fromName(PERFORMANCE_NAME, PULSES_PER_QUARTER),
+    'performance',
+  );
+  mpm.addPerformance(performance);
+  return performance;
+};
 
 export const setPerformanceName = (mpm: Mpm, name: string): void => {
-    performanceOf(mpm).setName(name)
-}
+  performanceOf(mpm).setName(name);
+};
 
 /**
  * Every scope the document has something in — `'global'` first, then parts by number.
@@ -92,11 +92,11 @@ export const setPerformanceName = (mpm: Mpm, name: string): void => {
  * looping over scopes finds no instructions there and moves on.
  */
 export const scopesOf = (mpm: Mpm): Scope[] => {
-    const performance = performanceOf(mpm)
-    const scopes: Scope[] = performance.getGlobal() ? ['global'] : []
-    for (const part of performance.getAllParts()) scopes.push(part.getNumber() - 1)
-    return scopes
-}
+  const performance = performanceOf(mpm);
+  const scopes: Scope[] = performance.getGlobal() ? ['global'] : [];
+  for (const part of performance.getAllParts()) scopes.push(part.getNumber() - 1);
+  return scopes;
+};
 
 /**
  * The `<global>` or `<part>` a scope names, created if `create` and it is not there yet.
@@ -105,50 +105,57 @@ export const scopesOf = (mpm: Mpm): Scope[] => {
  * mpm-ts's serializer wrote and what `Alignment.notesInPart` assumes.
  */
 const environmentOf = (mpm: Mpm, scope: Scope, create: boolean): Global | Part | null => {
-    const performance = performanceOf(mpm)
-    if (scope === 'global') return performance.getGlobal()
+  const performance = performanceOf(mpm);
+  if (scope === 'global') return performance.getGlobal();
 
-    const existing = performance.getPart(scope + 1)
-    if (existing || !create) return existing
+  const existing = performance.getPart(scope + 1);
+  if (existing || !create) return existing;
 
-    const part = unwrap(Part.fromValues(`part_${String(scope)}`, scope + 1, scope, 0), `part ${String(scope)}`)
-    performance.addPart(part)
-    return part
-}
+  const part = unwrap(
+    Part.fromValues(`part_${String(scope)}`, scope + 1, scope, 0),
+    `part ${String(scope)}`,
+  );
+  performance.addPart(part);
+  return part;
+};
 
 const datedOf = (mpm: Mpm, scope: Scope, create: boolean): Dated | null => {
-    const environment = environmentOf(mpm, scope, create)
-    if (!environment) return null
-    return create ? environment.requireDated() : environment.getDated()
-}
+  const environment = environmentOf(mpm, scope, create);
+  if (!environment) return null;
+  return create ? environment.requireDated() : environment.getDated();
+};
 
 /** The `<header>` of a scope. Only the style functions need it. */
 export const headerOf = (mpm: Mpm, scope: Scope, create: boolean): Header | null =>
-    environmentOf(mpm, scope, create)?.getHeader() ?? null
+  environmentOf(mpm, scope, create)?.getHeader() ?? null;
 
 const map = <K extends InstructionType>(
-    mpm: Mpm, type: K, scope: Scope, create: boolean,
+  mpm: Mpm,
+  type: K,
+  scope: Scope,
+  create: boolean,
 ): MapFor<K> | null => {
-    const dated = datedOf(mpm, scope, create)
-    if (!dated) return null
+  const dated = datedOf(mpm, scope, create);
+  if (!dated) return null;
 
-    const kind = mapNames[type]
-    const existing = dated.getMapOfKind(kind)
-    if (existing || !create) return existing
+  const kind = mapNames[type];
+  const existing = dated.getMapOfKind(kind);
+  if (existing || !create) return existing;
 
-    dated.addMapByType(kind)
-    return dated.getMapOfKind(kind)
-}
+  dated.addMapByType(kind);
+  return dated.getMapOfKind(kind);
+};
 
 /** The espressivo map an instruction type lives in, in this scope, or null if there is none. */
 export const mapOf = <K extends InstructionType>(
-    mpm: Mpm, type: K, scope: Scope,
-): MapFor<K> | null => map(mpm, type, scope, false)
+  mpm: Mpm,
+  type: K,
+  scope: Scope,
+): MapFor<K> | null => map(mpm, type, scope, false);
 
 /** {@link mapOf}, creating the part, the `<dated>` and the map if they are not there yet. */
-export const requireMap = <K extends InstructionType>(
-    mpm: Mpm, type: K, scope: Scope,
-): MapFor<K> => map(mpm, type, scope, true)!
+export const requireMap = <K extends InstructionType>(mpm: Mpm, type: K, scope: Scope): MapFor<K> =>
+  map(mpm, type, scope, true)!;
 
 /**
  * A copy of this document with the maps of these instruction types taken out.
@@ -162,20 +169,20 @@ export const requireMap = <K extends InstructionType>(
  * render it and throw it away.
  */
 export const withoutMaps = (mpm: Mpm, types: readonly InstructionType[]): Mpm => {
-    const root = mpm.getRootElement()
-    if (!root) return createMpm()
+  const root = mpm.getRootElement();
+  if (!root) return createMpm();
 
-    const copy = new Mpm(new Document(root.copy()))
-    for (const performance of copy.getAllPerformances()) {
-        const environments: (Global | Part | null)[] = [
-            performance.getGlobal(),
-            ...performance.getAllParts(),
-        ]
-        for (const environment of environments) {
-            const dated = environment?.getDated()
-            if (!dated) continue
-            for (const type of types) dated.removeMap(mapNames[type])
-        }
+  const copy = new Mpm(new Document(root.copy()));
+  for (const performance of copy.getAllPerformances()) {
+    const environments: (Global | Part | null)[] = [
+      performance.getGlobal(),
+      ...performance.getAllParts(),
+    ];
+    for (const environment of environments) {
+      const dated = environment?.getDated();
+      if (!dated) continue;
+      for (const type of types) dated.removeMap(mapNames[type]);
     }
-    return copy
-}
+  }
+  return copy;
+};

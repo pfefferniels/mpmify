@@ -3,7 +3,7 @@
 ## 6. `InsertRubato.removeRubatoDistortionFrom`: mixes symbolic and performed positions (InsertRubato.ts:171)
 
 ```typescript
-const offset = note.date + note.tickDuration
+const offset = note.date + note.tickDuration;
 ```
 
 `note.date` is the symbolic score position, while `note.tickDuration` is the performed duration in ticks (already rubato-adjusted on line 169). This incorrectly combines two different coordinate systems. Should be either `note.tickDate + note.tickDuration` (both performed) or `note.date + note.duration` (both symbolic).

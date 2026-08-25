@@ -12,7 +12,7 @@ was run with `Math.random` and `crypto.getRandomValues` seeded; every claim belo
 
 `bugs.md` is the older, still-open log and is untouched. Its #6 (`InsertRubato` mixing
 symbolic and performed positions) is a real mpmify bug and is still open — it changes what the
-fitting *means*, which is out of scope for a port.
+fitting _means_, which is out of scope for a port.
 
 ---
 
@@ -45,14 +45,14 @@ curve that was never fitted. Storing `endDate` was how the mismatch was being pa
 Fixing it properly means changing the fitting, which §5 of the port brief puts off limits.
 
 **Closed on 2026-08-25** by issue #24, from the other side. The fit now writes the instruction
-that *ends* its span — which it had to, because an open `transition.to` renders as a constant —
+that _ends_ its span — which it had to, because an open `transition.to` renders as a constant —
 and that closing instruction is what `setRelativeVolume` reads the span off. Fit and render
 agree because the document says where the curve stops, not because the fitting changed.
 
 ### 2. A merged instruction lost its attribution
 
 `MPMRecording` wrapped `insertInstruction` and recorded `args[0]["xml:id"]` — the id of the
-record handed *in*. But `insertInstruction` merges: an instruction at the same date and
+record handed _in_. But `insertInstruction` merges: an instruction at the same date and
 `@noteid` as an existing one is written into that one, and the incoming record's `xml:id` is
 discarded. The id that got recorded therefore named nothing.
 
@@ -75,14 +75,14 @@ happened to create outright.
 mpm-ts's `insertStyle` did `map.push(style)`. Instruction inserts are date-ordered, style
 switches were not, so a style switch ended up wherever the map happened to end.
 
-The style in force at an instruction is found by scanning *backwards* from it
+The style in force at an instruction is found by scanning _backwards_ from it
 (`GenericMap.findStyleSwitchAt`, and Java meico's `getStyleAt` before it). A switch at the end
 of the map therefore governs nothing. In the corpus the `ornamentationMap`'s switch sat at
 index 100 of 101 — so all 100 `<ornament name.ref="def_…">` resolved to no def, and every
 `ornamentDef` in the header, 77 of them, was unreachable. The `metricalAccentuationMap`'s sat
 at index 1, which cost it the first `<accentuationPattern>`.
 
-`MPM.insertStyle` now goes through espressivo's `addStyleSwitch`, which inserts *before*
+`MPM.insertStyle` now goes through espressivo's `addStyleSwitch`, which inserts _before_
 everything else at its date. Both maps now carry their switch at index 0.
 
 ### 4. `InsertArticulation` never put its definitions in scope
@@ -117,7 +117,7 @@ shape of the last frame in a piece — the body never ran, `ref` never changed, 
 spun. Reproduced with three rubatos over five notes; it hangs.
 
 There was a second, quieter failure on the same lines: if the `for` ran to completion because
-*every* frame merged, the re-entry then took the else branch on its first step and inserted a
+_every_ frame merged, the re-entry then took the else branch on its first step and inserted a
 "neutral" rubato one frame after `ref` — closing the loop it had just built.
 
 The walk now records where the run of frames stopped and advances `ref` outside the `for`,
@@ -147,7 +147,7 @@ Now removes them from the outer list.
 
 ### 7. `InsertDynamicsGradient` threw on its own defaults
 
-Choosing between the `crescendo` and `decrescendo` gradients happened *inside* the
+Choosing between the `crescendo` and `decrescendo` gradients happened _inside_ the
 `if (this.options.sortVelocities)` branch, so with `sortVelocities: false` — which is what the
 constructor's own default options say — `gradient` stayed undefined and
 `gradient.to - gradient.from` threw a `TypeError`. The direction a chord leans is a property of
@@ -161,10 +161,10 @@ applied only when asked for. The corpus never hit this (its one call passes
 ### 8. `StylizeArticulation` could not see a chord's notes
 
 ```ts
-targetNotes = targetNotes.filter(n => n["xml:id"] === articulation.noteid.slice(1))
+targetNotes = targetNotes.filter((n) => n['xml:id'] === articulation.noteid.slice(1));
 ```
 
-`@noteid` is a *space-separated list* of references — `InsertArticulation` folds the notes of a
+`@noteid` is a _space-separated list_ of references — `InsertArticulation` folds the notes of a
 chord into one instruction with `noteid="#n0 #n1"`. Comparing the whole attribute, minus its
 first character, against a single id matched nothing as soon as there were two notes. So
 `findConflicts` found no target notes for exactly the instructions most likely to conflict, and
@@ -180,7 +180,7 @@ for (const instructionType of instructionTypesToGet) {
         const instructions = this.getInstructions<T>(type, part)   // `type`, not `instructionType`
 ```
 
-With no `type` argument the method loops over all eight instruction types, fetches *all*
+With no `type` argument the method loops over all eight instruction types, fetches _all_
 instructions each time round, and then applies the current type's rules to them — so a rubato
 would be tested for whether an accentuation pattern is still running. `InsertRubato`, the only
 caller, always names a type, so it never showed. Corrected in the port.
@@ -213,15 +213,15 @@ espressivo reads the whole format. `test/mpm/MPM.test.ts` pins the round trip.
 mpm-ts kept style switches in the same array as the instructions, and the merge lookup was
 `map.find(i => i.date === instruction.date && i.noteid === instruction.noteid)` — no test of
 what kind of element it had found. A `<style>` has a `date` and no `noteid`, so an instruction
-arriving at a date where a style switch sat, and no instruction did, was written *onto the
-style*: the switch grew a `bpm` and a `beatLength`, and the instruction was never added.
+arriving at a date where a style switch sat, and no instruction did, was written _onto the
+style_: the switch grew a `bpm` and a `beatLength`, and the instruction was never added.
 
 The new `insertInstruction` matches on the element's local name as well.
 
 ### 13. A related resource was written under its media type
 
 `exportMPM`'s generic serializer used `node.type` as the element name. A `RelatedResource` is
-`{ uri, type }`, where `type` names the resource *kind* — so `{ uri: 'roll.mei', type: 'mei' }`
+`{ uri, type }`, where `type` names the resource _kind_ — so `{ uri: 'roll.mei', type: 'mei' }`
 serialized as `<mei uri="roll.mei"/>`, outside any `<relatedResources>`. Now written as MPM
 spells it. (Nothing in the corpus uses related resources, so this was never seen.)
 

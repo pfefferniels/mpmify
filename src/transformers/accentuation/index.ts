@@ -1,2 +1,2 @@
-export * from './InsertMetricalAccentuation'
-export * from './MergeMetricalAccentuations'
+export * from './InsertMetricalAccentuation';
+export * from './MergeMetricalAccentuations';

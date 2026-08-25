@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath } from 'node:url';
 
 /**
  * `scripts/bake/*` and mpm-desk both import mpmify by package name. The alias lets the bake
@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url'
  * dependency the package does not already have.
  */
 export default {
-    resolve: {
-        alias: {
-            mpmify: fileURLToPath(new URL('./src', import.meta.url)),
-        },
+  resolve: {
+    alias: {
+      mpmify: fileURLToPath(new URL('./src', import.meta.url)),
     },
-}
+  },
+};
