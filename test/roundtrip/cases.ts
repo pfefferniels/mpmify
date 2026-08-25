@@ -273,22 +273,15 @@ export const tierTwoCases: Case[] = [
                 ],
             },
         },
-        // The frame is now exact and the gradient is now written — but written backwards. The
-        // fit says `transition.from="0" transition.to="-1"`, the decrescendo default, where the
-        // truth ramps up: the chord comes back 64/51.5/39 against a truth of 39/51.5/64.
+        // Exact in velocity. This case came back mirrored — 64/51.5/39 against a truth of
+        // 39/51.5/64 — for two reasons that had to be fixed together, and each of which hid the
+        // other. The registry ran the spread before the gradient, so the gradient read its
+        // direction off onsets the spread had just collapsed (#32); and the clustering's merge
+        // read the two `transition.*` one index short of where they sit, so a correctly fitted
+        // ramp was reversed again on its way into the definition.
         //
-        // That is the registry order. `InsertTemporalSpread` runs first and collapses every
-        // onset in the chord onto one date; `InsertDynamicsGradient` then sorts the chord by
-        // `midi.onset` to read the ramp's direction, and by then no two onsets differ. Its own
-        // doc comment says so — "should always take place before inserting temporal spread,
-        // since temporal spread will destroy the original order of MIDI onsets" — and the
-        // registry does the opposite. Swapping the two would change the fold order of every
-        // saved work file, so it is left for #32 rather than done in passing.
-        //
-        // The onset bound is the same renderer behaviour as the rolled-chords case above.
-        note: 'issue #32 — the registry runs the spread before the gradient that reads the '
-            + 'onsets it destroys, so every arpeggio ramp comes back reversed',
-        bounds: { onset: { mean: 11, max: 60 }, duration: { mean: 11, max: 60 }, velocity: { mean: 11, max: 30 } },
+        // The onset bound is the renderer behaviour described on the rolled-chords case above.
+        bounds: { onset: { mean: 11, max: 60 }, duration: { mean: 11, max: 60 }, velocity: { max: 0.5 } },
     },
 ]
 

@@ -16,8 +16,14 @@ import { getTransformerOrder, isRegistered, registerAlias, registerTransformer }
 // Register all built-in transformers in their standard order.
 registerTransformer(MakeChoice);
 registerTransformer(Modify);
-registerTransformer(InsertTemporalSpread);
+// The gradient before the spread, because the spread destroys what the gradient reads.
+// `InsertDynamicsGradient` sorts a chord by `midi.onset` to find which way its ramp runs, and
+// `InsertTemporalSpread` collapses every onset in the chord onto one date. Run the other way
+// round, the direction is read off onsets that no longer differ and every arpeggio's ramp comes
+// back reversed — a truth of 39/51.5/64 refitting as 64/51.5/39. `InsertDynamicsGradient`'s own
+// doc comment has said so all along; the registry disagreed with it. See issue #32.
 registerTransformer(InsertDynamicsGradient);
+registerTransformer(InsertTemporalSpread);
 registerTransformer(ApproximateLogarithmicTempo);
 registerTransformer(TranslatePhysicalTimeToTicks);
 registerTransformer(StylizeOrnamentation);

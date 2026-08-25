@@ -116,59 +116,19 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                 const subClustersByLabel = subClusters.reduce((acc, cur, i) => {
                     const label = cur.label.toString()
                     if (!acc[label]) acc[label] = []
-                    acc[label].push({
-                        ornament: group[i].ornament,
-                        point: [...group[i].point, ...cur.value] as [number, number, number, number, number]
-                    })
+                    acc[label].push(group[i].ornament)
                     return acc
-                }, {} as { [label: string]: { ornament: Ornament, point: [number, number, number, number, number] }[] })
+                }, {} as { [label: string]: Ornament[] })
 
                 for (const subLabel in subClustersByLabel) {
                     const subgroup = subClustersByLabel[subLabel]
 
                     if (subLabel === "-1") {
-                        subgroup.forEach(({ ornament }) => this.defineAndName(mpm, scope, ornament))
+                        subgroup.forEach(ornament => this.defineAndName(mpm, scope, ornament))
                     } else {
-                        const sums = subgroup.reduce((acc, cur) => {
-                            acc.frameStart += cur.point[0]
-                            acc.frameLength += cur.point[1]
-                            acc.intensity += cur.point[2]
-                            acc.transitionFrom += cur.point[3]
-                            acc.transitionTo += cur.point[4]
-                            return acc
-                        }, { frameStart: 0, frameLength: 0, intensity: 0, transitionFrom: 0, transitionTo: 0 })
-                        const avgFrameStart = sums.frameStart / subgroup.length
-                        const avgFrameLength = sums.frameLength / subgroup.length
-                        const avgIntensity = sums.intensity / subgroup.length
-                        const avgTransitionFrom = sums.transitionFrom / subgroup.length
-                        const avgTransitionTo = sums.transitionTo / subgroup.length
-
-                        const defName = `def_${scope}_${label}_${subLabel}`
-                        const noteOffShift = subgroup[0].ornament["noteoff.shift"]
-                        const timeUnit = subgroup[0].ornament["time.unit"]
-
-                        const def: OrnamentDef = {
-                            type: 'ornamentDef',
-                            name: defName,
-                            dynamicsGradient: {
-                                type: 'dynamicsGradient',
-                                'transition.from': avgTransitionFrom,
-                                'transition.to': avgTransitionTo
-                            },
-                            temporalSpread: {
-                                type: 'temporalSpread',
-                                'frame.start': avgFrameStart,
-                                'frameLength': avgFrameLength,
-                                'noteoff.shift': noteOffShift,
-                                'time.unit': timeUnit,
-                                intensity: avgIntensity
-                            }
-                        }
-
+                        const def = this.mergedDef(subgroup, `def_${scope}_${label}_${subLabel}`)
                         mpm.insertDefinition(def, scope)
-                        subgroup.forEach(({ ornament }) => {
-                            ornament["name.ref"] = defName
-                        })
+                        subgroup.forEach(ornament => { ornament["name.ref"] = def.name })
                     }
                 }
             }
@@ -193,6 +153,53 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
                     delete o["frameLength"]
                 }
             })
+        }
+    }
+
+    /**
+     * One definition for a cluster of ornaments: each attribute the mean of the group's.
+     *
+     * Averaged from the ornaments themselves rather than from the clustering's coordinate
+     * vectors. Those vectors were being read by position — `point[3]` and `point[4]` for the two
+     * `transition.*` — while `generateClusters` builds a **four**-dimensional point ending in
+     * `noteoff.shift`. So the gradient was read one place short: `transition.from` came back as
+     * the note-off shift and `transition.to` as `transition.from`, which turned every clustered
+     * crescendo into its own mirror image — a truth of 39/51.5/64 refitting as 64/51.5/39. Read
+     * the attributes by name and the two cannot come apart again.
+     */
+    private mergedDef(ornaments: Ornament[], name: string): OrnamentDef {
+        const mean = (of: (ornament: Ornament) => number | undefined) => {
+            const values = ornaments
+                .map(of)
+                .filter((value): value is number => value !== undefined)
+            if (values.length === 0) return undefined
+            return values.reduce((sum, value) => sum + value, 0) / values.length
+        }
+
+        const transitionFrom = mean(ornament => ornament["transition.from"])
+        const transitionTo = mean(ornament => ornament["transition.to"])
+
+        return {
+            type: 'ornamentDef',
+            name,
+            // Only if the group actually carries one. Defaulting the two ends to zero would
+            // describe a ramp nobody measured.
+            dynamicsGradient: (transitionFrom !== undefined && transitionTo !== undefined)
+                ? {
+                    type: 'dynamicsGradient',
+                    'transition.from': transitionFrom,
+                    'transition.to': transitionTo,
+                }
+                : undefined,
+            temporalSpread: {
+                type: 'temporalSpread',
+                'frame.start': mean(ornament => ornament["frame.start"]) as number,
+                'frameLength': mean(ornament => ornament.frameLength) as number,
+                'noteoff.shift': ornaments[0]["noteoff.shift"],
+                'time.unit': ornaments[0]["time.unit"],
+                // `?? 1`, not `|| 1`: an intensity of 0 is a legal value, not a missing one.
+                intensity: mean(ornament => ornament.intensity ?? 1),
+            }
         }
     }
 
