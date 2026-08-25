@@ -2,6 +2,7 @@ import { MPM } from "../../mpm"
 import { MSM } from "../../msm"
 import { AbstractTransformer, TransformationOptions } from "../Transformer"
 import { TranslatePhysicalTimeToTicks } from "../tempo"
+import { deriveResidual } from "../../residual"
 
 export type InsertPedalOptions =
     TransformationOptions
@@ -31,10 +32,17 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     }
 
     protected transform(msm: MSM, mpm: MPM) {
+        // Where each pedal fell on the score grid, under the MPM as it stands. `movement` is
+        // held out for the same reason every other fitter holds its own dimension out, though
+        // it changes nothing here: a movementMap moves controllers, not the pedal marks this
+        // reads. Note the tick figures for pedals carry no rubato compensation — the warp is
+        // taken off notes only, which `removeRubatoDistortion` records as a standing @todo.
+        const residual = deriveResidual(msm, mpm, { without: ['movement'] })
+
         const validPedals = msm.pedals
             .filter(pedal => {
-                const tickDate = pedal.tickDate
-                const tickDuration = pedal.tickDuration
+                const tickDate = residual.ofPedal(pedal)?.tickDate
+                const tickDuration = residual.ofPedal(pedal)?.tickDuration
 
                 if (tickDate === undefined || tickDuration === undefined) {
                     return false
@@ -49,8 +57,8 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
         const depth = this.options.depth || 1
 
         for (const pedal of validPedals) {
-            const tickDate = pedal.tickDate
-            const tickDuration = pedal.tickDuration
+            const tickDate = residual.ofPedal(pedal)!.tickDate!
+            const tickDuration = residual.ofPedal(pedal)!.tickDuration!
 
             if (this.options.direction === 'down') {
                 mpm.insertInstruction({
