@@ -35,7 +35,7 @@ describe('the tempo fitter recovers its own curve', () => {
         expect(tempos).toHaveLength(1)
         expect(tempos[0].date).toBe(0)
         expect(tempos[0].bpm).toBeCloseTo(100, 4)
-        expect(tempos[0]['transition.to']).toBeUndefined()
+        expect(tempos[0].transitionTo).toBeUndefined()
     })
 
     test('a ritardando comes back with both boundary tempos', () => {
@@ -50,7 +50,7 @@ describe('the tempo fitter recovers its own curve', () => {
         // already sits above the instantaneous tempo at the segment start — so the fitter
         // recovers it to about a bpm, not to the digit.
         expect(Math.abs((tempos[0].bpm as number) - 120)).toBeLessThan(1)
-        expect(Math.abs((tempos[0]['transition.to'] as number) - 60)).toBeLessThan(1)
+        expect(Math.abs((tempos[0].transitionTo as number) - 60)).toBeLessThan(1)
         // Closing the span is what makes the transition render at all — see issue #24.
         expect(tempos[tempos.length - 1].date).toBeGreaterThan(0)
     })
@@ -64,7 +64,7 @@ describe('the dynamics fitter recovers its own curve', () => {
 
         expect(dynamics.length).toBeGreaterThanOrEqual(2)
         expect(dynamics[0].volume as number).toBeCloseTo(40, 0)
-        expect(dynamics[0]['transition.to'] as number).toBeCloseTo(100, 0)
+        expect(dynamics[0].transitionTo as number).toBeCloseTo(100, 0)
     })
 
     test('a constant dynamic comes back flat, with no transition at all', () => {
@@ -72,17 +72,17 @@ describe('the dynamics fitter recovers its own curve', () => {
         const dynamics = fitted.getInstructions('dynamics', 'global')
 
         expect(dynamics[0].volume as number).toBeCloseTo(70, 4)
-        expect(dynamics[0]['transition.to']).toBeUndefined()
+        expect(dynamics[0].transitionTo).toBeUndefined()
     })
 })
 
 describe('the articulation fitter recovers its own ratios', () => {
     test('a uniform legato comes back as one def at that relativeDuration', () => {
         const { fitted } = roundTrip(caseNamed('articulation: one legato for every note'))
-        const defs = fitted.getDefinitions<ArticulationDef>('articulationDef', 'global')
+        const defs = fitted.getDefinitions('articulationDef', 'global')
 
         expect(defs).toHaveLength(1)
-        expect(defs[0].relativeDuration as number).toBeCloseTo(1.3, 2)
+        expect(defs[0].getRelativeDuration()).toBeCloseTo(1.3, 2)
     })
 
     /**

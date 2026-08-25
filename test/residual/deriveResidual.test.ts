@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { Dynamics, MPM, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { deriveResidual } from "../../src/residual"
 import { computeTickTimes } from "../../src/transformers/tempo/tickTimes"
 
@@ -26,9 +26,7 @@ const fixture = () => new MSM(
 
 const withTempo = () => {
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
     return mpm
 }
 
@@ -73,9 +71,7 @@ describe('deriveResidual, velocity', () => {
 
     test('measures against the curve once there is one', () => {
         const mpm = withTempo()
-        mpm.insertInstruction<Dynamics>({
-            type: 'dynamics', 'xml:id': 'd1', date: 0, volume: 80,
-        }, 'global')
+        mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: 80 }, 'global')
 
         const derived = deriveResidual(fixture(), mpm)
         expect(derived.notes.map(n => n.velocity)).toEqual([20, 20, 0])
@@ -85,9 +81,7 @@ describe('deriveResidual, velocity', () => {
     // dimension out and what comes back is what the rest of the MPM leaves for you.
     test('without holds a dimension out of the measurement', () => {
         const mpm = withTempo()
-        mpm.insertInstruction<Dynamics>({
-            type: 'dynamics', 'xml:id': 'd1', date: 0, volume: 80,
-        }, 'global')
+        mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: 80 }, 'global')
 
         const withDynamics = deriveResidual(fixture(), mpm)
         const withoutDynamics = deriveResidual(fixture(), mpm, { without: ['dynamics'] })

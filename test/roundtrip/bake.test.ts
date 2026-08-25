@@ -44,8 +44,7 @@ describe('the bake', () => {
     })
 
     test('names only elements the MPM actually holds', () => {
-        const present = new Set((baked.pipeline.mpm.getInstructions() as { 'xml:id': string }[])
-            .map(instruction => instruction['xml:id']))
+        const present = new Set(baked.pipeline.mpm.getInstructions().map(i => i.id))
         const dangling = baked.reconstruction.segments
             .flatMap(segment => segment.spans.flatMap(span => span.elements))
             .filter(id => !present.has(id))

@@ -125,8 +125,7 @@ export const derive = (mei: string, info: string): Derived => {
     // segments are: argumentations covering the exact same ticks are one.
     const transformers = mergeOverlappingArgumentations(ran, msm, residual)
 
-    const instructions = mpm.getInstructions() as { 'xml:id': string; type: string }[]
-    const typeById = new Map(instructions.map(i => [i['xml:id'], i.type]))
+    const typeById = new Map(mpm.getInstructions().map(i => [i.id, i.type]))
 
     const segments: Segment[] = []
     let droppedSpans = 0

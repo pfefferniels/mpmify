@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import { MSM, MsmNote } from "../../src/msm"
-import { MPM, Rubato, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 import { computeTickTimes, emptyTickTimes } from "../../src/transformers/tempo/tickTimes"
 import { removeRubatoDistortion } from "../../src/transformers/rubato/rubatoMath"
 
@@ -29,15 +29,13 @@ const fixture = () => new MSM(
 
 const withTempo = () => {
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 60, beatLength: 0.25,
-    }, 'global')
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 60, beatLength: 0.25 }, 'global')
     return mpm
 }
 
-const rubatoAt = (mpm: MPM, date: number) => mpm.insertInstruction<Rubato>({
-    type: 'rubato', 'xml:id': `r${date}`, date, frameLength: FRAME, intensity: 0.65,
-}, 'global')
+const rubatoAt = (mpm: MPM, date: number) => mpm.insertInstruction(
+    'rubato', { id: `r${date}`, date, frameLength: FRAME, intensity: 0.65 }, 'global'
+)
 
 /**
  * The tick walk is three steps — onsets, then durations measured from them, then the rubato warp

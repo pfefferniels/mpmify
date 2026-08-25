@@ -15,6 +15,24 @@
  *
  * The chain is deterministic (`test/determinism.test.ts` folds it twice and compares), so a
  * digest taken before and after the migration must match line for line.
+ *
+ * ## The three lines it did not match on, and why
+ *
+ * Measured over the espressivo migration: 20 lines of 314, all ornamentation.
+ *
+ * 1. `<temporalSpread>` no longer writes `noteoff.shift="false"` or `time.unit="ticks"`.
+ *    espressivo's `TemporalSpread.generateXML` omits an attribute at its default; MPM reads an
+ *    absent one as exactly that default. Same document, fewer bytes.
+ * 2. `<ornament>` no longer carries `@intensity`. That was a leak: `StylizeOrnamentation`
+ *    deleted six parked attributes and not the seventh, and the ODD does not give `<ornament>`
+ *    an `@intensity` at all (it is a `memberOf` `att.id`, `att.note.order`,
+ *    `att.reference.name`, `att.scale`, `att.time.symbolic.date`). The def's own `@intensity`,
+ *    which is valid, is unchanged.
+ * 3. `<ornament>` now always carries `@scale`, `scale="0"` where it used to carry none.
+ *    espressivo's `addOrnamentV3` writes it unconditionally at the spec's own default of 0.0.
+ *
+ * None of the three changes what renders — the tier0/2/3 round-trip suites compare in
+ * performance space and stayed green through all of it.
  */
 import { describe, test } from "vitest"
 import { writeFileSync } from "fs"

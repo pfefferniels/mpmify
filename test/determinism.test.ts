@@ -78,7 +78,7 @@ describe('the pipeline fold is a function of its inputs', () => {
             const mpm = new MPM()
             chain()[0].run(msm, mpm)
             return mpm.getInstructions('tempo', 'global')
-                .map(t => [t.bpm, t['transition.to'], t.meanTempoAt])
+                .map(t => [t.bpm, t.transitionTo, t.meanTempoAt])
         }
         const first = bpms()
         expect(first.length).toBeGreaterThan(0)
@@ -92,7 +92,7 @@ describe('the pipeline fold is a function of its inputs', () => {
             const mpm = new MPM()
             chain()[1].run(msm, mpm)
             return mpm.getInstructions('dynamics', 'global')
-                .map(d => [d.volume, d['transition.to'], d.curvature, d.protraction])
+                .map(d => [d.volume, d.transitionTo, d.curvature, d.protraction])
         }
         const first = curves()
         expect(first.length).toBeGreaterThan(0)

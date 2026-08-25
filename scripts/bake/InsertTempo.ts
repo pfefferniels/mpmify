@@ -1,5 +1,5 @@
 import { MPM, MSM, AbstractTransformer, generateId } from 'mpmify'
-import type { Tempo, Scope, ScopedTransformationOptions } from 'mpmify'
+import type { InstructionOptions, Scope, ScopedTransformationOptions } from 'mpmify'
 
 interface InsertTempoOptions extends ScopedTransformationOptions {
     from: number
@@ -53,12 +53,12 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
             bpm,
             beatLength,
             ...(transitionTo !== undefined ? {
-                'transition.to': transitionTo,
+                transitionTo,
                 meanTempoAt: meanTempoAt ?? 0.5
             } : {})
         }
 
-        mpm.insertInstruction(tempo as Tempo, scope, true)
+        mpm.insertInstruction('tempo', tempo as InstructionOptions<'tempo'>, scope, true)
     }
 
     private removeAffectedTempoInstructions(mpm: MPM, scope: Scope, from: number, to: number) {
@@ -75,18 +75,17 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
             if (effectiveIndex !== -1) {
                 const effectiveTempo = existing[effectiveIndex]
                 if (isCovered(effectiveTempo.date)) {
-                    const restore: Tempo = {
-                        type: 'tempo',
-                        'xml:id': generateId('tempo', boundary, mpm),
+                    const restore: InstructionOptions<'tempo'> = {
+                        id: generateId('tempo', boundary, mpm),
                         date: boundary,
                         beatLength: effectiveTempo.beatLength,
                         bpm: effectiveTempo.bpm
                     }
-                    this._boundaryId = restore['xml:id']
+                    this._boundaryId = restore.id
                     for (const t of existing) {
                         if (isCovered(t.date)) mpm.removeInstruction(t)
                     }
-                    mpm.insertInstruction(restore, scope, false)
+                    mpm.insertInstruction('tempo', restore, scope, false)
                     return
                 }
             }
@@ -98,7 +97,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
     }
 }
 
-function findEffectiveTempoIndex(tempos: Tempo[], date: number): number {
+function findEffectiveTempoIndex(tempos: readonly { date: number }[], date: number): number {
     let result = -1
     for (let i = 0; i < tempos.length; i++) {
         if (tempos[i].date <= date) result = i

@@ -1,17 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { Dynamics, MPM, Tempo } from "../../src/mpm"
+import { MPM } from "../../src/mpm"
 
 const populated = () => {
     const mpm = new MPM()
-    mpm.insertInstruction<Tempo>({
-        type: 'tempo', 'xml:id': 't1', date: 0, bpm: 120, beatLength: 0.25,
-    }, 'global')
-    mpm.insertInstruction<Dynamics>({
-        type: 'dynamics', 'xml:id': 'd1', date: 0, volume: 64,
-    }, 'global')
-    mpm.insertInstruction<Dynamics>({
-        type: 'dynamics', 'xml:id': 'd2', date: 720, volume: 90,
-    }, 1)
+    mpm.insertInstruction('tempo', { id: 't1', date: 0, bpm: 120, beatLength: 0.25 }, 'global')
+    mpm.insertInstruction('dynamics', { id: 'd1', date: 0, volume: 64 }, 'global')
+    mpm.insertInstruction('dynamics', { id: 'd2', date: 720, volume: 90 }, 1)
     return mpm
 }
 

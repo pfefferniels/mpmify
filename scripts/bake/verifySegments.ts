@@ -167,8 +167,7 @@ console.log('\n4. the intensity curve is unchanged')
  */
 const curveFromPipeline = (maxDate: number) => {
     const { transformers, msm, mpm } = fresh.pipeline
-    const typeById = new Map((mpm.getInstructions() as { 'xml:id': string; type: string }[])
-        .map(i => [i['xml:id'], i.type]))
+    const typeById = new Map(mpm.getInstructions().map(i => [i.id, i.type]))
     const argumentations = Map.groupBy(transformers, t => t.argumentation)
 
     const startsByType = new Map<string, number[]>()

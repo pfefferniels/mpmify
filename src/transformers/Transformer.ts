@@ -1,4 +1,4 @@
-import { InstructionType, MPM, Scope } from "../mpm";
+import { addCorresp, InstructionType, MPM, Scope } from "../mpm";
 import { MSM } from "../msm";
 import { MPMRecording } from "./MPMRecording";
 import { Residual } from "../residual";
@@ -112,13 +112,7 @@ export abstract class AbstractTransformer<OptionsType extends TransformationOpti
                 return
             }
 
-            const newCorresp = this.argumentation?.id || this.id
-            if (!instruction.corresp) {
-                instruction.corresp = newCorresp
-            }
-            else if (!instruction.corresp.split(' ').includes(newCorresp)) {
-                instruction.corresp += ' ' + newCorresp
-            }
+            addCorresp(instruction.element, this.argumentation?.id || this.id)
         })
     }
 }
