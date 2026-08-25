@@ -119,7 +119,37 @@ export class MSM {
         if (min) notesWithOnset.forEach(n => n['midi.onset'] -= min)
     }
 
+    /**
+     * The MSM as a document, with the recording in it unless asked to leave it out.
+     *
+     * Kept as-is for existing callers; `serializeScore` is what a renderer should be given.
+     */
     public serialize(filterIntermediateAttributes = true) {
+        return this.build(filterIntermediateAttributes ? 'none' : 'all')
+    }
+
+    /**
+     * The MSM as a *score*: symbolic dates and durations plus `midi.pitch`, and nothing the
+     * performance put there.
+     *
+     * This is what goes to espressivo when a residual is derived. Handing the renderer the
+     * recorded `midi.onset` as well would be harmless — it reads `date`/`duration` — but it
+     * makes the document ambiguous about which timing it is stating, and the whole point of
+     * the residual is to keep the recording and the rendering apart.
+     */
+    public serializeScore() {
+        return this.build('pitch')
+    }
+
+    /**
+     * Serialize the MSM as an XML document.
+     *
+     * @param midi which of a note's MIDI attributes to carry into the document. `'none'` is
+     * symbolic only; `'pitch'` adds `midi.pitch`, which is the least a renderer needs to sound
+     * the note and the most a *score* should say; `'all'` adds the recorded `midi.onset`,
+     * `midi.duration` and `midi.velocity` as well.
+     */
+    private build(midi: 'none' | 'pitch' | 'all') {
         if (this.allNotes.length === 0) {
             console.log('no notes to serialize')
             return
@@ -151,16 +181,26 @@ export class MSM {
                             }
                         }
                     },
-                },
-                'pedalMap': {
-                    'pedal': this.pedals.map(pedal => {
-                        return {
-                            '@': pedal
-                        }
-                    })
+                    // Inside `<dated>`, not beside it. espressivo reads the pedals from the
+                    // global `<dated>` (`Performance.addMsmMapToList('pedalMap', globalDated)`)
+                    // and its own `Msm.createMsm` nests it there, so a `<pedalMap>` one level up
+                    // was simply never found — every serialized pedal was invisible to the
+                    // renderer, silently.
+                    'pedalMap': {
+                        'pedal': this.pedals.map(pedal => {
+                            return {
+                                '@': pedal
+                            }
+                        })
+                    }
                 }
             },
-            'part': Array.from(Array(2).keys()).map(part => {
+            // One `<part>` per part the notes actually use, ascending. This was
+            // `Array.from(Array(2).keys())` — exactly two, always — so every note in part 3 or
+            // higher was dropped from the serialized score without a word, and a single-part
+            // piece still emitted an empty second `<part>`. `parts()` is the same 0-based
+            // numbering `notesInPart` uses. See issue #34.
+            'part': [...this.parts()].sort((a, b) => a - b).map(part => {
                 return {
                     '@': {
                         name: `part${part}`,
@@ -191,10 +231,10 @@ export class MSM {
                                         'duration': note['duration']
                                     } as Record<string, unknown>
 
-                                    if (!filterIntermediateAttributes) {
-                                        if (note['midi.pitch']) {
-                                            result['midi.pitch'] = note['midi.pitch']
-                                        }
+                                    if (midi !== 'none' && note['midi.pitch']) {
+                                        result['midi.pitch'] = note['midi.pitch']
+                                    }
+                                    if (midi === 'all') {
                                         if (note['midi.onset']) {
                                             result['midi.onset'] = note['midi.onset']
                                         }

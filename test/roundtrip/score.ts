@@ -35,13 +35,6 @@ export const buildScore = (spec: ScoreSpec): MSM => {
     const pitches = spec.pitches ?? [67]
     const gate = spec.gate ?? 1
 
-    // `MSM.serialize` writes exactly two `<part>` elements and filters notes by part number, so
-    // a third voice would be dropped from the rendered score without a word — and the case would
-    // silently be measuring a shorter piece than it declared. See issue #34.
-    if (spec.separateParts && pitches.length > 2) {
-        throw new Error('MSM.serialize writes at most two parts; see issue #34')
-    }
-
     const notes: MsmNote[] = []
     for (let beat = 0; beat < spec.beats; beat++) {
         pitches.forEach((pitch, voice) => {
