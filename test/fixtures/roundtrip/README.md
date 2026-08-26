@@ -8,6 +8,9 @@ only inputs the pipeline had ever run on lived in `mpm-desk` and were never copi
 |---|---|
 | `traeumerei.mei` | Schumann, *Träumerei* — the upbeat and the four bars of the opening phrase, aligned to Welte-Mignon roll 225 (Alfred Grünfeld) |
 | `chain.json` | The reconstruction's own transformer calls, restricted to those bars |
+| `alignment.msm` | The MEI's alignment, frozen: the score and the recording in MSM's own attributes |
+| `alignment.pedals.json` | The recorded pedals, which MSM cannot state |
+| `alignment.sources.json` | Which reading each `<note>` came from, which MSM cannot state either |
 
 ## What it carries
 
@@ -30,6 +33,26 @@ every aspect the issue asked the fixture to exercise, plus pedalling.
 Each segment's `elements` is empty. It is filled in on export from what the calls created, and
 the bake derives its own from a run rather than reading it back.
 
+## The frozen alignment
+
+`alignment.*` is the same alignment `scripts/bake/asMSM.ts` builds from the MEI, stated as
+documents. It exists because `asMSM` reads a vocabulary private to this project —
+`extData[type="duration"]`, `extData[type="velocity"]`, an `absolute` with an `ms` suffix — and
+the accuracy suite must be readable without it.
+
+The three files are one triple. `Alignment.serialize()` writes the score and the recording
+together into `alignment.msm`, and the two things it cannot carry go beside it:
+
+- **pedals.** MSM's `<pedal>` is `date`/`state`/`date.end` in ticks, and a recorded pedal has no
+  symbolic date at all.
+- **sources.** `source` — which reading of the passage a note came from, what `MakeChoice`
+  selects on — is not an MSM attribute. One entry per `<note>` of the document, in document
+  order; `id` is a checksum, not a key, because a note both readings sound is two `<note>`
+  elements under one `xml:id`.
+
+112 `<note>` elements under 56 ids, 10 pedals under 5 ids: the excerpt is aligned twice.
+`MakeChoice` is what reduces it to one reading, and it runs in the test rather than here.
+
 ## Where it came from
 
 Cut on 2026-08-25 from `mpm-desk/public/transcription.mei` and `mpm-desk/public/info.json`, the
@@ -51,7 +74,14 @@ pipeline reads and was left out.
 
 ## Regenerating it
 
-There is no script: with the source outside this repo a checked-in one could not be run here
-anyway, and the excerpt is meant to be stable — the recorded bounds in `aligned.test.ts` are
-measurements of *this* passage. Cutting a longer one means redoing the three steps above and
-re-recording the bounds against the result.
+The MEI and `chain.json` have no script: with the source outside this repo a checked-in one
+could not be run here anyway, and the excerpt is meant to be stable — the recorded bounds in
+`aligned.test.ts` are measurements of *this* passage. Cutting a longer one means redoing the
+three steps above and re-recording the bounds against the result.
+
+`alignment.*` does, because it is derived rather than cut:
+
+    npx vite-node scripts/bake/writeAlignment.ts
+
+It runs `asMSM` over the MEI and refuses to write unless the triple reads back as the alignment
+`asMSM` built. Touching the MEI's `<performance>` means re-running it.

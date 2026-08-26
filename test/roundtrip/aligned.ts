@@ -5,8 +5,8 @@ import type { PerformanceData, PerformedNote } from 'espressivo';
 import { Alignment } from '../../src/alignment/index.js';
 import { createMpm } from '../../src/mpm/index.js';
 import { importWork } from '../../src/Work.js';
-import { asMSM } from '../../scripts/bake/asMSM.js';
 import { runPipeline } from '../../scripts/bake/deriveSegments.js';
+import { deserializeAlignment, parseAlignmentFixture } from './alignmentFixture.js';
 import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.js';
 
 /**
@@ -19,8 +19,8 @@ import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.
  * has nowhere to go but the error.
  *
  *     aligned MEI       --convertMeiToMsm--> score MSM
- *     MEI + score MSM   --asMSM------------> the recording, on the score
- *     that + info.json  --the chain--------> MPM
+ *     alignment.*       --the fixture------> the recording, on the score
+ *     MEI + info.json   --the chain--------> MPM
  *     score MSM + MPM   --espressivo-------> a performance
  *                                            assert it is the recording again
  *
@@ -44,9 +44,9 @@ export interface AlignedRun {
   /**
    * How far the recording departs from the bare score under an empty MPM.
    *
-   * A fixture that lost its `<when>` elements — or a chain that resolved to nothing — would
-   * leave the round trip comparing the score against itself and passing. This is what says
-   * the fixture still carries a performance.
+   * A fixture that lost its `milliseconds.*` attributes — or a chain that resolved to nothing —
+   * would leave the round trip comparing the score against itself and passing. This is what
+   * says the fixture still carries a performance.
    */
   exercised: Errors;
   /** How much of the recording the chain's MPM actually accounts for, per aspect. */
@@ -63,7 +63,7 @@ export const runAligned = (): AlignedRun => {
 
   const rendered = performMsmToData({ msm: scoreMsm, mpm: mpmXml });
   const bare = performMsmToData({ msm: scoreMsm, mpm: EMPTY_MPM });
-  const observed = recording(mei, scoreMsm, info);
+  const observed = recording(info);
 
   const errors = compareToRecording(observed, rendered);
   const exercised = compareToRecording(observed, bare);
@@ -89,14 +89,21 @@ export const runAligned = (): AlignedRun => {
  *
  * Two of the chain's transformers are about the observation rather than about the MPM, and both
  * have to be applied before the recording is a target. `MakeChoice` picks one of the two
- * readings the MEI carries — without it every note is in the file twice, once per source — and
- * `Modify` is the editor saying a note was played softer than the roll scan says. Rebuilding
- * the MSM here rather than reading back the one the chain ran on is deliberate: a transformer
- * that quietly wrote its answer into the observations would otherwise be measured against its
- * own writing and score perfectly.
+ * readings the fixture carries — without it every note is in it twice, once per source — and
+ * `Modify` is the editor saying a note was played softer than the roll scan says. Reading the
+ * fixture afresh rather than taking back the alignment the chain ran on is deliberate: a
+ * transformer that quietly wrote its answer into the observations would otherwise be measured
+ * against its own writing and score perfectly.
  */
-const recording = (mei: string, scoreMsm: string, info: string): Alignment => {
-  const observed = asMSM(mei, scoreMsm);
+const recording = (info: string): Alignment => {
+  // cut by `scripts/bake/writeAlignment.ts` — see test/fixtures/roundtrip/README.md.
+  const observed = deserializeAlignment(
+    parseAlignmentFixture(
+      fixture('alignment.msm'),
+      fixture('alignment.pedals.json'),
+      fixture('alignment.sources.json'),
+    ),
+  );
   const { transformers } = importWork(info);
   const scratch = createMpm();
 
@@ -123,11 +130,11 @@ const explained = (exercised: AspectError, remaining: AspectError) =>
 /**
  * The recording against a render of it, note by note, matched on `xml:id`.
  *
- * The score MSM holds notes the recording does not: `asMSM` drops a note whose date and pitch a
- * longer one already claims, and a note the alignment never reached has no `<when>` at all.
- * Those are absent from the comparison rather than counted as error — what they measure is the
- * alignment, not the chain. A note the recording *does* have and the render does not is
- * `missing`, and that is a failure.
+ * The score MSM holds notes the recording does not: a note whose date and pitch a longer one
+ * already claims was folded into that longer one, and a note the alignment never reached is not
+ * in the fixture at all. Those are absent from the comparison rather than counted as error —
+ * what they measure is the alignment, not the chain. A note the recording *does* have and the
+ * render does not is `missing`, and that is a failure.
  */
 const compareToRecording = (observed: Alignment, rendered: PerformanceData): Errors => {
   const byId = new Map<string, PerformedNote>();

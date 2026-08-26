@@ -56,7 +56,7 @@ const BOUNDS = {
  */
 const EXPLAINED = { onset: 0.97, duration: 0.5, velocity: 0.95 };
 
-/** What `asMSM` finds in the fixture: 58 aligned notes, less two the MSM conversion doubles. */
+/** What the fixture holds: 58 aligned notes, less two the MSM conversion doubles. */
 const NOTES = 56;
 
 let run: AlignedRun;
@@ -76,7 +76,7 @@ describe('an aligned recording, fitted and rendered back', () => {
 
   test('the fixture still carries a performance', () => {
     // Every number below is a difference from the recording. A fixture that lost its
-    // `<when>` elements would compare the score against itself and pass everything.
+    // `milliseconds.*` attributes would compare the score against itself and pass everything.
     expect(run.exercised.onset.mean).toBeGreaterThan(1000);
     expect(run.exercised.velocity.mean).toBeGreaterThan(10);
     expect(run.errors.matched).toBe(NOTES);
