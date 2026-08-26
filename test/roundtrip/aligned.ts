@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { performMsmToData } from 'espressivo';
+import { convertMeiToMsm, performMsmToData } from 'espressivo';
 import type { PerformanceData, PerformedNote } from 'espressivo';
 import { Alignment } from '../../src/alignment/index.js';
 import { createMpm } from '../../src/mpm/index.js';
 import { importWork } from '../../src/Work.js';
-import { runPipeline } from '../../scripts/bake/deriveSegments.js';
+import { runChain } from '../../src/runChain.js';
+import { registerTransformer } from '../../src/transformers/TransformerRegistry.js';
+import { InsertTempo } from '../../scripts/bake/InsertTempo.js';
 import { deserializeAlignment, parseAlignmentFixture } from './alignmentFixture.js';
 import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.js';
 
@@ -18,19 +20,34 @@ import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.
  * Welte roll's onsets are a tempo curve plus a rubato frame, and what the chain cannot express
  * has nowhere to go but the error.
  *
- *     aligned MEI       --convertMeiToMsm--> score MSM
- *     alignment.*       --the fixture------> the recording, on the score
- *     MEI + info.json   --the chain--------> MPM
- *     score MSM + MPM   --espressivo-------> a performance
- *                                            assert it is the recording again
+ *     aligned MEI          --convertMeiToMsm--> score MSM
+ *     alignment.*          --the fixture------> the recording, on the score
+ *     that + chain.json    --runChain---------> MPM
+ *     score MSM + MPM      --espressivo-------> a performance
+ *                                               assert it is the recording again
  *
- * This is the check issue #51 asks for, and it runs the bake — `scripts/bake/deriveSegments`,
- * the one place mpmify's pipeline still runs in production — rather than a chain assembled
- * here. The fixture is therefore also the input that bake never had in this repo.
+ * This is the check issue #51 asks for, and the chain is the real one — the calls a person
+ * wrote for this passage, rebuilt by `importWork` and run by `runChain`, which is the same
+ * runner the bake goes through. It is not a chain assembled here to suit the measurement.
+ *
+ * `InsertTempo` is the bake's own transformer rather than the library's, and the chain names
+ * it ten times, so it has to be registered before the file is imported.
  */
+
+registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' });
 
 const fixture = (name: string) =>
   readFileSync(join(__dirname, '..', 'fixtures', 'roundtrip', name), 'utf-8');
+
+/** The frozen alignment, cut by `scripts/bake/writeAlignment.ts` — see the fixtures' README. */
+const fromFixture = (): Alignment =>
+  deserializeAlignment(
+    parseAlignmentFixture(
+      fixture('alignment.msm'),
+      fixture('alignment.pedals.json'),
+      fixture('alignment.sources.json'),
+    ),
+  );
 
 export interface AlignedRun {
   /** The MEI as MSM — what the render performs. */
@@ -56,10 +73,15 @@ export interface AlignedRun {
 }
 
 export const runAligned = (): AlignedRun => {
-  const mei = fixture('traeumerei.mei');
   const info = fixture('chain.json');
 
-  const { scoreMsm, mpmXml, transformers } = runPipeline(mei, info);
+  const movements = convertMeiToMsm(fixture('traeumerei.mei'));
+  if (!movements.length) throw new Error('MEI holds no convertible movement');
+  const scoreMsm = movements[0].msm;
+
+  // Its own alignment, not the one `recording` returns: the chain writes through what it is
+  // given, and the recording has to survive the run unedited to be a target.
+  const { mpmXml, transformers } = runChain(fromFixture(), importWork(info).transformers);
 
   const rendered = performMsmToData({ msm: scoreMsm, mpm: mpmXml });
   const bare = performMsmToData({ msm: scoreMsm, mpm: EMPTY_MPM });
@@ -96,14 +118,7 @@ export const runAligned = (): AlignedRun => {
  * against its own writing and score perfectly.
  */
 const recording = (info: string): Alignment => {
-  // cut by `scripts/bake/writeAlignment.ts` — see test/fixtures/roundtrip/README.md.
-  const observed = deserializeAlignment(
-    parseAlignmentFixture(
-      fixture('alignment.msm'),
-      fixture('alignment.pedals.json'),
-      fixture('alignment.sources.json'),
-    ),
-  );
+  const observed = fromFixture();
   const { transformers } = importWork(info);
   const scratch = createMpm();
 

@@ -7,18 +7,15 @@
  * Everything here is bake-time only. It is the last place mpmify runs.
  */
 import {
-  compareTransformers,
-  createMpm,
   deriveResidual,
   getInstructions,
   getRange,
-  exportMPM,
   importWork,
-  InsertMetadata,
   registerTransformer,
-  validate,
+  runChain,
 } from '../../src/index.js';
 import type {
+  ChainRun,
   InstructionType,
   Mpm,
   Alignment,
@@ -33,27 +30,14 @@ import type { Reconstruction, Segment, Span } from './Reconstruction.js';
 
 registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' });
 
-/**
- * The pipeline half of the bake: the MEI, the chain, and the MPM the chain writes.
- *
- * Split out of `derive` for `test/roundtrip/aligned.ts`, which renders this MPM back and
- * compares it against the recording it was fitted to. That check is about the pipeline, so it
- * has no use for the segments — and no reason to fail when the segment half does.
- */
-interface Pipeline {
+/** What the chain gives back, plus the three things only the MEI side of the bake knows. */
+interface Pipeline extends ChainRun {
   /** The MEI as MSM — what a render performs. */
   scoreMsm: string;
   /** The recording on the score, as the chain left it. */
   msm: Alignment;
-  mpm: Mpm;
-  /** The chain's MPM, serialized. */
-  mpmXml: string;
-  /** The chain as it ran: the file's calls, metadata substituted, in registry order. */
-  transformers: Transformer[];
-  /** How the file groups those calls, by call id. */
+  /** How the file groups the calls, by call id. */
   segments: WorkSegment[];
-  title: string;
-  author: string;
 }
 
 interface Derived {
@@ -90,38 +74,16 @@ const quiet = <T>(fn: () => T): T => {
   }
 };
 
-export const runPipeline = (mei: string, info: string): Pipeline => {
+/** The MEI half: convert it, read the alignment out of it, and hand both to the chain. */
+const runPipeline = (mei: string, info: string): Pipeline => {
   const movements = convertMeiToMsm(mei);
   if (!movements.length) throw new Error('MEI holds no convertible movement');
   const scoreMsm = movements[0].msm;
 
   const msm = asMSM(mei, scoreMsm);
-
   const { transformers: loaded, segments } = importWork(info);
-  const messages = validate(loaded);
-  if (messages.length) throw new Error(messages.map((m) => m.message).join('\n'));
 
-  const metadata = loaded.find((t) => t.name === 'InsertMetadata') as InsertMetadata | undefined;
-  const title = metadata?.options.comments?.[0]?.text ?? '';
-  const author = metadata?.options.authors?.[0]?.text ?? '';
-
-  // The app dropped the imported InsertMetadata and prepended its own, built
-  // from the title and author it had extracted. Same document, one code path.
-  // It belongs to no segment: it writes `<metadata>`, not an instruction.
-  const metadataTransformer = new InsertMetadata({
-    authors: author ? [{ number: 0, text: author }] : [],
-    comments: title ? [{ text: title }] : [],
-  });
-
-  const ran: Transformer[] = [
-    metadataTransformer,
-    ...loaded.filter((t) => t.name !== 'InsertMetadata'),
-  ].sort(compareTransformers);
-
-  const mpm = createMpm();
-  quiet(() => ran.forEach((transformer) => transformer.run(msm, mpm)));
-
-  return { scoreMsm, msm, mpm, mpmXml: exportMPM(mpm), transformers: ran, segments, title, author };
+  return { scoreMsm, msm, segments, ...quiet(() => runChain(msm, loaded)) };
 };
 
 /** The instructions of one type a set of element ids names, earliest first. */

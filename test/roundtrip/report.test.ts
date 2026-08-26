@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import { test } from 'vitest';
 import { runAligned } from './aligned.js';
 import { allCases } from './cases.js';
