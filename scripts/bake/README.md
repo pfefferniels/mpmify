@@ -8,12 +8,14 @@ mpm-desk repo (pass them with `--mei` / `--info`). `vite-node` resolves the `mpm
 through the alias in `vite.config.ts`, so the bake runs against the working tree.
 
 An excerpt of those inputs _is_ in this repo now — `test/fixtures/roundtrip`, four bars and the
-84 calls that reconstruct them — and two test files run this code over it on every commit:
-`test/roundtrip/aligned.test.ts` renders `runPipeline`'s MPM back and compares it against the
-recording, and `test/roundtrip/bake.test.ts` asserts what `bakeSegments.ts` checks before it
-writes. The first thing they found was that the bake did not run at all: `getRange` needs a
-residual to place a pedal, neither `derive` nor the segment merge passed one, and every real
-`info.json` has `InsertPedal` calls in it.
+84 calls that reconstruct them — and `test/roundtrip/bake.test.ts` runs this code over it on
+every commit, asserting what `bakeSegments.ts` checks before it writes. The first thing it found
+was that the bake did not run at all: `getRange` needs a residual to place a pedal, neither
+`derive` nor the segment merge passed one, and every real `info.json` has `InsertPedal` calls in
+it.
+
+`test/roundtrip/aligned.test.ts` measures the same 84 calls, but reaches them through
+`src/runChain.ts` and the frozen alignment, so it no longer runs anything in this directory.
 
 ## What it does
 
@@ -35,16 +37,16 @@ node_modules/.bin/vite-node scripts/bake/verifySegments.ts                      
 
 ## Files
 
-| File                | Role                                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------------------- |
-| `bakeSegments.ts`   | CLI wrapper: sets up jsdom globals, runs `derive`, writes `public/`                            |
-| `deriveSegments.ts` | The bake itself — `runPipeline` runs the transformers, `derive` groups the calls into segments |
-| `verifySegments.ts` | Re-derives and diffs against what was written                                                  |
-| `asMSM.ts`          | Enriches a converted MSM with the performance data encoded in the MEI                          |
-| `mergeSegments.ts`  | Folds segments covering the same ticks into one                                                |
-| `InsertTempo.ts`    | A custom transformer, registered after `ApproximateLogarithmicTempo`                           |
-| `Reconstruction.ts` | Copy of mpm-desk's `src/model/Reconstruction.ts` — the output shape                            |
-| `intensityCurve.ts` | Copy of mpm-desk's `src/utils/intensityCurve.ts` — `verifySegments` check 4 needs it           |
+| File                | Role                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `bakeSegments.ts`   | CLI wrapper: sets up jsdom globals, runs `derive`, writes `public/`                    |
+| `deriveSegments.ts` | The bake itself — `runPipeline` feeds the MEI to `runChain`, `derive` groups the calls |
+| `verifySegments.ts` | Re-derives and diffs against what was written                                          |
+| `asMSM.ts`          | Enriches a converted MSM with the performance data encoded in the MEI                  |
+| `mergeSegments.ts`  | Folds segments covering the same ticks into one                                        |
+| `writeAlignment.ts` | Cuts `test/fixtures/roundtrip/alignment.*` out of the MEI through `asMSM`              |
+| `Reconstruction.ts` | Copy of mpm-desk's `src/model/Reconstruction.ts` — the output shape                    |
+| `intensityCurve.ts` | Copy of mpm-desk's `src/utils/intensityCurve.ts` — `verifySegments` check 4 needs it   |
 
 The last two are copies rather than imports so the set stands on its own. If mpm-desk's versions
 change, these do not follow — and `knip.json` ignores them, since a copy carries exports its

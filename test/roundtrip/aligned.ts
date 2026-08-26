@@ -6,8 +6,6 @@ import { Alignment } from '../../src/alignment/index.js';
 import { createMpm } from '../../src/mpm/index.js';
 import { importWork } from '../../src/Work.js';
 import { runChain } from '../../src/runChain.js';
-import { registerTransformer } from '../../src/transformers/TransformerRegistry.js';
-import { InsertTempo } from '../../scripts/bake/InsertTempo.js';
 import { deserializeAlignment, parseAlignmentFixture } from './alignmentFixture.js';
 import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.js';
 
@@ -29,12 +27,7 @@ import { type AspectError, type Errors, EMPTY_MPM, statistics } from './harness.
  * This is the check issue #51 asks for, and the chain is the real one — the calls a person
  * wrote for this passage, rebuilt by `importWork` and run by `runChain`, which is the same
  * runner the bake goes through. It is not a chain assembled here to suit the measurement.
- *
- * `InsertTempo` is the bake's own transformer rather than the library's, and the chain names
- * it ten times, so it has to be registered before the file is imported.
  */
-
-registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' });
 
 const fixture = (name: string) =>
   readFileSync(join(__dirname, '..', 'fixtures', 'roundtrip', name), 'utf-8');

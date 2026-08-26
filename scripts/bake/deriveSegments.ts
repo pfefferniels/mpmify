@@ -11,7 +11,6 @@ import {
   getInstructions,
   getRange,
   importWork,
-  registerTransformer,
   runChain,
 } from '../../src/index.js';
 import type {
@@ -23,12 +22,9 @@ import type {
   Transformer,
 } from '../../src/index.js';
 import { convertMeiToMsm } from 'espressivo';
-import { InsertTempo } from './InsertTempo.js';
 import { asMSM } from './asMSM.js';
 import { mergeOverlappingSegments } from './mergeSegments.js';
 import type { Reconstruction, Segment, Span } from './Reconstruction.js';
-
-registerTransformer(InsertTempo, { after: 'ApproximateLogarithmicTempo' });
 
 /** What the chain gives back, plus the three things only the MEI side of the bake knows. */
 interface Pipeline extends ChainRun {

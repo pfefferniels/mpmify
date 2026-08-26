@@ -5,26 +5,43 @@ import {
   removeInstruction,
   requireMap,
   type Scope,
-} from '../../src/mpm/index.js';
-import { Alignment } from '../../src/alignment/index.js';
+} from '../../mpm/index.js';
+import { Alignment } from '../../alignment/index.js';
 import {
   AbstractTransformer,
   generateId,
   type ScopedTransformationOptions,
-} from '../../src/transformers/Transformer.js';
+} from '../Transformer.js';
 
-interface InsertTempoOptions extends ScopedTransformationOptions {
+export interface InsertTempoOptions extends ScopedTransformationOptions {
+  /** Where the tempo is stated, in ticks. */
   from: number;
+  /** Where it stops applying, in ticks — exclusive. */
   to: number;
   bpm: number;
+  /** The tempo at `to`, if this is a transition rather than a step. */
   transitionTo?: number;
   meanTempoAt?: number;
   beatLength: number;
 }
 
+/**
+ * A tempo somebody states, rather than one the fitter solves for.
+ *
+ * `ApproximateLogarithmicTempo` reads a tempo off the onsets; this writes down the one it is
+ * given. The range is exclusive at `to` and it owns that range outright: every `<tempo>` already
+ * inside it is removed, and if nothing states a tempo at `to` itself, the one that was in force
+ * there is written back — otherwise this instruction would go on sounding past the passage it
+ * was meant for.
+ *
+ * It calls {@link Alignment.shiftToFirstOnset}, which rewrites `milliseconds.date` on every note
+ * and pedal, so it has to run before `TranslatePhysicalTimeToTicks` reads the physical domain to
+ * convert it. `Order.ts` places it there.
+ */
 export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
   readonly name = 'InsertTempo';
   readonly requires = [];
+  /** The restored boundary tempo, which is this call's doing but not its subject. */
   private _boundaryId?: string;
 
   constructor(options?: InsertTempoOptions) {
@@ -59,7 +76,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
     requireMap(mpm, 'tempo', scope).addTempo(tempo);
   }
 
-  private removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, from: number, to: number) {
+  private removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, from: number, to: number): void {
     const existing = getInstructions(mpm, 'tempo', scope)
       .slice()
       .sort((a, b) => a.date - b.date);
@@ -95,6 +112,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
   }
 }
 
+/** The last tempo at or before `date`, or -1 if the list starts after it. */
 function findEffectiveTempoIndex(tempos: readonly { date: number }[], date: number): number {
   let result = -1;
   for (let i = 0; i < tempos.length; i++) {

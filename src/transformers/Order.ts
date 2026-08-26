@@ -15,7 +15,11 @@ import {
 import { InsertPedal } from './pedal/InsertPedalInstructions.js';
 import { CombineAdjacentRubatos } from './rubato/CombineAdjacentRubatos.js';
 import { InsertRubato } from './rubato/InsertRubato.js';
-import { ApproximateLogarithmicTempo, TranslatePhysicalTimeToTicks } from './tempo/index.js';
+import {
+  ApproximateLogarithmicTempo,
+  InsertTempo,
+  TranslatePhysicalTimeToTicks,
+} from './tempo/index.js';
 import type { Transformer } from './Transformer.js';
 import {
   getTransformerOrder,
@@ -42,6 +46,9 @@ registerTransformer(Modify);
 registerTransformer(InsertDynamicsGradient);
 registerTransformer(InsertTemporalSpread);
 registerTransformer(ApproximateLogarithmicTempo);
+// Also before `TranslatePhysicalTimeToTicks`, and for the same reason as the line below:
+// `InsertTempo` calls `shiftToFirstOnset`, which rewrites `milliseconds.date` on every note.
+registerTransformer(InsertTempo);
 // Before `TranslatePhysicalTimeToTicks`, because it edits `milliseconds.date` and that transformer
 // reads the physical domain to convert it. Unregistered, it sorted *after* everything known —
 // `compareTransformers` ranks an unknown name last — so it ran on onsets the conversion had

@@ -9,9 +9,9 @@ import { derive } from '../../scripts/bake/deriveSegments.js';
 /**
  * The other half of the bake: the intensity segments the viewer reads.
  *
- * `test/roundtrip/aligned.ts` runs the pipeline half of `scripts/bake/deriveSegments.ts` and
- * measures what it renders. This runs the whole thing, because until the fixture from #51 landed
- * there was nothing in this repo to run it on — and it turned out not to run at all: `getRange`
+ * `test/roundtrip/aligned.ts` measures the chain, which is now `src/runChain.ts` and reaches
+ * nothing here. This is the only thing that runs the bake, because until the fixture from #51
+ * landed there was nothing in this repo to run it on — and it turned out not to run at all: `getRange`
  * needs a residual to place a pedal, since a pedal carries no symbolic date, and `derive` and
  * the segment merge both called it without one. Every real `info.json` has `InsertPedal` in
  * it, so `bakeSegments.ts` and `verifySegments.ts` threw on their own inputs.
