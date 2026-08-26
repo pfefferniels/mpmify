@@ -28,10 +28,10 @@ export interface InsertMetricalAccentuationOptions extends ScopedTransformationO
   scaleTolerance: number;
 }
 
-type Velocity = {
+interface Velocity {
   beat: number;
   avgVelocityChange: number;
-};
+}
 
 /**
  * One fitted accentuation, before it is an `<accentuation>` child of anything.
@@ -41,13 +41,13 @@ type Velocity = {
  * exactly one place ({@link InsertMetricalAccentuation.buildDef}). `id` is optional because the
  * neutral pattern's single accentuation has never carried one.
  */
-type FittedAccentuation = {
+interface FittedAccentuation {
   id?: string;
   beat: number;
   value: number;
   transitionFrom: number;
   transitionTo: number;
-};
+}
 
 export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetricalAccentuationOptions> {
   name = 'InsertMetricalAccentuation';
@@ -139,7 +139,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
 
         const scaled = v.avgVelocityChange / scale;
         return {
-          id: 'accentuation_' + v4(),
+          id: `accentuation_${v4()}`,
           beat: v.beat,
           value: scaled,
           transitionFrom: scaled,
@@ -168,7 +168,7 @@ export class InsertMetricalAccentuation extends AbstractTransformer<InsertMetric
     return def;
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     if (
       !getDefinitions(mpm, 'accentuationPatternDef', this.options.scope).find(
         (def) => def.getName() === 'neutral',

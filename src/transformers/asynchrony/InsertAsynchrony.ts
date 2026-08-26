@@ -50,14 +50,14 @@ const chordOnset = (chord: AlignedNote[] | undefined): number | undefined => {
  * score — where that is exactly the other staff — keeps the answer it had.
  */
 const referenceChords = (msm: Alignment, part: number): ChordMap => {
-  return msm.allNotes.reduce((chords, note) => {
+  return msm.allNotes.reduce<ChordMap>((chords, note) => {
     if (note.part - 1 === part) return chords;
 
     const chord = chords.get(note.date);
     if (chord) chord.push(note);
     else chords.set(note.date, [note]);
     return chords;
-  }, new Map() as ChordMap);
+  }, new Map());
 };
 
 /**
@@ -87,7 +87,7 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     const part = this.options.part as Scope;
     const chords = Array.from(msm.asChords(part)).filter(([date, chord]) => {
       // Filter out chords that are not in the range
@@ -126,13 +126,13 @@ export class InsertAsynchrony extends AbstractTransformer<InsertAsynchronyOption
     const map = requireMap(mpm, 'asynchrony', part);
 
     map.addAsynchrony({
-      id: 'asynchrony_' + v4(),
+      id: `asynchrony_${v4()}`,
       date: this.options.from,
       millisecondsOffset: averageShift,
     });
 
     map.addAsynchrony({
-      id: 'asynchrony_' + v4(),
+      id: `asynchrony_${v4()}`,
       date: this.options.to,
       millisecondsOffset: 0,
     });

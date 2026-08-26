@@ -97,7 +97,7 @@ export class InsertTemporalSpread extends AbstractTransformer<InsertTemporalSpre
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     // Each ornament is written in two goes: what MPM lets an `<ornament>` say, and the
     // `<temporalSpread>` fields that have no place on one and are parked on its element for
     // `StylizeOrnamentation` to collect.

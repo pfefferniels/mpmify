@@ -46,7 +46,7 @@ export class InsertDynamicsInstructions extends AbstractTransformer<InsertDynami
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     const points = this.asPoints(msm, this.options.scope);
     const { from, to } = this.options;
 

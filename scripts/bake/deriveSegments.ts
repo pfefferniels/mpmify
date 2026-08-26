@@ -82,7 +82,7 @@ interface Derived {
 
 const quiet = <T>(fn: () => T): T => {
   const log = console.log;
-  console.log = () => {};
+  console.log = () => undefined;
   try {
     return fn();
   } finally {

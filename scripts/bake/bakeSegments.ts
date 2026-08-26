@@ -97,7 +97,7 @@ console.log(
     .join(', ')}`,
 );
 
-const json = JSON.stringify(reconstruction, null, 2) + '\n';
+const json = `${JSON.stringify(reconstruction, null, 2)}\n`;
 console.log(
   `\nscore.msm ${scoreMsm.length} B, performance.mpm ${mpmXml.length} B, segments.json ${json.length} B`,
 );

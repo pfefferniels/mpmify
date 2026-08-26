@@ -76,7 +76,7 @@ registerAlias('TranslatePhyiscalTimeToTicks', 'TranslatePhysicalTimeToTicks');
  * depends on. `validate` reports the name separately, so the ordering here only has to be the
  * least surprising of the two possible wrong answers.
  */
-export const compareTransformers = (a: Transformer, b: Transformer) => {
+export const compareTransformers = (a: Transformer, b: Transformer): number => {
   const currentOrder = getTransformerOrder();
   const rank = (name: string) => {
     const index = currentOrder.indexOf(name);
@@ -99,12 +99,12 @@ export const compareTransformers = (a: Transformer, b: Transformer) => {
   return aIndex - bIndex;
 };
 
-export type ValidationMessage = {
+export interface ValidationMessage {
   index: number;
   message: string;
-};
+}
 
-export const validate = (chain: Transformer[]) => {
+export const validate = (chain: Transformer[]): ValidationMessage[] => {
   const messages: ValidationMessage[] = [];
   const done: string[] = [];
   for (const t of chain) {

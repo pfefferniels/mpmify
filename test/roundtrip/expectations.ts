@@ -58,10 +58,9 @@ const checkBound = (
   result: RoundTripResult,
 ) => {
   if (!bound) return;
-  const context =
-    `${spec.name} — ${aspect}` +
-    (spec.note ? ` (${spec.note})` : '') +
-    `\n  measured: ${describeErrors(result.errors)}`;
+  const context = `${spec.name} — ${aspect}${
+    spec.note ? ` (${spec.note})` : ''
+  }\n  measured: ${describeErrors(result.errors)}`;
 
   if (bound.mean !== undefined) {
     expect(measured.mean, context).toBeLessThanOrEqual(bound.mean);
@@ -87,8 +86,8 @@ const expectExactlyTheKnownViolations = (spec: Case, xml: string) => {
 
   expect(
     found,
-    `"${spec.name}" declares ${JSON.stringify(declared)}` +
-      (spec.note ? ` for ${spec.note}` : '') +
-      `\n  found:\n${detail}`,
+    `"${spec.name}" declares ${JSON.stringify(declared)}${
+      spec.note ? ` for ${spec.note}` : ''
+    }\n  found:\n${detail}`,
   ).toEqual(declared);
 };

@@ -23,7 +23,7 @@ export class MakeDefaultArticulation extends AbstractTransformer<MakeDefaultArti
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     // collect notes that have no articulation
     //
     // From this transformer's own scope. The articulations below are read per-scope and the

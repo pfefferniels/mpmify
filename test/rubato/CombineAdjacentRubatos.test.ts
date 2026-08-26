@@ -38,7 +38,9 @@ const given = (mpm: Mpm, rubatos: InstructionOptions<'rubato'>[]) => {
 
 /** Call the protected `transform` method for testing */
 const run = (transformer: CombineAdjacentRubatos, msm: Alignment, mpm: Mpm) => {
-  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  interface Transformable {
+    transform(msm: Alignment, mpm: Mpm): void;
+  }
   (transformer as unknown as Transformable).transform(msm, mpm);
 };
 

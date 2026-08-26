@@ -52,7 +52,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     if (this.options.translatePhysicalModifiers) this.translatePhysicalMPMModifiers(mpm, msm);
   }
 
@@ -100,7 +100,7 @@ export class TranslatePhysicalTimeToTicks extends AbstractTransformer<TranslateP
    * given MPM and translates them into tick values.
    * @todo Currently, only ornaments are taken into account.
    */
-  translatePhysicalMPMModifiers(mpm: Mpm, msm: Alignment) {
+  translatePhysicalMPMModifiers(mpm: Mpm, msm: Alignment): void {
     for (const scope of scopesOf(mpm)) {
       const segments = placeTempos(msm, mpm, scope);
 

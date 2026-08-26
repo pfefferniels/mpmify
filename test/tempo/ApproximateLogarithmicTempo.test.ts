@@ -18,7 +18,9 @@ import {
 
 /** Call the protected `transform` method for testing */
 function callTransform(transformer: ApproximateLogarithmicTempo, msm: Alignment, mpm: Mpm) {
-  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  interface Transformable {
+    transform(msm: Alignment, mpm: Mpm): void;
+  }
   (transformer as unknown as Transformable).transform(msm, mpm);
 }
 
@@ -32,7 +34,7 @@ const BEAT = 720; // ticks per quarter note
 function generateOnsets(
   tempoFn: (d: number) => number,
   numBeats: number,
-  startTime: number = 0,
+  startTime = 0,
 ): { date: number; onset: number }[] {
   const result: { date: number; onset: number }[] = [];
   let time = startTime;

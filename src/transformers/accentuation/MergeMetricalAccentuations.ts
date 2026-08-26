@@ -18,12 +18,12 @@ interface MergeMetricalAccentuationsOptions extends ScopedTransformationOptions 
 }
 
 /** One accentuation's four numbers while they are being averaged, before they are a def. */
-type MergedAccentuation = {
+interface MergedAccentuation {
   beat: number;
   value: number;
   transitionFrom: number;
   transitionTo: number;
-};
+}
 
 export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetricalAccentuationsOptions> {
   name = 'MergeMetricalAccentuations';
@@ -39,7 +39,7 @@ export class MergeMetricalAccentuations extends AbstractTransformer<MergeMetrica
     );
   }
 
-  protected transform(_: Alignment, mpm: Mpm) {
+  protected transform(_: Alignment, mpm: Mpm): void {
     const allDefs = getDefinitions(mpm, 'accentuationPatternDef', this.options.scope);
     if (allDefs.length <= 1) return;
 

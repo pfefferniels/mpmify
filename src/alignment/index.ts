@@ -11,10 +11,10 @@ import { PULSES_PER_QUARTER } from '../ppq.js';
  * `milliseconds.date` and `milliseconds.date.end` onto a note, and `readPerformanceData` reads
  * them back. Every caller that wanted a duration wanted `onset + duration` anyway.
  */
-type PerformedAttributes = {
+interface PerformedAttributes {
   'milliseconds.date': number;
   'milliseconds.date.end': number;
-};
+}
 
 /**
  * What mpmify carries beyond what MSM states.
@@ -57,10 +57,10 @@ export type AlignedNote = {
  */
 export type ChordMap = Map<number, AlignedNote[]>;
 
-export type TimeSignature = {
+export interface TimeSignature {
   numerator: number;
   denominator: number;
-};
+}
 
 /**
  * A score and a recording of it, note by note.
@@ -105,11 +105,11 @@ export class Alignment {
    * re-sorted the original in place. Nothing wanted that, so there is only one kind of copy
    * now and both names give it.
    */
-  public clone() {
+  public clone(): Alignment {
     return this.deepClone();
   }
 
-  public deepClone() {
+  public deepClone(): Alignment {
     const clone = new Alignment();
     clone.allNotes = this.allNotes.map((note) => ({ ...note }));
     clone.pedals = this.pedals.map((pedal) => ({ ...pedal }));
@@ -126,7 +126,7 @@ export class Alignment {
    * The keys are by definition not in `AlignedNote`, so the write goes through an index signature
    * the type does not have. That cast is the whole of the untypedness and it stays here.
    */
-  public addCustomInfo(scoreId: string, info: Record<string, unknown>) {
+  public addCustomInfo(scoreId: string, info: Record<string, unknown>): void {
     const target = this.allNotes.find((note) => note['xml:id'] === scoreId);
     if (!target) return;
 
@@ -139,7 +139,7 @@ export class Alignment {
   /**
    * Deletes the silence before the first note is being played
    */
-  public shiftToFirstOnset() {
+  public shiftToFirstOnset(): void {
     const notesWithOnset = this.allNotes.filter((n) => isDefined(n['milliseconds.date']));
     // `Math.min()` of nothing is `Infinity`, and only the note shift at the bottom was
     // guarded against it: the pedal loop subtracted it unconditionally and left every pedal
@@ -174,7 +174,7 @@ export class Alignment {
    * instructions. The pedals live here, which is where `InsertPedal`, `deriveResidual` and
    * `tickTimes` read them.
    */
-  public serialize() {
+  public serialize(): string | undefined {
     return this.build(true);
   }
 
@@ -187,7 +187,7 @@ export class Alignment {
    * timing it means, and the whole point of the residual is to keep the recording and the
    * rendering apart.
    */
-  public serializeScore() {
+  public serializeScore(): string | undefined {
     return this.build(false);
   }
 
@@ -205,7 +205,7 @@ export class Alignment {
    */
   private build(performed: boolean) {
     if (this.allNotes.length === 0) {
-      console.log('no notes to serialize');
+      console.error('no notes to serialize');
       return;
     }
 
@@ -297,12 +297,12 @@ export class Alignment {
       part === 'global' ? [...this.allNotes] : this.allNotes.filter((n) => n.part - 1 === part)
     ).sort((a, b) => a.date - b.date);
 
-    return notes.reduce((prev, curr) => {
+    return notes.reduce<ChordMap>((prev, curr) => {
       const chord = prev.get(curr.date);
       if (chord) chord.push(curr);
       else prev.set(curr.date, [curr]);
       return prev;
-    }, new Map() as ChordMap);
+    }, new Map());
   }
 
   /**
@@ -346,7 +346,7 @@ export class Alignment {
     return this.allNotes.find((n) => n.date === lastDate);
   }
 
-  public parts() {
+  public parts(): Set<number> {
     return new Set(this.allNotes.map((note) => note.part - 1));
   }
 
@@ -363,7 +363,7 @@ export class Alignment {
       : this.allNotes.filter((n) => n.part - 1 === part);
   }
 
-  public notesInRange(from: number, to: number, scope: Scope) {
+  public notesInRange(from: number, to: number, scope: Scope): AlignedNote[] {
     return this.notesInPart(scope).filter((note) => {
       return note.date >= from && note.date <= to;
     });

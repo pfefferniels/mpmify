@@ -43,7 +43,9 @@ const atSixtyBpm = () => {
   return mpm;
 };
 
-type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+interface Transformable {
+  transform(msm: Alignment, mpm: Mpm): void;
+}
 const callTransform = (
   transformer: InsertArticulation | StylizeArticulation,
   msm: Alignment,

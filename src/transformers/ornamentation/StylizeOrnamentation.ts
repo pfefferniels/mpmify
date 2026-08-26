@@ -15,7 +15,7 @@ import {
 import { Alignment } from '../../alignment/index.js';
 import { AbstractTransformer, type TransformationOptions } from '../Transformer.js';
 import { v4 } from 'uuid';
-import { dbscan } from '../../utils/dbscan.js';
+import { dbscan, type IPoint } from '../../utils/dbscan.js';
 import { InsertDynamicsGradient } from './InsertDynamicsGradient.js';
 import { InsertTemporalSpread } from './InsertTemporalSpread.js';
 
@@ -46,25 +46,25 @@ export interface StylizeOrnamentationOptions extends TransformationOptions {
  * carried alongside for the two things only it can answer — which element this is, and what
  * `@name.ref` to write once a definition exists.
  */
-type FittedOrnament = {
+interface FittedOrnament {
   instruction: Instruction<'ornament'>;
   draft: OrnamentDraft;
-};
+}
 
 /** The two ends of a `<dynamicsGradient>`, once a caller has decided there is one. */
-type GradientValues = {
+interface GradientValues {
   transitionFrom: number;
   transitionTo: number;
-};
+}
 
 /** The five values a `<temporalSpread>` is built from, with every absence already resolved. */
-type SpreadValues = {
+interface SpreadValues {
   frameStart: number;
   frameLength: number;
   frameDomain: FrameDomain;
   intensity: number;
   noteOffShift: NoteOffShift;
-};
+}
 
 /**
  * The note-off shift as a number dbscan can measure.
@@ -97,7 +97,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     });
   }
 
-  generateClusters(ornaments: FittedOrnament[]) {
+  generateClusters(ornaments: FittedOrnament[]): IPoint[] {
     const points = ornaments.map(({ draft }) => {
       return [
         draft.frameStart as number,
@@ -116,7 +116,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     });
   }
 
-  generateSubClusters(ornaments: FittedOrnament[]) {
+  generateSubClusters(ornaments: FittedOrnament[]): IPoint[] {
     const points = ornaments.map(({ draft }) => {
       return [draft.transitionFrom || 0, draft.transitionTo || 0];
     });
@@ -125,7 +125,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     });
   }
 
-  protected transform(_msm: Alignment, mpm: Mpm) {
+  protected transform(_msm: Alignment, mpm: Mpm): void {
     for (const scope of scopesOf(mpm)) {
       const ornaments: FittedOrnament[] = getInstructions(mpm, 'ornament', scope).map(
         (instruction) => ({ instruction, draft: ornamentDraftOf(instruction.element) }),
@@ -159,15 +159,12 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
       const clusters = this.generateClusters(filteredOrnaments);
 
       // Group points by label
-      const clustersByLabel = clusters.reduce(
-        (acc, cur, i) => {
-          const label = cur.label.toString();
-          if (!acc[label]) acc[label] = [];
-          acc[label].push(filteredOrnaments[i]);
-          return acc;
-        },
-        {} as { [label: string]: FittedOrnament[] },
-      );
+      const clustersByLabel = clusters.reduce<Record<string, FittedOrnament[]>>((acc, cur, i) => {
+        const label = cur.label.toString();
+        if (!acc[label]) acc[label] = [];
+        acc[label].push(filteredOrnaments[i]);
+        return acc;
+      }, {});
 
       // Process each cluster
       for (const label in clustersByLabel) {
@@ -179,14 +176,14 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
 
         // Process subgroups
         const subClusters = this.generateSubClusters(group);
-        const subClustersByLabel = subClusters.reduce(
+        const subClustersByLabel = subClusters.reduce<Record<string, FittedOrnament[]>>(
           (acc, cur, i) => {
             const label = cur.label.toString();
             if (!acc[label]) acc[label] = [];
             acc[label].push(group[i]);
             return acc;
           },
-          {} as { [label: string]: FittedOrnament[] },
+          {},
         );
 
         for (const subLabel in subClustersByLabel) {
@@ -353,15 +350,12 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     if (ornaments.length === 0) return;
 
     const clusters = this.generateSubClusters(ornaments);
-    const byLabel = clusters.reduce(
-      (acc, cluster, index) => {
-        const label = cluster.label.toString();
-        if (!acc[label]) acc[label] = [];
-        acc[label].push(ornaments[index]);
-        return acc;
-      },
-      {} as { [label: string]: FittedOrnament[] },
-    );
+    const byLabel = clusters.reduce<Record<string, FittedOrnament[]>>((acc, cluster, index) => {
+      const label = cluster.label.toString();
+      if (!acc[label]) acc[label] = [];
+      acc[label].push(ornaments[index]);
+      return acc;
+    }, {});
 
     for (const label in byLabel) {
       const group = byLabel[label];
@@ -428,7 +422,7 @@ export class StylizeOrnamentation extends AbstractTransformer<StylizeOrnamentati
     // Which frames are unusable is `temporalSpreadOf`'s to say, so it is asked rather than
     // second-guessed here.
     if (hasFrame && this.temporalSpreadOf(draft) === undefined) {
-      console.warn('skipping ornament with an unusable frame', ornament.instruction.id);
+      console.error('skipping ornament with an unusable frame', ornament.instruction.id);
       return;
     }
 

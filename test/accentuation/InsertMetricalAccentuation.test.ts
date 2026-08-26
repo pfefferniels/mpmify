@@ -91,7 +91,9 @@ const run = (msm: Alignment, mpm: Mpm, scaleTolerance: number) => {
     beatLength: 0.25,
     scaleTolerance,
   });
-  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  interface Transformable {
+    transform(msm: Alignment, mpm: Mpm): void;
+  }
   (transformer as unknown as Transformable).transform(msm, mpm);
 };
 
@@ -302,7 +304,9 @@ describe('a beat grid that is not a power of two', () => {
       beatLength: TRIPLET,
       scaleTolerance: 0,
     });
-    type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+    interface Transformable {
+      transform(msm: Alignment, mpm: Mpm): void;
+    }
     (transformer as unknown as Transformable).transform(msm, mpm);
 
     const def = getDefinitions(mpm, 'accentuationPatternDef', 'global').find(

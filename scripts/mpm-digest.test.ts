@@ -90,7 +90,7 @@ describe('mpm digest', () => {
         const result = roundTrip(spec);
         lines.push(...digest(result.fittedXml).map((l) => `  ${l}`));
       }
-      writeFileSync(OUT, lines.join('\n') + '\n');
+      writeFileSync(OUT, `${lines.join('\n')}\n`);
       console.log(`wrote ${String(lines.length)} lines to ${OUT}`);
     },
     300_000,

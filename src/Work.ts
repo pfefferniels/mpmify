@@ -56,11 +56,11 @@ export interface WorkFile extends Work {
   secondary?: Record<string, unknown>;
 }
 
-export type ImportResult = {
+export interface ImportResult {
   transformers: Transformer[];
   segments: Segment[];
   secondary?: Record<string, unknown>;
-};
+}
 
 /** The recording ids a `MakeChoice` call preferred — which recording each note was taken from. */
 export const sourcesOf = (transformers: Transformer[]): string[] =>
@@ -134,7 +134,7 @@ const readProvenance = (imported: Record<string, unknown>): Call[] => {
     return {
       id: typeof call['id'] === 'string' ? call['id'] : v4(),
       name: call['name'],
-      options: isRecord(call['options']) ? (call['options'] as TransformationOptions) : {},
+      options: isRecord(call['options']) ? call['options'] : {},
     };
   });
 };
@@ -180,7 +180,7 @@ export function importWork(json: string): ImportResult {
     .map((call) => {
       const transformer = createTransformer(call.name);
       if (!transformer) {
-        console.warn(`Unknown transformer name: ${call.name}`);
+        console.error(`Unknown transformer name: ${call.name}`);
         return null;
       }
       transformer.id = call.id;

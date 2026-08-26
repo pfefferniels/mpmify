@@ -1,4 +1,4 @@
-export const isDefined = (onset?: number) => {
+export const isDefined = (onset?: number): boolean => {
   return onset !== undefined && !isNaN(onset);
 };
 
@@ -11,7 +11,7 @@ export const isDefined = (onset?: number) => {
  * Either order is defensible; having both is not, and value-first is the one the other four
  * call sites were already written against.
  */
-export const clamp = (value: number, min: number, max: number) => {
+export const clamp = (value: number, min: number, max: number): number => {
   return Math.max(min, Math.min(value, max));
 };
 
@@ -38,7 +38,7 @@ const toFixed = (num: number, precision: number) => {
   return +shiftDecimalExponent(rounded, -precision).toFixed(precision);
 };
 
-export const fix = <T extends object>(obj: T, key: keyof T, precision: number) => {
+export const fix = <T extends object>(obj: T, key: keyof T, precision: number): void => {
   const property = obj[key];
   if (typeof property === 'number' && Number.isFinite(property)) {
     (obj[key] as number) = toFixed(property, precision);

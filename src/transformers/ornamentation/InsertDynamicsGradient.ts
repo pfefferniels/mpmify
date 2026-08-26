@@ -18,18 +18,21 @@ import {
  * `transition.from`/`transition.to` use. Named apart from espressivo's `DynamicsGradient`, the
  * `<ornamentDef>` child it is fitted into but is not.
  */
-export type GradientRange = { from: number; to: number };
+export interface GradientRange {
+  from: number;
+  to: number;
+}
 export type DatedGradientRange = Map<number, GradientRange>;
 
-type SingleGradient = {
+interface SingleGradient {
   date: number;
   gradient: GradientRange;
-};
+}
 
-type DefaultGradients = {
+interface DefaultGradients {
   crescendo: GradientRange;
   decrescendo: GradientRange;
-};
+}
 
 const isSingleGradient = (
   gradient: SingleGradient | DefaultGradients,
@@ -75,33 +78,36 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
   }
 
   /**
-   * @note If gradient is undefined, it will be estimated.
+   * @note If `requested` is undefined, the gradient is estimated from the chord.
    *
    * @note The chord is passed in rather than looked up. This used to open with
    * `msm.asChords(scope).get(date)` — a full walk-and-group of every note in the score — while
    * its only bulk caller was already iterating exactly that map, so the whole score was
    * regrouped once per chord in it.
    */
-  private applyGradient = (
+  private readonly applyGradient = (
     mpm: Mpm,
     date: number,
     chord: AlignedNote[],
-    gradient?: GradientRange,
+    requested?: GradientRange,
   ) => {
     let arpeggioNotes = chord;
     if (arpeggioNotes.length === 0) return;
 
-    // Which of the two default gradients the chord calls for is a property of the chord,
-    // not of whether the velocities are also being rewritten. Reading it inside the
-    // `sortVelocities` branch left `gradient` undefined — and the arithmetic below
-    // throwing — for the whole `sortVelocities: false` configuration, which is the
-    // constructor's own default. See old-bugs.md.
-    if (!gradient && !isSingleGradient(this.options)) {
-      gradient =
-        directionOf(arpeggioNotes) === 'crescendo'
+    // Which of the two default gradients the chord calls for is a property of the chord, not of
+    // whether the velocities are also being rewritten — so it is resolved here rather than
+    // inside the `sortVelocities` branch, which left it undefined, and the arithmetic below
+    // throwing, for the whole `sortVelocities: false` configuration. See old-bugs.md.
+    //
+    // It also has to be read before the sort: `sortVelocities` rewrites the velocities
+    // `directionOf` reads, so afterwards every chord looks like a crescendo.
+    const gradient =
+      requested ??
+      (isSingleGradient(this.options)
+        ? undefined
+        : directionOf(arpeggioNotes) === 'crescendo'
           ? this.options.crescendo
-          : this.options.decrescendo;
-    }
+          : this.options.decrescendo);
 
     if (this.options.sortVelocities) {
       this.sortVelocities(arpeggioNotes);
@@ -157,7 +163,7 @@ export class InsertDynamicsGradient extends AbstractTransformer<InsertDynamicsGr
     });
   };
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     const chords = msm.asChords(this.options?.scope);
 
     if (isSingleGradient(this.options)) {

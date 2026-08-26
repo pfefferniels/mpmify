@@ -38,7 +38,9 @@ const pedal = (id: string, source: string): AlignedPedal => ({
 
 /** Call the protected `transform` method for testing */
 const callTransform = (transformer: MakeChoice, msm: Alignment, mpm: Mpm) => {
-  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  interface Transformable {
+    transform(msm: Alignment, mpm: Mpm): void;
+  }
   (transformer as unknown as Transformable).transform(msm, mpm);
 };
 

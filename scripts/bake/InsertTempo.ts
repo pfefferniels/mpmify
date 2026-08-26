@@ -35,7 +35,7 @@ export class InsertTempo extends AbstractTransformer<InsertTempoOptions> {
     return this._boundaryId ? [this._boundaryId] : [];
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     this._boundaryId = undefined;
     msm.shiftToFirstOnset();
     const { from, to, bpm, transitionTo, meanTempoAt, beatLength } = this.options;

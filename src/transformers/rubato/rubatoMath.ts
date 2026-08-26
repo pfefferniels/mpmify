@@ -96,7 +96,7 @@ const resolve = (rubato: RubatoFrame): ResolvedRubato | null => {
  *
  * An unresolvable rubato leaves the date where it was, which is what an identity warp means.
  */
-export const calculateRubatoOnDate = (date: number, rubato: RubatoFrame) => {
+export const calculateRubatoOnDate = (date: number, rubato: RubatoFrame): number => {
   const rd = resolve(rubato);
   if (rd === null) return date;
 
@@ -150,7 +150,7 @@ export const removeRubatoDistortion = (
   mpm: Mpm,
   scope: Scope,
   times: TickTimes,
-) => {
+): void => {
   const affectedNotes =
     scope === 'global' ? msm.allNotes : msm.allNotes.filter((n) => n.part - 1 === scope);
 

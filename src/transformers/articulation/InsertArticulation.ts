@@ -55,11 +55,11 @@ export const makeArticulationDef = (
   return def;
 };
 
-export type ArticulationUnit = {
+export interface ArticulationUnit {
   noteIDs: string[];
   name: string;
   aspects: Set<ArticulationProperty>;
-};
+}
 
 export type InsertArticulationOptions = ScopedTransformationOptions & ArticulationUnit;
 
@@ -134,7 +134,7 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
 
     return {
       date: note.date,
-      noteid: '#' + note['xml:id'],
+      noteid: `#${note['xml:id']}`,
       relativeDuration: aspects.has('relativeDuration') ? relativeDuration : undefined,
       relativeVelocity: aspects.has('relativeVelocity') ? relativeVelocity : undefined,
       absoluteDuration: aspects.has('absoluteDuration') ? absoluteDuration : undefined,
@@ -144,9 +144,9 @@ export class InsertArticulation extends AbstractTransformer<InsertArticulationOp
     };
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     const { noteIDs, aspects, name } = this.options;
-    const affectedNotes = noteIDs.map((id) => msm.getByID(id)).filter((n) => !!n) as AlignedNote[];
+    const affectedNotes = noteIDs.map((id) => msm.getByID(id)).filter((n) => !!n);
 
     // What the MPM explains without any articulation is what articulation has to account
     // for. Derived here rather than read off the notes, so this no longer depends on which

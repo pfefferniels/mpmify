@@ -39,7 +39,7 @@ export interface Transformer {
    */
   created: string[];
   run(msm: Alignment, mpm: Mpm): void;
-  readonly requires: Array<TransformerConstructor>;
+  readonly requires: TransformerConstructor[];
 }
 
 /**
@@ -53,7 +53,7 @@ export abstract class AbstractTransformer<
   options: OptionsType;
   created: string[] = [];
 
-  abstract readonly requires: Array<TransformerConstructor>;
+  abstract readonly requires: TransformerConstructor[];
 
   protected constructor(options: OptionsType) {
     this.options = options;
@@ -73,7 +73,7 @@ export abstract class AbstractTransformer<
    * Not to be overridden. A transformer that must not be credited with something it wrote says
    * so through {@link AbstractTransformer.disowned}.
    */
-  public run(msm: Alignment, mpm: Mpm) {
+  public run(msm: Alignment, mpm: Mpm): void {
     const before = fingerprintInstructions(mpm);
     this.transform(msm, mpm);
 
@@ -131,7 +131,7 @@ export type OptionsOf<T> = T extends AbstractTransformer<infer O> ? O : never;
  * The scan is over every instruction of the type rather than only those at the date, because an
  * id is only unique if it is unique in the document.
  */
-export const generateId = (type: InstructionType, date: number, mpm: Mpm) => {
+export const generateId = (type: InstructionType, date: number, mpm: Mpm): string => {
   const taken = new Set(getInstructions(mpm, type).map((instruction) => instruction.id));
   let candidate = `${type}_${date}`;
   for (let n = 1; taken.has(candidate); n++) {
@@ -158,10 +158,10 @@ export const isNoteBased = (
   return 'noteIDs' in transformer;
 };
 
-type Range = {
+interface Range {
   from: number;
   to?: number;
-};
+}
 
 /**
  * The span of score a transformer acts on.

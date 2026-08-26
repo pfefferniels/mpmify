@@ -51,7 +51,7 @@ export class InsertPedal extends AbstractTransformer<InsertPedalOptions> {
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     // Where each pedal fell on the score grid, under the MPM as it stands. `movement` is
     // held out for the same reason every other fitter holds its own dimension out, though
     // it changes nothing here: a movementMap moves controllers, not the pedal marks this

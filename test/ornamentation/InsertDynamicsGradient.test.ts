@@ -7,7 +7,7 @@ import { InsertDynamicsGradient } from '../../src/transformers/index.js';
  * Quickly generates a simple MSM note
  * @note Example for duration and position: 0.25 = quarter note etc.
  */
-const generateNote = (position: number, duration: number, pitch: number, part: number = 1) => ({
+const generateNote = (position: number, duration: number, pitch: number, part = 1) => ({
   'xml:id': `n_${part}_${pitch}`,
   date: position * 4 * 720,
   part: part,
@@ -40,7 +40,9 @@ const msmFixture = () =>
 
 /** Call the protected `transform` method for testing */
 const callTransform = (transformer: InsertDynamicsGradient, msm: Alignment, mpm: Mpm) => {
-  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  interface Transformable {
+    transform(msm: Alignment, mpm: Mpm): void;
+  }
   (transformer as unknown as Transformable).transform(msm, mpm);
 };
 

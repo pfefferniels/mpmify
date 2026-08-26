@@ -7,7 +7,7 @@ import { v4 } from 'uuid';
  * @param mei the source MEI, whose `<performance>` holds the onsets, durations and velocities
  * @param msmXml the same MEI converted to MSM — see `utils/espressivo.convertMei`
  */
-export const asMSM = (mei: string, msmXml: string) => {
+export const asMSM = (mei: string, msmXml: string): Alignment => {
   const msmDoc = new DOMParser().parseFromString(msmXml, 'application/xml');
 
   // Enrich the official MSM with performance information

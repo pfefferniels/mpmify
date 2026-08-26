@@ -9,15 +9,15 @@ import { v4 } from 'uuid';
 import type { DynamicsWithEndDate } from './InsertDynamicsInstructions.js';
 import { hashSeed, type Random, seededRandom } from '../../utils/random.js';
 
-export type DynamicsPoints = {
+export interface DynamicsPoints {
   date: number;
   velocity: number;
-};
+}
 
-export type InnerControlPoints = {
+export interface InnerControlPoints {
   x1: number;
   x2: number;
-};
+}
 
 /**
  * The two inner control points of the cubic Bézier a `<dynamics>` or `<movement>` transition is
@@ -77,7 +77,10 @@ const transitionValueAt = (
  * this evaluator has always done with them. It is applied *after* the `??`, so a target of **0**
  * is still a target; see the header on issue #46.
  */
-export const volumeAtDate = (instruction: DynamicsWithEndDate & InnerControlPoints, date: number) =>
+export const volumeAtDate = (
+  instruction: DynamicsWithEndDate & InnerControlPoints,
+  date: number,
+): number =>
   transitionValueAt(
     instruction,
     +instruction.volume,
@@ -95,7 +98,7 @@ export const volumeAtDate = (instruction: DynamicsWithEndDate & InnerControlPoin
 export const positionAtDate = (
   instruction: AddMovementOptions & { position: Normalized; endDate: number } & InnerControlPoints,
   date: number,
-) =>
+): number =>
   transitionValueAt(
     instruction,
     instruction.position,
@@ -148,7 +151,7 @@ const generateNeighbour = (prev: DynamicsWithEndDate, random: Random) => {
 
 export const approximateDynamics = (points: DynamicsPoints[]): DynamicsWithEndDate | undefined => {
   if (points.length === 0) {
-    console.warn('approximateDynamics requires at least one point');
+    console.error('approximateDynamics requires at least one point');
     return;
   } else if (points.length === 1) {
     return {

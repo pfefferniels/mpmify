@@ -18,7 +18,7 @@ export class CompressOrnamentation extends AbstractTransformer<CompressOrnamenta
     });
   }
 
-  protected transform(_msm: Alignment, mpm: Mpm) {
+  protected transform(_msm: Alignment, mpm: Mpm): void {
     const parts = scopesOf(mpm);
     for (const part of parts) {
       const defs = getDefinitions(mpm, 'ornamentDef', part);

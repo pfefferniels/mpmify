@@ -55,7 +55,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     );
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     // Where the notes fell under the tempo, with rubato held out — this is what fits it.
     // Holding it out also means a second call over a looping frame reads the same raw
     // positions the first one did, rather than positions the first call has compensated.
@@ -63,7 +63,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
 
     const frame = { date: this.options.date, length: this.options.length };
     const chords = [...msm.asChords(this.options.scope).entries()].filter(
-      ([date, _]) => date >= frame.date && date < frame.date + frame.length,
+      ([date]) => date >= frame.date && date < frame.date + frame.length,
     );
 
     if (chords.length === 0) return;
@@ -75,7 +75,7 @@ export class InsertRubato extends AbstractTransformer<InsertRubatoOptions> {
     for (const [, notes] of chords) {
       const mean = avarageTickDate(notes, residual);
       if (mean === undefined) {
-        console.warn(
+        console.error(
           'InsertRubato: some note has no tick date or duration — run a tempo interpolation first.',
         );
         return;

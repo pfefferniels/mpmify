@@ -1,4 +1,3 @@
-import { Mpm } from '../../mpm/index.js';
 import { Alignment, type AlignedNote } from '../../alignment/index.js';
 import { AbstractTransformer, type ScopedTransformationOptions } from '../Transformer.js';
 
@@ -40,7 +39,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     );
   }
 
-  protected transform(msm: Alignment, _: Mpm) {
+  protected transform(msm: Alignment): void {
     let affected: AlignedNote[] = [];
 
     // (1) range mode
@@ -85,7 +84,7 @@ export class MakeChoice extends AbstractTransformer<MakeChoiceOptions> {
     const discarded = new Set<AlignedNote>();
     const chosen: AlignedNote[] = [];
 
-    for (const [_, notes] of equivalents) {
+    for (const notes of equivalents.values()) {
       const prototype = notes.find((note) => note.source === timingPreference);
       if (!prototype) continue;
 

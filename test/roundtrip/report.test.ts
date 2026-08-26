@@ -20,11 +20,13 @@ test.skipIf(!process.env.ROUNDTRIP_REPORT)(
         const result = roundTrip(spec);
         const violations = findViolations(result.fittedXml);
         console.log(
-          `${spec.name.padEnd(52)} ${describeErrors(result.errors)}` +
-            (result.errors.missing ? `  MISSING ${result.errors.missing}` : '') +
-            (violations.length
+          `${spec.name.padEnd(52)} ${describeErrors(result.errors)}${
+            result.errors.missing ? `  MISSING ${result.errors.missing}` : ''
+          }${
+            violations.length
               ? `\n    !! ${violations.map((v) => `[${v.check}] ${v.detail}`).join('\n    !! ')}`
-              : ''),
+              : ''
+          }`,
         );
       } catch (error) {
         console.log(`${spec.name.padEnd(52)} THREW ${(error as Error).message}`);
@@ -48,12 +50,13 @@ test.skipIf(!process.env.ROUNDTRIP_REPORT)(
         `duration ${run.errors.duration.median.toFixed(2)} ms · ` +
         `velocity ${run.errors.velocity.median.toFixed(2)}` +
         `\n    explained: onset ${share('onset')} ms · duration ${share('duration')} ms · ` +
-        `velocity ${share('velocity')}` +
-        (findViolations(run.mpmXml).length
-          ? `\n    !! ${findViolations(run.mpmXml)
-              .map((v) => `[${v.check}] ${v.detail}`)
-              .join('\n    !! ')}`
-          : ''),
+        `velocity ${share('velocity')}${
+          findViolations(run.mpmXml).length
+            ? `\n    !! ${findViolations(run.mpmXml)
+                .map((v) => `[${v.check}] ${v.detail}`)
+                .join('\n    !! ')}`
+            : ''
+        }`,
     );
   },
   120_000,

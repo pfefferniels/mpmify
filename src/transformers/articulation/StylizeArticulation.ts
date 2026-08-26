@@ -114,7 +114,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
     meanRelativeDuration: number,
     residual: Residual,
   ) {
-    const conflictList: Set<Articulation> = new Set();
+    const conflictList = new Set<Articulation>();
 
     // What every note in this cluster gets stretched to once its articulation refers to the
     // cluster's def, and so the length the conflict below has to be tested against. It is
@@ -223,7 +223,7 @@ export class StylizeArticulation extends AbstractTransformer<StylizeArticulation
       .forEach((def) => removeDefinition(mpm, 'articulationDef', def));
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     // Where each note actually fell, under everything the MPM explains apart from
     // articulation — which is what this step is deciding. Derived once: it does not vary by
     // scope, and each call renders the document.

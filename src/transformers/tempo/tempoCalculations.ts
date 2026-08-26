@@ -332,7 +332,7 @@ export function optimizeForElapsedTime(
  * point of the delegation: `resolveTempo` collapses three shapes of declared transition back to
  * a constant, and taking the wrong arm is invisible until a timestamp moves.
  */
-export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate) =>
+export const computeMillisecondsAt = (date: number, tempo: TempoWithEndDate): number =>
   millisecondsAt(date, resolveSpan(tempo));
 
 /**

@@ -1,4 +1,3 @@
-import { Mpm } from '../../mpm/index.js';
 import { Alignment } from '../../alignment/index.js';
 import { AbstractTransformer, type ScopedTransformationOptions } from '../Transformer.js';
 
@@ -25,7 +24,7 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
     );
   }
 
-  protected transform(msm: Alignment, _mpm: Mpm) {
+  protected transform(msm: Alignment): void {
     const { aspect, change } = this.options;
 
     const notes =
@@ -49,8 +48,10 @@ export class Modify extends AbstractTransformer<ModifyOptions> {
         case 'duration':
           note['milliseconds.date.end'] += change;
           break;
+        // `pedal` is in the options union but has no arm here: it is not a property of a note.
+        case 'pedal':
         default:
-          console.warn(`Unknown aspect: ${aspect}`);
+          console.error(`Unknown aspect: ${aspect}`);
       }
     }
   }

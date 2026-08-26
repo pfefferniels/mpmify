@@ -47,14 +47,14 @@ function downsample(values: number[], maxPoints: number): { values: number[]; st
 
 const MAX_CURVE_POINTS = 2000;
 
-export type IntensityCurve = {
+export interface IntensityCurve {
   /** Downsampled 0..1 intensity values for rendering */
   values: number[];
   /** Step size used for downsampling (1 = no downsampling) */
   step: number;
   /** Original full-resolution length (= maxDate) */
   fullLength: number;
-};
+}
 
 /**
  * Sum every segment into one curve of rising and falling intensity.

@@ -12,6 +12,7 @@ import {
 import { Alignment, type AlignedNote } from '../../alignment/index.js';
 import {
   type TempoWithEndDate,
+  type WithEndDate,
   getTempoAt,
   millisecondsAt,
   resolveSpan,
@@ -28,18 +29,18 @@ import { beatLengthInTicks } from '../../ppq.js';
 
 type TempoDirection = 'acc' | 'rit' | 'auto';
 
-export type TempoSegment = {
+export interface TempoSegment {
   from: number;
   to: number;
   beatLength: number;
-};
+}
 
 /** An anchor the caller places at a score date nothing sounds at — a rest, or a tied-over beat. */
-export type SilentOnset = {
+export interface SilentOnset {
   date: number;
   /** When it falls, in milliseconds, on the same timeline as a note's `milliseconds.date`. */
   onset: number;
-};
+}
 
 export type ApproximateLogarithmicTempoOptions = ScopedTransformationOptions &
   TempoSegment & {
@@ -162,9 +163,9 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
     return fitSegments(segments, notes, options.silentOnsets);
   }
 
-  protected transform(msm: Alignment, mpm: Mpm) {
+  protected transform(msm: Alignment, mpm: Mpm): void {
     if (!msm.timeSignature) {
-      console.warn('A time signature must be given to interpolate a tempo map.');
+      console.error('A time signature must be given to interpolate a tempo map.');
       return;
     }
 
@@ -222,8 +223,12 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
     // no segment's start.
     const map = requireMap(mpm, 'tempo', this.options.scope);
     for (const fitted of tempos) {
-      const { endDate: _fittingWindow, ...tempo } = fitted;
-      map.addTempo({ ...tempo, id: generateId('tempo', tempo.date, mpm) });
+      const tempo: InstructionOptions<'tempo'> & Partial<WithEndDate> = {
+        ...fitted,
+        id: generateId('tempo', fitted.date, mpm),
+      };
+      delete tempo.endDate;
+      map.addTempo(tempo);
     }
 
     // When using continue, removeAffectedTempoInstructions may restore a
@@ -270,7 +275,7 @@ export class ApproximateLogarithmicTempo extends AbstractTransformer<Approximate
     });
   }
 
-  removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, segments: TempoSegment[]) {
+  removeAffectedTempoInstructions(mpm: Mpm, scope: Scope, segments: TempoSegment[]): void {
     if (segments.length === 0) return;
 
     const sortedRanges = segments.filter((s) => s.to > s.from).sort((a, b) => a.from - b.from);
@@ -635,13 +640,13 @@ function normalizeChainedSegments(segments: TempoSegment[]): TempoSegment[] {
     const source = segments[k];
     const from = k === 0 ? source.from : result[k - 1].to;
     if (k > 0 && source.from !== from) {
-      console.warn(
+      console.error(
         `Tempo segment chain is not contiguous at index ${k}: expected from=${from}, got ${source.from}. ` +
           `Using from=${from} to keep a valid chain.`,
       );
     }
     if (source.to <= from) {
-      console.warn(
+      console.error(
         `Invalid tempo segment at index ${k}: to (${source.to}) must be greater than from (${from}).`,
       );
       return [];

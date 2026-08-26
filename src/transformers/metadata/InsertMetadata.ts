@@ -38,7 +38,7 @@ export class InsertMetadata extends AbstractTransformer<InsertMetadataOptions> {
     super(options || {});
   }
 
-  protected transform(_msm: Alignment, mpm: Mpm) {
+  protected transform(_msm: Alignment, mpm: Mpm): void {
     const authors = (this.options.authors ?? []).map((author) =>
       unwrap(Author.fromName(author.text, author.number, null), 'author'),
     );

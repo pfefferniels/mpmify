@@ -58,7 +58,9 @@ const callTransform = (
   msm: Alignment,
   mpm: Mpm,
 ) => {
-  type Transformable = { transform(msm: Alignment, mpm: Mpm): void };
+  interface Transformable {
+    transform(msm: Alignment, mpm: Mpm): void;
+  }
   (transformer as unknown as Transformable).transform(msm, mpm);
 };
 

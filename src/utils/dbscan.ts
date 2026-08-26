@@ -32,7 +32,7 @@ interface DBScanOptions {
  * @param options dbscan related parameters.
  * @returns labels is the returned list of clustered group labels. A label of -1 indicates the point is noise
  */
-export function dbscan(points: number[][], options: DBScanOptions = {}) {
+export function dbscan(points: number[][], options: DBScanOptions = {}): IPoint[] {
   if (!(points instanceof Array)) {
     throw Error(`points must be of type array, ${typeof points} given`);
   }
